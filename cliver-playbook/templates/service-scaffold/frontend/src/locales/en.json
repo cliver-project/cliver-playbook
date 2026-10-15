@@ -1,0 +1,58 @@
+{
+  "app": {
+    "title": "cliver-app",
+    "tagline": "Service scaffold — FastAPI + React"
+  },
+  "nav": {
+    "home": "Home",
+    "items": "Items"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "label": "Language"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "confirm": "Confirm",
+    "search": "Search",
+    "actions": "Actions",
+    "notFound": "Not found"
+  },
+  "home": {
+    "welcome": "Welcome to the service scaffold",
+    "description": "A FastAPI backend, a React frontend, PostgreSQL via Docker, and tests — everything wired and passing out of the box.",
+    "itemsCardTitle": "Demo items",
+    "itemsCardDescription": "Fetched live from the backend via TanStack Query.",
+    "itemsCount": "{{count}} item(s) stored",
+    "apiDown": "Backend unreachable — is it running on port 8000?",
+    "manageItems": "Manage items"
+  },
+  "items": {
+    "title": "Items",
+    "create": "New item",
+    "createTitle": "Create item",
+    "editTitle": "Edit {{name}}",
+    "deleteTitle": "Delete {{name}}",
+    "deleteConfirm": "This permanently removes the row. This cannot be undone.",
+    "name": "Name",
+    "description": "Description",
+    "quantity": "Quantity",
+    "updatedAt": "Updated",
+    "empty": "No items yet — create the first one.",
+    "created": "Item created",
+    "updated": "Item updated",
+    "deleted": "Item deleted"
+  }
+}

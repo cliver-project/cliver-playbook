@@ -1,0 +1,64 @@
+/* Design tokens — theme palette definitions.
+ *
+ * Theming model: the ThemeProvider (and the no-flash script in index.html)
+ * set `data-theme="light" | "dark"` on <html>. Each theme redefines the same
+ * variable set; adding a new theme means adding another `[data-theme="..."]`
+ * block plus an option in the ThemeProvider — no component changes.
+ *
+ * Values follow the shadcn/ui neutral palette (OKLCH). `--radius` drives the
+ * rounded-* utilities via the @theme mappings in index.css.
+ */
+
+:root,
+[data-theme="light"] {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.627 0.17 149.2);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.769 0.166 70.08);
+  --warning-foreground: oklch(0.279 0.077 45.635);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}
+
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.723 0.219 149.1);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.828 0.189 84.4);
+  --warning-foreground: oklch(0.279 0.077 45.635);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
