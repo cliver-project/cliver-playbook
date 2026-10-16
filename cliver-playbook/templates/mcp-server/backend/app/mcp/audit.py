@@ -22,6 +22,7 @@ import logging
 from typing import Any
 
 from app.auth.audit import write_audit
+from app.core.config import settings
 from app.db.session import SessionLocal
 from app.mcp.context import AnonymousViewer, current_agent, current_request, current_viewer
 
@@ -124,7 +125,7 @@ async def write_tool_audit(
         "args": _truncate(args or {}),
         "duration_ms": max(0, int(duration_ms)),
         "agent_type": agent.normalised_type(),
-        "agent_id": agent.truncated_id(128),
+        "agent_id": agent.truncated_id(settings.mcp.agent_id_max_length),
     }
     if extra_detail:
         detail.update(_truncate(extra_detail))
