@@ -1,0 +1,19 @@
+[project]
+name = "cliver-playbook"
+version = "0.1.0"
+description = "Development workspace root for the cliver-playbook packages"
+requires-python = ">=3.12"
+# The workspace root is a development convenience, not a distributable
+# package: `uv sync` here installs every backend package in editable mode
+# (see [tool.uv.sources]) so the whole library is importable from a single
+# virtualenv, exactly as a consuming project would install it.
+dependencies = ["cliver-playbook-app-basic"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+cliver-playbook-app-basic = { workspace = true }
+
+[tool.uv.workspace]
+members = ["packages/backend/*"]

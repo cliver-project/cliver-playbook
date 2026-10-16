@@ -1,0 +1,36 @@
+# Application configuration — the lowest-priority settings layer.
+#
+# Precedence (highest first):
+#   environment variables (CLIVER_*)  >  .env file  >  this file  >  field
+#   defaults in packages/backend/cliver-playbook-app-basic/src/cliver_playbook/
+#   app/basic/settings.py
+#
+# The application root is discovered by walking up from the current working
+# directory until a directory containing app.yaml or .env is found — run any
+# component from anywhere below this file and this configuration applies.
+#
+# Keys are BARE Settings field names (no CLIVER_ prefix — the prefix belongs
+# to the environment-variable layer only). Structure authority is the
+# Settings class; keys it does not define are silently ignored (extra=ignore),
+# so a typo here fails quietly — check spelling against settings.py when a
+# value seems to have no effect.
+#
+# Values may be Jinja2 expressions. The env(name, default=None) helper reads
+# the process environment, then the discovered .env, then the default;
+# omitting the default makes a variable REQUIRED (startup fails with its
+# name). Wrap literal Jinja syntax in raw/endraw block tags.
+#
+# This file is checked in: NEVER put secrets here — keep them in the
+# environment or the gitignored .env. Note: uvicorn --reload does not watch
+# this file; restart after editing.
+
+app_name: cliver-app
+log_level: INFO
+
+# Composed from CLIVER_DB_* parts (each defaulting to the bundled compose
+# db), so a deployment can repoint the database either wholesale
+# (CLIVER_DATABASE_URL — a higher layer, wins over this file) or part by
+# part (CLIVER_DB_* — plain template inputs consumed below, not Settings
+# fields). Quoted so special characters in a composed password stay valid
+# YAML.
+database_url: "postgresql://{{ env('CLIVER_DB_USER', 'cliver') }}:{{ env('CLIVER_DB_PASSWORD', 'cliver') }}@{{ env('CLIVER_DB_HOST', '127.0.0.1') }}:{{ env('CLIVER_DB_PORT', '5432') }}/{{ env('CLIVER_DB_NAME', 'cliver_app') }}"

@@ -1,0 +1,15 @@
+# Python: virtualenvs, caches, build artifacts (workspace root and packages)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Local configuration and secrets — only .env.example files are committed
+.env
+
+# Node (frontend packages)
+node_modules/

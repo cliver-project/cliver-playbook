@@ -1,3 +1,9 @@
+> **Superseded by ADR-0015** (2026-10-16): the library ships as composable
+> packages (`cliver_playbook.app.<module>` namespace), so the fixed `app`
+> package name and the `cliver_app` rename token no longer apply — there is
+> nothing left to copy-merge or rename. The display-name and `CLIVER_`
+> env-prefix conventions were retained. Kept for history.
+
 # ADR-0002: Fixed `app` package name and the three-token rename surface
 
 **Status:** Accepted (2026-10-15)
