@@ -51,6 +51,12 @@ app.include_router(items.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 
+# MCP module: register the permission catalog (idempotent side-effect)
+# and (at M2+) mount the streamable_http sub-application.
+from app.mcp import register as mcp_register
+
+mcp_register(app)
+
 # MCP sub-application: the official mcp SDK's streamable_http_app, wrapped
 # in a thin ASGI gate when auth is on. Mounted at settings.mcp.mount_path
 # (default /mcp) so the URL space is the same as if the user composed the

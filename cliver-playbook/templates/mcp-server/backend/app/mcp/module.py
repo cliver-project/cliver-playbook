@@ -1,25 +1,30 @@
 """Module entry: what the parent ``main.py`` calls to wire the MCP server
 into the FastAPI application.
 
-Filled in by M1 (structure) + M2 (lifespan composition + subapp mount).
-The current M0 stub just exposes the symbol the parent ``main.py`` will
-import, so wiring it in later is a one-line change rather than a refactor.
+The ``mcp:*`` permission codes are part of the shared catalog via a
+static edit to ``app/auth/permissions.py`` (see INTEGRATION.md) — nothing
+to register at runtime. This seam exists so the parent ``main.py`` has a
+single call that future steps can grow into (M2: sub-app mount helpers,
+M4: default tool registration).
 """
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
+
+logger = logging.getLogger("mcp.module")
 
 
 def register(app: FastAPI) -> None:
-    """Mount the MCP sub-app on ``settings.mcp.mount_path`` and enter its
-    lifespan context from the parent app's lifespan.
+    """Attach the MCP surface to the parent app. No-op at M1.
 
-    No-op at M0; M1 adds the registration of default tools, M2 adds the
-    sub-app mount and lifespan composition, M3 adds the auth gate
-    conditional on ``settings.mcp.auth_enabled``.
+    Kept as an explicit seam: the parent main.py calls this once at
+    assembly time. Later steps add the default tool registration here
+    (the sub-app mount itself stays in main.py so the lifespan context
+    composes with the parent's, not per-module).
     """
-    # M0: intentionally a no-op so the rest of the import graph stays
-    # valid and the parent main.py can already `from app.mcp import register`
-    # without conditional logic.
-    return
+    logger.debug("MCP module registered (no-op at M1)")
+    # M4 will add: from app.mcp.tools import register_default_tools
+    #               register_default_tools()

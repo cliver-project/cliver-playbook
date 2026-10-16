@@ -40,6 +40,14 @@ PERMISSION_CATALOG: tuple[Permission, ...] = (
     # OAuth 2.1 provider administration (ADR-0005)
     Permission("oauth:read", "View registered clients and active grants", "OAuth"),
     Permission("oauth:revoke", "Revoke OAuth grants (user × client)", "OAuth"),
+    # MCP server (added by the mcp-server template — app/mcp/ tools enforce
+    # these via require_perm; runtime extension is impossible because the
+    # catalog tuple is imported by value elsewhere, so the delta is a static
+    # edit recorded as an EDIT row in INTEGRATION.md)
+    Permission("mcp:tools:invoke", "Invoke MCP tools", "MCP"),
+    Permission("mcp:prompts:get", "Get MCP prompts", "MCP"),
+    Permission("mcp:resources:read", "Read MCP resources", "MCP"),
+    Permission("mcp:agents:read", "View MCP agent activity", "MCP"),
 )
 
 PERMISSION_CODES: frozenset[str] = frozenset(p.code for p in PERMISSION_CATALOG)
