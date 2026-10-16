@@ -362,7 +362,7 @@ def _seed() -> None:
                     "INSERT INTO users "
                     "(username, email, password_hash, display_name, is_active, "
                     " must_change_password) "
-                    "VALUES ('admin', NULL, :password_hash, 'Administrator', true, true) "
+                    "VALUES ('admin', NULL, :password_hash, 'Administrator', true, false) "
                     "RETURNING id"
                 ),
                 {"password_hash": hash_password(password)},
