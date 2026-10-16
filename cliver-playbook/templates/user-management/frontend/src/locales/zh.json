@@ -185,7 +185,26 @@
     "usernameHint": "用户名是稳定的登录身份，如需修改请联系管理员。",
     "saved": "资料已更新",
     "passwordTitle": "密码",
-    "passwordDescription": "修改密码会强制退出所有其他会话——包括其他浏览器、设备与 API 令牌。"
+    "passwordDescription": "修改密码会强制退出所有其他会话——包括其他浏览器、设备与 API 令牌。",
+    "linkedAccounts": {
+      "title": "已关联账号",
+      "description": "可以以你的身份登录的外部账号。关联不影响密码；无密码账号不能解绑最后一个凭证。",
+      "empty": "尚未关联外部账号。",
+      "connect": "关联 {{provider}}",
+      "unlink": "解绑",
+      "linkedOn": "关联于 {{date}}",
+      "lastCredentialHint": "最后一个凭证——请先设置密码",
+      "linkedToast": "已关联 {{provider}} 账号",
+      "unlinkedToast": "已解绑",
+      "unlinkTitle": "解绑 {{provider}}",
+      "unlinkConfirm": "解绑后将无法再用该外部账号登录本账号；随时可以重新关联。",
+      "linkErrors": {
+        "already_linked": "该外部账号已关联到其他账号。",
+        "not_allowed": "当前账号不允许关联外部身份。",
+        "state_mismatch": "关联会话已过期或无效，请重试。",
+        "unknown": "关联失败，请重试。"
+      }
+    }
   },
   "items": {
     "title": "条目管理",

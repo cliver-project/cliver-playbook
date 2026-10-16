@@ -121,6 +121,45 @@ export function oauthLoginUrl(providerKey: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Linked external identities (self-service, profile page)
+// ---------------------------------------------------------------------------
+
+export interface LinkedIdentity {
+  id: number;
+  provider: string;
+  /** Display label resolved through the settings registry; falls back to the
+   * raw key for providers that left the config. Display-only. */
+  provider_label: string;
+  email: string;
+  display_name: string;
+  linked_at: string;
+  /** True when unlinking would leave a passwordless account with no
+   * credential at all — DELETE refuses it with 409. Display hint only; the
+   * server re-checks on the DELETE itself. */
+  is_last_credential: boolean;
+}
+
+export async function listLinkedIdentities(): Promise<LinkedIdentity[]> {
+  const { data } = await api.get<LinkedIdentity[]>("/auth/identities");
+  return data;
+}
+
+/** Start linking a provider to the signed-in account: returns the IdP
+ * authorize URL for a full-page navigation. The outcome lands back on
+ * /profile#linked=<provider> or #link_error=<reason> — no session token is
+ * ever issued by a link flow. */
+export async function startIdentityLink(providerKey: string): Promise<string> {
+  const { data } = await api.post<{ redirect_url: string }>(
+    `/auth/identities/${providerKey}/link`,
+  );
+  return data.redirect_url;
+}
+
+export async function unlinkIdentity(id: number): Promise<void> {
+  await api.delete(`/auth/identities/${id}`);
+}
+
+// ---------------------------------------------------------------------------
 // OAuth 2.1 authorize page (agent consent hand-off)
 // ---------------------------------------------------------------------------
 

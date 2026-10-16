@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth/AuthContext";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,11 +16,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/api/client";
-import { changePassword, updateProfile } from "@/api/auth";
+import {
+  changePassword,
+  listLinkedIdentities,
+  listOAuthProviders,
+  startIdentityLink,
+  unlinkIdentity,
+  updateProfile,
+  type LinkedIdentity,
+} from "@/api/auth";
 
 /**
- * Self-service profile page: the caller's own contact details plus an inline
- * password change.
+ * Self-service profile page: the caller's own contact details, an inline
+ * password change, and linked external identities.
  *
  * Two independent forms on purpose — editing an email should not require
  * re-typing a password, and a password rotation should not silently re-send
@@ -28,6 +38,12 @@ import { changePassword, updateProfile } from "@/api/auth";
  *
  * Username is shown read-only: it is the stable identity handle and only
  * admins manage it (see ProfileUpdate on the backend for the same boundary).
+ *
+ * The linked-accounts card is the landing point of the identity-link redirect
+ * chain: the backend sends the outcome in the URL fragment
+ * (`#linked=<provider>` / `#link_error=<reason>`), which — exactly like the
+ * login callback's `#token=` — never reaches any server. It is parsed once
+ * and scrubbed from history immediately so back/reload cannot replay it.
  */
 export default function ProfilePage() {
   const { t } = useTranslation();
@@ -84,6 +100,67 @@ export default function ProfilePage() {
       setSavingPassword(false);
     }
   }
+
+  // --- linked accounts card --------------------------------------------------
+  // Outcome of the link redirect chain, parsed lazily on first render and
+  // consumed (scrubbed + toasted) in the effect below — see OAuthCallbackPage
+  // for the same fragment-discipline pattern.
+  const [handoff] = useState(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    return { linked: params.get("linked"), linkError: params.get("link_error") };
+  });
+
+  useEffect(() => {
+    if (!handoff.linked && !handoff.linkError) return;
+    // Scrub first: whatever happens next, the fragment must not survive.
+    window.history.replaceState(null, "", window.location.pathname);
+    if (handoff.linked) {
+      toast.success(t("profile.linkedAccounts.linkedToast", { provider: handoff.linked }));
+    } else if (handoff.linkError) {
+      toast.error(
+        t(`profile.linkedAccounts.linkErrors.${handoff.linkError}`, {
+          defaultValue: t("profile.linkedAccounts.linkErrors.unknown"),
+        }),
+      );
+    }
+    // Runs once per mount by design — the fragment is gone after this, so
+    // `handoff`/`t` cannot change meaningfully for a second run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const queryClient = useQueryClient();
+  const identities = useQuery({ queryKey: ["identities"], queryFn: listLinkedIdentities });
+  // Enabled providers only; same query key as the login page's SSO buttons.
+  const providers = useQuery({
+    queryKey: ["oauthProviders"],
+    queryFn: listOAuthProviders,
+    staleTime: 60_000,
+  });
+  const linkedKeys = new Set((identities.data ?? []).map((row) => row.provider));
+  // Connect buttons: configured AND enabled AND not already linked. Disabled
+  // presets contribute nothing server-side, so the provider list is the truth.
+  const connectable = (providers.data ?? []).filter((p) => !linkedKeys.has(p.key));
+
+  const [unlinking, setUnlinking] = useState<LinkedIdentity | null>(null);
+
+  const link = useMutation({
+    mutationFn: (providerKey: string) => startIdentityLink(providerKey),
+    // Full-page navigation: the redirect chain must leave the SPA for the
+    // IdP and come back to the backend callback, then to /profile#linked=…
+    onSuccess: (redirectUrl) => window.location.assign(redirectUrl),
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  });
+
+  const unlink = useMutation({
+    mutationFn: (id: number) => unlinkIdentity(id),
+    onSuccess: () => {
+      toast.success(t("profile.linkedAccounts.unlinkedToast"));
+      setUnlinking(null);
+      void queryClient.invalidateQueries({ queryKey: ["identities"] });
+    },
+    // A 409 (last credential) or 404 arrives with the server's message.
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  });
 
   return (
     <div className="space-y-6">
@@ -193,6 +270,84 @@ export default function ProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("profile.linkedAccounts.title")}</CardTitle>
+          <CardDescription>{t("profile.linkedAccounts.description")}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {identities.isLoading ? (
+            <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+          ) : identities.isError ? (
+            <p className="text-muted-foreground text-sm">{t("common.error")}</p>
+          ) : (identities.data ?? []).length === 0 ? (
+            <p className="text-muted-foreground text-sm">{t("profile.linkedAccounts.empty")}</p>
+          ) : (
+            <ul className="divide-y">
+              {(identities.data ?? []).map((row) => (
+                <li key={row.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{row.provider_label}</p>
+                    <p className="text-muted-foreground truncate text-xs">
+                      {/* Email snapshot; display name is the fallback for
+                          providers that do not return one (GitHub nulls). */}
+                      {row.email || row.display_name || row.provider}
+                      {" · "}
+                      {t("profile.linkedAccounts.linkedOn", {
+                        date: new Date(row.linked_at).toLocaleDateString(),
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {row.is_last_credential ? (
+                      <span className="text-muted-foreground text-xs">
+                        {t("profile.linkedAccounts.lastCredentialHint")}
+                      </span>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={row.is_last_credential}
+                      onClick={() => setUnlinking(row)}
+                    >
+                      {t("profile.linkedAccounts.unlink")}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {connectable.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {connectable.map((provider) => (
+                <Button
+                  key={provider.key}
+                  variant="outline"
+                  size="sm"
+                  disabled={link.isPending}
+                  onClick={() => link.mutate(provider.key)}
+                >
+                  {link.isPending ? t("common.pending") : t("profile.linkedAccounts.connect", { provider: provider.label })}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={unlinking !== null}
+        onOpenChange={(open) => !open && setUnlinking(null)}
+        title={t("profile.linkedAccounts.unlinkTitle", {
+          provider: unlinking?.provider_label ?? "",
+        })}
+        description={t("profile.linkedAccounts.unlinkConfirm")}
+        confirmLabel={t("profile.linkedAccounts.unlink")}
+        pending={unlink.isPending}
+        onConfirm={() => unlinking && unlink.mutate(unlinking.id)}
+      />
     </div>
   );
 }

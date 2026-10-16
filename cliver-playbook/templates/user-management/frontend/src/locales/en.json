@@ -185,7 +185,26 @@
     "usernameHint": "Your username is your stable sign-in identity — ask an administrator if it needs to change.",
     "saved": "Profile updated",
     "passwordTitle": "Password",
-    "passwordDescription": "Changing your password signs out every other session — other browsers, devices, and API tokens included."
+    "passwordDescription": "Changing your password signs out every other session — other browsers, devices, and API tokens included.",
+    "linkedAccounts": {
+      "title": "Linked accounts",
+      "description": "External identities that can sign in as you. Linking never touches your password; a passwordless account cannot unlink its last credential.",
+      "empty": "No external accounts linked yet.",
+      "connect": "Connect {{provider}}",
+      "unlink": "Unlink",
+      "linkedOn": "linked {{date}}",
+      "lastCredentialHint": "Last credential — set a password first",
+      "linkedToast": "{{provider}} account linked",
+      "unlinkedToast": "Account unlinked",
+      "unlinkTitle": "Unlink {{provider}}",
+      "unlinkConfirm": "You will not be able to sign in with this external account afterwards. You can link it again at any time.",
+      "linkErrors": {
+        "already_linked": "That external account is already linked to another account.",
+        "not_allowed": "This account is not allowed to link external identities.",
+        "state_mismatch": "The linking session expired or is invalid. Please try again.",
+        "unknown": "Linking failed. Please try again."
+      }
+    }
   },
   "items": {
     "title": "Items",
