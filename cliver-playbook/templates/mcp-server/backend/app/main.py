@@ -29,16 +29,20 @@ logger = logging.getLogger("cliver_app")
 # the parent FastAPI's. The MCP SDK exposes this as ``subapp.router.lifespan_context``
 # — entered by the parent's lifespan, the subapp's state machines boot and
 # shut down with the parent. Verified against mcp 2.3.0 (spike 2026-10-16).
+# The subapp is built once at module level below (single build: the SDK
+# registers its session manager on the server singleton as a side-effect,
+# so a second build would orphan the first one's manager); the lifespan
+# closes over that same object.
+from app.mcp import register as mcp_register
+from app.mcp.subapp import build_mcp_subapp
+
+_mcp_subapp = build_mcp_subapp()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # The MCP subapp is built once at module import (so its routes and
-    # streamable-http app are stable across requests). The lifespan
-    # context below simply drives its internal session manager.
-    from app.mcp.subapp import build_mcp_subapp  # late import: avoid circular
-
-    subapp = build_mcp_subapp()
-    if subapp is not None:
-        async with subapp.router.lifespan_context(subapp):
+    if _mcp_subapp is not None:
+        async with _mcp_subapp.router.lifespan_context(_mcp_subapp):
             yield
     else:
         yield
@@ -51,30 +55,27 @@ app.include_router(items.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 
-# MCP module: register the permission catalog (idempotent side-effect)
-# and (at M2+) mount the streamable_http sub-application.
-from app.mcp import register as mcp_register
-
+# MCP module seam: catalog is extended statically (see app/mcp/permissions.py);
+# later steps hang default-tool registration off this call.
 mcp_register(app)
 
-# MCP sub-application: the official mcp SDK's streamable_http_app, wrapped
-# in a thin ASGI gate when auth is on. Mounted at settings.mcp.mount_path
-# (default /mcp) so the URL space is the same as if the user composed the
-# MCP server into a future modular design.
-from app.mcp.subapp import build_mcp_subapp
-
-_mcp_subapp = build_mcp_subapp()
+# MCP sub-application mounted at "/" AFTER the API routers: Starlette
+# matches in order, so every /api/v1/* route wins first and the sub-app
+# answers the rest. The SDK route inside it sits at settings.mcp.mount_path
+# (default /mcp) — exact-match, no trailing-slash redirect.
 if _mcp_subapp is not None:
-    app.mount(settings.mcp.mount_path, _mcp_subapp)
-    logger.info("MCP sub-app mounted at %s", settings.mcp.mount_path)
+    app.mount("/", _mcp_subapp)
+    logger.info("MCP endpoint mounted at %s", settings.mcp.mount_path)
 
-# OAuth 2.1 provider surface: when the MCP subapp is mounted, the MCP module
-# owns the OAuth routes (mounted at settings.mcp.mount_path + /oauth and
-# /mcp/.well-known/...). The Web's root-level mount would shadow them, so it
-# is gated on the MCP module NOT being present. With the MCP subapp
-# always-mounted in this template, the root mount is suppressed.
+# OAuth 2.1 provider surface stays at the root exactly as in user-management:
+# routes are added BEFORE the "/" mount below, so they win over the sub-app
+# and the Web's DCR/authorize flows are byte-identical to the UM template.
+# (A future step may mount an MCP-scoped copy under settings.mcp.mount_path
+# + /oauth via a mount_path parameter on mount_oauth_routes, for agents that
+# discover the AS from the MCP WWW-Authenticate header; that addition will
+# not remove this root mount.)
 app.add_middleware(RequestMetaMiddleware)
-if settings.oauth21_enabled and _mcp_subapp is None:
+if settings.oauth21_enabled:
     mount_oauth_routes(app)
 
 logger.info("Application assembled: %s (API prefix %s)", settings.app_name, settings.api_v1_prefix)

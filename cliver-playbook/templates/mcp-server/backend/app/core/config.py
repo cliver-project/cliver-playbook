@@ -185,6 +185,59 @@ class OidcSettings(BaseModel):
         return self
 
 
+class McpOauthSettings(BaseModel):
+    """OAuth 2.1 issuer knobs for the MCP-mounted authorization server.
+
+    Kept separate from the Web's oauth21_* block: the MCP surface may run
+    standalone (different origin/port), so its issuer and TTLs can differ
+    from the Web's. TTL defaults mirror the Web's values.
+    """
+
+    # AS metadata base; empty = derived per-request from Host/protocol.
+    issuer_url: str = ""
+    access_ttl_seconds: int = 3600
+    refresh_ttl_seconds: int = 30 * 86400
+    code_ttl_seconds: int = 300
+
+
+class McpSettings(BaseModel):
+    """MCP server block (see app.yaml's `mcp:` section for the narrative)."""
+
+    # Auth gate flag. Default OFF: local development / trusted networks.
+    # ON = every request must carry a bearer token from the shared
+    # auth_tokens table (same issuance/revocation path as the Web's).
+    auth_enabled: bool = False
+
+    # Public path of the MCP endpoint on the parent app. Must start with
+    # "/" and not end with "/" — it becomes the SDK route path (exact-match,
+    # no trailing-slash redirect).
+    mount_path: str = "/mcp"
+
+    # Per-viewer in-flight tool call budget (M5 enforcement point).
+    max_concurrent_calls: int = 16
+
+    # Agent self-identification: values outside the whitelist normalise to
+    # "unknown" in audit rows. Empty list = accept any string (dev default).
+    agent_type_whitelist: list[str] = Field(
+        default_factory=lambda: ["claude-code", "workbuddy", "codex", "mcp-cli", "unknown"]
+    )
+
+    # Agent ids are stored verbatim up to this length, truncated beyond.
+    agent_id_max_length: int = 128
+
+    oauth: McpOauthSettings = Field(default_factory=McpOauthSettings)
+
+    @field_validator("mount_path")
+    @classmethod
+    def _validate_mount_path(cls, value: str) -> str:
+        if not value.startswith("/") or value.endswith("/") or len(value) < 2:
+            raise ValueError(
+                "mcp.mount_path must start with '/' and not end with '/' "
+                f"(got {value!r}) — it is the SDK route path, exact-match"
+            )
+        return value
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
@@ -291,6 +344,14 @@ class Settings(BaseSettings):
     # Refresh-replay grace window: replays within it are audited as
     # race_suspected (network retries) instead of revoking the token family.
     oauth21_replay_grace_seconds: int = 30
+
+    # ------------------------------------------------------------------
+    # MCP server (this template's delta over user-management)
+    # ------------------------------------------------------------------
+
+    # Nested block; env overrides use CLIVER_MCP__* (double underscore),
+    # yaml uses the `mcp:` mapping — same rules as the oidc block.
+    mcp: McpSettings = Field(default_factory=McpSettings)
 
     def _require_database_url(self) -> str:
         if not self.database_url:

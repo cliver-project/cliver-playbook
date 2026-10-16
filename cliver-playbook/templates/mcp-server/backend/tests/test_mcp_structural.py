@@ -248,15 +248,3 @@ def test_gate_middleware_call_raises_not_implemented():
     gate = MCPGateMiddleware(_inner)
     with pytest.raises(NotImplementedError, match="M3"):
         asyncio.run(gate.__call__({}, None, None))
-
-
-# ---------------------------------------------------------------------------
-# auth gate path is NOT yet wired (subapp still returns None at M1)
-# ---------------------------------------------------------------------------
-
-
-def test_subapp_returns_none_at_m1():
-    """build_mcp_subapp() is a no-op at M1; the parent's mount is skipped."""
-    from app.mcp.subapp import build_mcp_subapp
-
-    assert build_mcp_subapp() is None
