@@ -7,6 +7,7 @@ BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 BACKEND_HOST ?= 127.0.0.1
 BACKEND_PORT ?= 8000
+MCP_HTTP_PORT ?= 8100
 WEB_UI_HOST ?= 127.0.0.1
 WEB_UI_PORT ?= 5173
 
@@ -66,13 +67,17 @@ web-ui-build: web-ui-init ## Type-check and build the frontend production bundle
 ##@ MCP server
 
 # The MCP server runs in the same process as the Web backend by default
-# (lifespan-composed sub-app at /mcp). The stdio target starts a SEPARATE
-# process on demand — useful for CLI agents that pipe JSON-RPC over stdin.
-# Both transports share the same database and the same CLIVER_DATABASE_URL.
+# (lifespan-composed sub-app at /mcp). The standalone targets start a
+# SEPARATE process on demand: stdio for CLI agents that pipe JSON-RPC
+# over stdin, http for a sidecar listener on its own port (MCP_HTTP_PORT,
+# distinct from BACKEND_PORT so both can run at once). The http mode
+# serves the full application (API + MCP + OAuth), not just /mcp — the
+# OAuth authorize flow needs the API routes. Both share the same
+# database and the same CLIVER_DATABASE_URL.
 .PHONY: mcp-stdio
 mcp-stdio: backend-init ## Run the MCP server over stdio (separate process, same DB)
 	@cd $(BACKEND_DIR) && uv run python -m app.mcp --transport stdio
 
 .PHONY: mcp-http
-mcp-http: backend-init ## Run the MCP server over streamable-http on a separate port
-	@cd $(BACKEND_DIR) && uv run python -m app.mcp --transport http --port $(BACKEND_PORT)
+mcp-http: backend-init ## Run the MCP-capable app over http on MCP_HTTP_PORT (default 8100)
+	@cd $(BACKEND_DIR) && uv run python -m app.mcp --transport http --host $(BACKEND_HOST) --port $(MCP_HTTP_PORT)
