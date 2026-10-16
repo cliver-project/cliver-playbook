@@ -1,8 +1,0 @@
-{
-  "$schema": "https://raw.githubusercontent.com/nickray/oxlint-json-schemas/main/.oxlintrc.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "rules": {
-    "react/rules-of-hooks": "error"
-  },
-  "ignorePatterns": ["dist", "node_modules"]
-}

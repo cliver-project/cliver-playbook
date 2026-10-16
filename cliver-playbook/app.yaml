@@ -30,7 +30,7 @@ log_level: INFO
 # Composed from CLIVER_DB_* parts (each defaulting to the bundled compose
 # db), so a deployment can repoint the database either wholesale
 # (CLIVER_DATABASE_URL — a higher layer, wins over this file) or part by
-# part (CLIVER_DB_* — plain template inputs consumed below, not Settings
+# part (CLIVER_DB_* — plain Jinja2 template inputs consumed below, not Settings
 # fields). Quoted so special characters in a composed password stay valid
 # YAML.
 database_url: "postgresql://{{ env('CLIVER_DB_USER', 'cliver') }}:{{ env('CLIVER_DB_PASSWORD', 'cliver') }}@{{ env('CLIVER_DB_HOST', '127.0.0.1') }}:{{ env('CLIVER_DB_PORT', '5432') }}/{{ env('CLIVER_DB_NAME', 'cliver_app') }}"

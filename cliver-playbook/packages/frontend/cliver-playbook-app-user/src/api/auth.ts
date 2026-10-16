@@ -1,7 +1,7 @@
 import { api } from "cliver-playbook-app-basic/api/client.ts";
 
 /**
- * Identity-domain API calls (user-management template).
+ * Identity-domain API calls (the user package).
  *
  * Thin typed wrappers — no state, no caching; TanStack Query handles server
  * state at the call sites. Shapes mirror app/schemas/auth.py exactly.

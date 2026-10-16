@@ -2,7 +2,7 @@
 
 Functions take an `AsyncSession` and stay transport-agnostic: routers own
 HTTP concerns, services own persistence rules. This layer is the seam a
-future template (or a real domain) extends.
+consuming project (or a real domain) extends.
 """
 
 from sqlalchemy import func, select

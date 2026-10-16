@@ -19,7 +19,7 @@ and declarative base, reads the identity tables, and contributes its own
 | Routers | `api/routes.py` | `ROUTERS: list[APIRouter]` — the protocol endpoint at `/mcp` and `/api/v1/mcp` views (ADR-0017). |
 | Protocol endpoint | `api/streamable.py` | The SDK's ASGI endpoint as a plain route; the session manager is installed and entered here. |
 | Gate | `auth.py` | `MCPGateMiddleware`: 401 + RFC 9728 pointer, 403 for a forced password change, viewer resolution. |
-| Tools | `tools/`, `toolkit.py` | `echo` and `user_directory` as templates: `@public_tool()` / `@require_perm(...)` write the audit row. |
+| Tools | `tools/`, `toolkit.py` | `echo` and `user_directory` as worked examples: `@public_tool()` / `@require_perm(...)` write the audit row. |
 | Audit | `audit.py` | MCP events on the identity package's `audit_logs` (viewer + agent + outcome). |
 | Transports | `transport.py`, `__main__.py` | `python -m cliver_playbook.app.mcp --transport stdio|http`. |
 | Application | `app.py` | `create_app()` composes basic + user + mcp; `configure_runtime()` for app-less entry points. |

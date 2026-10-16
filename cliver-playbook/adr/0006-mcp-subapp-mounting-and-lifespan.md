@@ -9,8 +9,9 @@
 # ADR-0006: MCP sub-app mounting and lifespan composition
 
 **Status:** Accepted (2026-10-16)
-**Context:** `templates/mcp-server` — how the MCP server attaches to the FastAPI app, and
-why one OAuth 2.1 provider serves both the Web and the agents.
+**Context:** `templates/mcp-server` (retired in favour of packages, ADR-0015) — how the
+MCP server attaches to the FastAPI app, and why one OAuth 2.1 provider serves both the
+Web and the agents.
 
 ## Decision
 

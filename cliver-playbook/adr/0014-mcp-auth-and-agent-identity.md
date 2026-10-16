@@ -1,8 +1,9 @@
 # ADR-0014: MCP auth ON/OFF, agent identity, and the shared token table
 
 **Status:** Accepted (2026-10-16)
-**Context:** `templates/mcp-server` — who may call the MCP surface, how a calling agent
-is identified, and what lands in the audit trail.
+**Context:** the MCP surface (`templates/mcp-server` when this was decided;
+`cliver-playbook-app-mcp` since the package split, ADR-0015) — who may call it, how a
+calling agent is identified, and what lands in the audit trail.
 
 ## Decision
 

@@ -6,7 +6,7 @@ rebuilds plain routes from ``route.endpoint``, so the gate has to be part of
 the endpoint object rather than wrapped on it afterwards — ADR-0017). One
 middleware, two modes, selected per request by ``settings.mcp.auth_enabled``:
 
-- **OFF (template default)**: no credential is required or read. An
+- **OFF (the default)**: no credential is required or read. An
   :class:`~cliver_playbook.app.mcp.context.AnonymousViewer` is bound so downstream
   permission checks fail closed (``has()`` is always False) — auth being
   off must not silently grant permissions, it just means "no identity".

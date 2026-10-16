@@ -79,7 +79,7 @@ def _wait_for_port(port: int, proc: subprocess.Popen, log: Any, timeout: float =
 
 @pytest.fixture(scope="module")
 def http_off_server():
-    """Full app on a real port, mcp.auth_enabled=false (template default)."""
+    """Full app on a real port, mcp.auth_enabled=false (the default)."""
     yield from _serve_app(auth_enabled=False)
 
 
