@@ -1,0 +1,129 @@
+# Application configuration — the lowest-priority settings layer.
+#
+# Precedence (highest first):
+#   environment variables (CLIVER_*)  >  .env file  >  this file  >  field
+#   defaults in backend/app/core/config.py
+#
+# Keys are BARE Settings field names (no CLIVER_ prefix — the prefix belongs
+# to the environment-variable layer only). Structure authority is the
+# Settings class; keys it does not define are silently ignored (extra=ignore),
+# so a typo here fails quietly — check spelling against config.py when a
+# value seems to have no effect.
+#
+# Values may be Jinja2 expressions. The env(name, default=None) helper reads
+# the process environment, then the project-root .env, then the default;
+# omitting the default makes a variable REQUIRED (startup fails with its
+# name). Wrap literal Jinja syntax in raw/endraw block tags.
+#
+# This file is checked in: NEVER put secrets here — keep them in the
+# environment or the gitignored .env. Note: uvicorn --reload does not watch
+# this file (the Makefile runs it from backend/); restart after editing.
+
+app_name: cliver-app
+log_level: INFO
+
+# Composed from CLIVER_DB_* parts (each defaulting to the bundled compose
+# db), so a deployment can repoint the database either wholesale
+# (CLIVER_DATABASE_URL — a higher layer, wins over this file) or part by
+# part (CLIVER_DB_* — plain template inputs consumed below, not Settings
+# fields). Quoted so special characters in a composed password stay valid
+# YAML.
+database_url: "postgresql://{{ env('CLIVER_DB_USER', 'cliver') }}:{{ env('CLIVER_DB_PASSWORD', 'cliver') }}@{{ env('CLIVER_DB_HOST', '127.0.0.1') }}:{{ env('CLIVER_DB_PORT', '5432') }}/{{ env('CLIVER_DB_NAME', 'cliver_app') }}"
+
+# --- OIDC provider registry (identity domain) -------------------------------
+#
+# Bundled presets below, all disabled: enabling a provider is a deployment
+# decision. Enable/override from the environment without editing this file,
+# using nested env names, e.g.
+#
+#   CLIVER_OIDC__PROVIDERS__GOOGLE__ENABLED=true
+#   CLIVER_OIDC__PROVIDERS__GOOGLE__CLIENT_ID=...
+#   CLIVER_OIDC__PROVIDERS__GOOGLE__CLIENT_SECRET=...
+#
+# (the env layer beats this file; provider keys match case-insensitively).
+# An enabled provider must carry client_id + client_secret plus either an
+# issuer (discovery) or all three explicit endpoint URLs — validated at
+# startup, fail fast. Client secrets NEVER go in this file (it is checked
+# in) — env/.env only.
+#
+# Note: env can override values here but cannot REMOVE these presets (deep
+# merge is additive); unwanted providers simply stay disabled.
+oidc:
+  # Absolute base URL of THIS backend as the IdP sees it, for the registered
+  # redirect URI <base>/api/v1/auth/oauth/<key>/callback.
+  # Empty -> derived from the incoming request.
+  redirect_base: ""
+  providers:
+    google:
+      enabled: false
+      label: Google
+      # Standard OIDC: the three endpoints come from the issuer's
+      # /.well-known/openid-configuration document.
+      issuer: https://accounts.google.com
+      client_id: ""
+      client_secret: ""
+      scopes: openid profile email
+      auto_provision: true
+      default_role: user
+    github:
+      enabled: false
+      label: GitHub
+      # GitHub speaks plain OAuth2 with no discovery document: explicit
+      # endpoints, and the numeric account id is the stable subject.
+      authorize_url: https://github.com/login/oauth/authorize
+      token_url: https://github.com/login/oauth/access_token
+      userinfo_url: https://api.github.com/user
+      subject_claim: id
+      client_id: ""
+      client_secret: ""
+      scopes: read:user user:email
+      auto_provision: true
+      default_role: user
+
+# --- MCP server (Phase 3 delta) --------------------------------------------
+#
+# The MCP server runs as a sub-application of THIS backend on the
+# `/mcp` URL prefix (and, when auth is on, OAuth 2.1 routes under
+# `/mcp/oauth` and the well-known metadata at `/mcp/.well-known/...`).
+# stdio transport is also supported via `python -m app.mcp --transport stdio`.
+#
+# The settings below compose into Settings.mcp.* under the CLIVER_MCP__... env
+# prefix; the layered-config mechanism (Phase 2.5) carries them through.
+mcp:
+  # Auth gate. Default OFF: the server is reachable without a token, which is
+  # the right default for local development and for agents running in a
+  # trusted environment (sidecar, internal network). Turn ON for any deployment
+  # that exposes /mcp beyond the loopback; tokens then come from the
+  # user-management `auth_tokens` table (same issuance/revocation path as the
+  # Web's bearer tokens) or via OAuth 2.1 dynamic client registration.
+  auth_enabled: false
+  # Public path of the MCP surface, mounted on the parent FastAPI app.
+  mount_path: /mcp
+  # How many concurrent tool calls a single viewer may have in flight.
+  max_concurrent_calls: 16
+  # Agent identification. Every MCP request carries X-MCP-Agent-Type and
+  # X-MCP-Agent-Id headers (or MCP_AGENT_TYPE / MCP_AGENT_ID env vars for
+  # stdio); the audit row records both. An empty whitelist means "accept
+  # any string", which is the right default for dev; tighten in prod.
+  agent_type_whitelist:
+    - claude-code
+    - workbuddy
+    - codex
+    - mcp-cli
+    - unknown
+  # Agent id is stored verbatim up to this length; longer is truncated.
+  agent_id_max_length: 128
+  # OAuth 2.1 AS/PRM metadata lives under <mount_path>/.well-known/... and
+  # the OAuth routes under <mount_path>/oauth/... when auth_enabled is true.
+  # When this server runs alongside the user-management OAuth 2.1 provider
+  # (which it always does — MCP cannot be composed without identity), the
+  # MCP's own OAuth mount is at /mcp/oauth so the Web's root-mounted
+  # .well-known routes and the MCP's are distinct and unambiguous.
+  oauth:
+    # AS metadata path; empty = default <mount_path>/.well-known/oauth-authorization-server
+    issuer_url: ""
+    # Access token TTL. MCP access tokens live in auth_tokens with
+    # client_id SET; long TTL is the wrong default for an agent gateway.
+    access_ttl_seconds: 3600
+    refresh_ttl_seconds: 2592000
+    code_ttl_seconds: 300

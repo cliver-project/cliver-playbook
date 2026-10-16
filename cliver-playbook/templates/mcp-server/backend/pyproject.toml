@@ -1,0 +1,60 @@
+[project]
+name = "cliver-app-backend"
+version = "0.1.0"
+description = "Backend service: FastAPI + async SQLAlchemy + PostgreSQL"
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework and server
+    "fastapi>=0.116.0",
+    "uvicorn[standard]>=0.35.0",
+    # Database: async SQLAlchemy over asyncpg at runtime; psycopg (sync) is the
+    # Alembic-only driver. config.py derives both URLs from one CLIVER_DATABASE_URL.
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.16.0",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.0",
+    "greenlet>=3.1.0",
+    # Configuration and validation
+    "pydantic>=2.11.0",
+    # 2.16 introduced the YamlConfigSettingsSource._read_file seam that
+    # app/core/config_yaml.py subclasses; the upper bound guards that
+    # private API against silent breakage (tests fail loudly if it moves).
+    "pydantic-settings>=2.16,<3",
+    # Layered config: the app.yaml tier is Jinja2-rendered, then YAML-parsed.
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+    # Read directly by config_yaml.py for the template env() helper's
+    # .env fallback (also a transitive pydantic-settings dependency).
+    "python-dotenv>=1.0",
+    "email-validator>=2.1.0",
+    # HTTP client (outbound calls)
+    "httpx>=0.28.0",
+    # OAuth 2.1 provider (agent/API clients): official MCP SDK ships the
+    # provider base classes and OAuth route factories used by app/auth/oauth21.py
+    "mcp>=2.2.0,<3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "anyio>=4.4.0",
+    "ruff>=0.8.0",
+]
+
+[tool.uv]
+# Application project, not a published library: install dependencies only,
+# never build/install the `app` package itself. Tests import it via pythonpath.
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# B008: FastAPI's `Depends(...)` in argument defaults is the framework idiom.
+ignore = ["B008"]
