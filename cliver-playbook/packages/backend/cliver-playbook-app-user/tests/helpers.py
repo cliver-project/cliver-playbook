@@ -7,7 +7,7 @@ fixture wipes it between tests, so each test seeds exactly what it needs.
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.user.auth.passwords import hash_password
-from cliver_playbook.app.user.auth.permissions import PERMISSION_CATALOG
+from cliver_playbook.app.user.auth.permissions import permission_catalog
 from cliver_playbook.app.user.models.entities import Role, RolePermission, User, UserRole
 
 TEST_ADMIN_PASSWORD = "admin-test-passw0rd"
@@ -19,7 +19,7 @@ async def seed_admin(session: AsyncSession) -> int:
     user_role = Role(code="user", name="User", is_system=True)
     session.add_all([admin_role, user_role])
     await session.flush()
-    for perm in PERMISSION_CATALOG:
+    for perm in permission_catalog():
         session.add(RolePermission(role_id=admin_role.id, permission_code=perm.code))
     admin_user = User(
         username="admin",

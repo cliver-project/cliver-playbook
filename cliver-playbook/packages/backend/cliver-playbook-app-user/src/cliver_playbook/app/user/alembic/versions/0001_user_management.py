@@ -43,7 +43,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 # Single source of truth for the seeded permission list and password format.
 # Alembic runs on the sync driver, and both helpers are plain sync functions.
 from cliver_playbook.app.user.auth.passwords import hash_password
-from cliver_playbook.app.user.auth.permissions import PERMISSION_CATALOG
+from cliver_playbook.app.user.auth.permissions import permission_catalog
 from cliver_playbook.app.user.settings import get_settings
 
 revision: str = "0001_user_management"
@@ -358,7 +358,7 @@ def _seed() -> None:
             ),
             [
                 {"role_id": admin_role_id, "code": p.code}
-                for p in sorted(PERMISSION_CATALOG, key=lambda p: p.code)
+                for p in sorted(permission_catalog(), key=lambda p: p.code)
             ],
         )
 

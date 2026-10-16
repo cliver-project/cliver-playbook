@@ -1,3 +1,11 @@
+> **Superseded by ADR-0017** (2026-10-16): the MCP protocol endpoint is now an
+> ordinary route inside the package's `APIRouter`, composed with every other
+> package's routers through `include_router` — no `Mount`, and no hand-composed
+> sub-app lifespan, because the session manager is entered from the
+> application's own lifespan. The transport settings decided here
+> (`stateless_http=True`, DNS-rebinding protection off, one build per process)
+> were carried over unchanged. Kept for history.
+
 # ADR-0006: MCP sub-app mounting and lifespan composition
 
 **Status:** Accepted (2026-10-16)

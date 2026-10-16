@@ -14,7 +14,7 @@ Rules:
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cliver_playbook.app.user.auth.permissions import PERMISSION_CODES
+from cliver_playbook.app.user.auth.permissions import permission_codes
 from cliver_playbook.app.user.models.entities import Role, RolePermission
 from cliver_playbook.app.user.services.users import DomainError
 
@@ -42,7 +42,7 @@ async def list_roles(db: AsyncSession) -> list[dict]:
 
 
 def _validate_codes(codes: list[str]) -> None:
-    unknown = [c for c in codes if c not in PERMISSION_CODES]
+    unknown = [c for c in codes if c not in permission_codes()]
     if unknown:
         raise DomainError(
             f"Unknown permission codes: {', '.join(sorted(unknown))} — "

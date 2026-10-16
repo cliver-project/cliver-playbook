@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "cliver-playbook-app-basic",
     "cliver-playbook-app-user",
+    "cliver-playbook-app-mcp",
 ]
 
 [tool.uv]
@@ -19,6 +20,7 @@ package = false
 [tool.uv.sources]
 cliver-playbook-app-basic = { workspace = true }
 cliver-playbook-app-user = { workspace = true }
+cliver-playbook-app-mcp = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/backend/*"]

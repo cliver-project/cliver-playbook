@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
-from cliver_playbook.app.user.auth.permissions import PERMISSION_CODES
+from cliver_playbook.app.user.auth.permissions import permission_codes
 from cliver_playbook.app.user.auth.tokens import verify_bearer
 from cliver_playbook.app.user.models.entities import Role, RolePermission, User, UserRole
 
@@ -128,14 +128,17 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 def require_perm(code: str):
     """FastAPI dependency factory: the caller must hold `code`.
 
-    Codes are validated against the catalog at import time — a typo in a
+    Codes are validated against the live catalog at import time — a typo in a
     router (say `user:reed`) would otherwise 403 every request with no hint,
     and worse, a binding to a nonexistent code would silently grant nothing.
+    "Live" matters for composition: a package that registers its codes
+    (ADR-0017) must do so before the module defining this call site imports.
     """
-    if code not in PERMISSION_CODES:
+    if code not in permission_codes():
         raise RuntimeError(
-            f"require_perm({code!r}): not in PERMISSION_CATALOG — "
-            "add it to app/auth/permissions.py first"
+            f"require_perm({code!r}): not in the permission catalog — add it to "
+            "auth/permissions.py (this package) or register it from the owning "
+            "package before this route module imports"
         )
 
     async def _checker(viewer: Viewer = Depends(get_current_user)) -> Viewer:
