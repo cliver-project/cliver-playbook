@@ -6,6 +6,7 @@
   "description": "Engineering asset library: composable backend and frontend packages, plus the skills that assemble them into a project.",
   "scripts": {
     "dev": "pnpm --filter cliver-playbook-dev-basic dev",
+    "dev:user": "pnpm --filter cliver-playbook-dev-user dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"

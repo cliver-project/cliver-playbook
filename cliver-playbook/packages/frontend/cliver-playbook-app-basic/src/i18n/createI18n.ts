@@ -13,7 +13,7 @@ import zh from "cliver-playbook-app-basic/locales/zh.json";
  * first)::
  *
  *     import { createI18n } from "cliver-playbook-app-basic/i18n/createI18n.ts";
- *     import { userTranslations } from "cliver-playbook-app-user/locales";
+ *     import { userTranslations } from "cliver-playbook-app-user";
  *     createI18n(userTranslations);
  *
  * Merge semantics: per language, deeper keys win (`{items: {title}}` from a

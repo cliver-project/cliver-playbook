@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useAuth } from "./AuthContext";
+import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
 
 /**
  * Route-level permission gate for UI affordances.

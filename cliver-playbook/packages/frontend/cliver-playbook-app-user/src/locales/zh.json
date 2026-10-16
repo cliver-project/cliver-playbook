@@ -1,49 +1,10 @@
 {
-  "app": {
-    "title": "cliver-app",
-    "tagline": "服务脚手架 — FastAPI + React"
-  },
   "nav": {
-    "home": "首页",
     "users": "用户",
     "roles": "角色",
     "oauth": "OAuth",
     "audit": "审计日志",
-    "items": "条目",
     "profile": "个人资料"
-  },
-  "theme": {
-    "label": "主题",
-    "light": "浅色",
-    "dark": "深色",
-    "system": "跟随系统"
-  },
-  "language": {
-    "label": "语言"
-  },
-  "common": {
-    "loading": "加载中…",
-    "pending": "处理中…",
-    "error": "出了点问题",
-    "retry": "重试",
-    "save": "保存",
-    "cancel": "取消",
-    "delete": "删除",
-    "edit": "编辑",
-    "create": "新建",
-    "confirm": "确认",
-    "search": "搜索",
-    "actions": "操作",
-    "notFound": "未找到"
-  },
-  "home": {
-    "welcome": "欢迎使用服务脚手架",
-    "description": "FastAPI 后端、React 前端、Docker 托管的 PostgreSQL，外加开箱即绿的测试——全部接线完毕。",
-    "itemsCardTitle": "演示数据",
-    "itemsCardDescription": "通过 TanStack Query 从后端实时获取。",
-    "itemsCount": "已存储 {{count}} 条记录",
-    "apiDown": "后端不可达——请确认 8000 端口服务已启动。",
-    "manageItems": "管理条目"
   },
   "auth": {
     "loginTitle": "登录",
@@ -205,21 +166,5 @@
         "unknown": "关联失败，请重试。"
       }
     }
-  },
-  "items": {
-    "title": "条目管理",
-    "create": "新建条目",
-    "createTitle": "新建条目",
-    "editTitle": "编辑 {{name}}",
-    "deleteTitle": "删除 {{name}}",
-    "deleteConfirm": "将永久删除该记录，此操作不可撤销。",
-    "name": "名称",
-    "description": "描述",
-    "quantity": "数量",
-    "updatedAt": "更新时间",
-    "empty": "暂无条目——创建第一个吧。",
-    "created": "条目已创建",
-    "updated": "条目已更新",
-    "deleted": "条目已删除"
   }
 }

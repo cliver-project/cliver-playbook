@@ -1,3 +1,11 @@
+// A path reference is the only mechanism that works here: the file it names
+// declares globals (augmentations), and an augmentation cannot be reached by
+// an `import` — which is what the rule below assumes. Without it, any program
+// that compiles this file (a consuming package's own typecheck) would report
+// `import.meta.env` as an unknown property, since a source-only package's
+// ambient declarations do not travel through the consumer's `include`.
+// oxlint-disable-next-line typescript/triple-slash-reference
+/// <reference path="../env.d.ts" />
 import axios from "axios";
 
 /**
@@ -6,8 +14,8 @@ import axios from "axios";
  * - Base URL: empty by default (same-origin; the Vite dev proxy forwards /api
  *   to the backend). VITE_API_BASE_URL overrides for split deployments.
  * - Bearer injection: the auth layer registers a token getter via
- *   `setAuthTokenGetter` — this file stays free of auth state (the
- *   user-management template builds its AuthContext on this hook).
+ *   `setAuthTokenGetter` — this file stays free of auth state (the user
+ *   package's `auth/session.ts` is the implementation of that hook).
  */
 export const api = axios.create({
   baseURL: (import.meta.env.VITE_API_BASE_URL ?? "") + "/api/v1",

@@ -99,9 +99,14 @@ spinning up a project.
   Its inline script must stay inline (it sets `data-theme` before first paint)
   and its storage key must match `ThemeProvider`.
 - `styles/index.css` carries `@source "../"`: the app's Tailwind build is
-  rooted at the app, and automatic content detection skips `node_modules`, so
-  the package has to name its own sources or the utilities used only here would
-  be missing from the built stylesheet. Every package that ships styles needs
-  its own line, and the build-time tools it imports (`tailwindcss`, the vite
-  plugins) are its dev dependencies.
+  rooted at the app, and automatic content detection does not look inside an
+  installed package, so the package has to name its own sources or the
+  utilities used only here would be missing from the built stylesheet. That
+  line covers this package; a package added on top of it is named by the app's
+  own Tailwind entry (`@import` this stylesheet, then one `@source` per
+  package) — see the user package's README. Only the file that carries
+  `@import "tailwindcss"` can declare sources, and the scanner does not follow
+  symlinks, so the extra paths must be real directories. The build-time tools
+  the stylesheet imports (`tailwindcss`, the vite plugins) are this package's
+  dev dependencies.
 - Theme and language persist under the `cliver-theme` / `i18nextLng` keys.

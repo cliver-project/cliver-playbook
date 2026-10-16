@@ -3,18 +3,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { useAuth } from "@/components/auth/AuthContext";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { apiErrorMessage } from "@/api/client";
+import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
+import { ConfirmDialog } from "cliver-playbook-app-basic/components/ConfirmDialog.tsx";
+import { Badge } from "cliver-playbook-app-basic/components/ui/badge.tsx";
+import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "cliver-playbook-app-basic/components/ui/table.tsx";
+import { apiErrorMessage } from "cliver-playbook-app-basic/api/client.ts";
 import {
   listOauthClients,
   listOauthGrants,
   revokeOauthGrant,
   type OauthGrantInfo,
-} from "@/api/auth";
+} from "cliver-playbook-app-user/api/auth.ts";
 
 /**
  * OAuth provider administration: which clients have registered (DCR is open

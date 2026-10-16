@@ -28,7 +28,8 @@
     "confirm": "确认",
     "search": "搜索",
     "actions": "操作",
-    "notFound": "未找到"
+    "notFound": "未找到",
+    "pending": "处理中…"
   },
   "home": {
     "welcome": "欢迎使用服务脚手架",

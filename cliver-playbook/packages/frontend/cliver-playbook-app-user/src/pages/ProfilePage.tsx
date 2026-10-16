@@ -3,19 +3,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { useAuth } from "@/components/auth/AuthContext";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
+import { ConfirmDialog } from "cliver-playbook-app-basic/components/ConfirmDialog.tsx";
+import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { apiErrorMessage } from "@/api/client";
+} from "cliver-playbook-app-basic/components/ui/card.tsx";
+import { Input } from "cliver-playbook-app-basic/components/ui/input.tsx";
+import { Label } from "cliver-playbook-app-basic/components/ui/label.tsx";
+import { apiErrorMessage } from "cliver-playbook-app-basic/api/client.ts";
 import {
   changePassword,
   listLinkedIdentities,
@@ -24,7 +24,7 @@ import {
   unlinkIdentity,
   updateProfile,
   type LinkedIdentity,
-} from "@/api/auth";
+} from "cliver-playbook-app-user/api/auth.ts";
 
 /**
  * Self-service profile page: the caller's own contact details, an inline

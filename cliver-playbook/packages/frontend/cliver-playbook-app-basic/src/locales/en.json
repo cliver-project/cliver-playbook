@@ -28,7 +28,8 @@
     "confirm": "Confirm",
     "search": "Search",
     "actions": "Actions",
-    "notFound": "Not found"
+    "notFound": "Not found",
+    "pending": "Working…"
   },
   "home": {
     "welcome": "Welcome to the service scaffold",

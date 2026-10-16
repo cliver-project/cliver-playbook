@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api } from "cliver-playbook-app-basic/api/client.ts";
 
 /**
  * Identity-domain API calls (user-management template).

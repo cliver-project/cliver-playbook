@@ -8,20 +8,21 @@ import {
   type ReactNode,
 } from "react";
 
-import type { CurrentUser } from "@/api/auth";
-import { fetchMe, login as apiLogin, logout as apiLogout } from "@/api/auth";
-import { getStoredToken, setStoredToken } from "@/api/client";
+import type { CurrentUser } from "cliver-playbook-app-user/api/auth.ts";
+import { fetchMe, login as apiLogin, logout as apiLogout } from "cliver-playbook-app-user/api/auth.ts";
+import { getStoredToken, setStoredToken } from "cliver-playbook-app-user/auth/session.ts";
 
 /**
  * Session state for the whole SPA.
  *
- * Deliberately tiny (~no network logic beyond /me): token transport lives in
- * api/client.ts, server-state caching lives in TanStack Query. This context
- * answers three questions: who is logged in, can the UI show a given
- * affordance, and how do we log in/out.
+ * Deliberately tiny (no network logic beyond /me): token persistence and the
+ * transport-level session policy live in auth/session.ts, server-state caching
+ * lives in TanStack Query. This context answers three questions: who is logged
+ * in, can the UI show a given affordance, and how do we log in/out.
  *
  * The token itself lives in localStorage under a fixed key — surviving reload
- * — and every authenticated request picks it up through the axios interceptor.
+ * — and every authenticated request picks it up through the axios interceptor
+ * that `installAuthClient()` registers.
  */
 
 type AuthStatus = "loading" | "authenticated" | "anonymous";

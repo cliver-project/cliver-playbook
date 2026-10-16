@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { listAudit } from "@/api/auth";
+import { Badge } from "cliver-playbook-app-basic/components/ui/badge.tsx";
+import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
+import { Input } from "cliver-playbook-app-basic/components/ui/input.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "cliver-playbook-app-basic/components/ui/table.tsx";
+import { listAudit } from "cliver-playbook-app-user/api/auth.ts";
 
 /**
  * Read-only audit trail viewer (audit:read). Every login, password change,

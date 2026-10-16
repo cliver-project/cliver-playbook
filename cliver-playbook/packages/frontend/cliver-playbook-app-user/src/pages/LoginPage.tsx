@@ -4,13 +4,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { useAuth } from "@/components/auth/AuthContext";
-import { AuthShell } from "@/components/auth/AuthShell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { apiErrorMessage } from "@/api/client";
-import { listOAuthProviders, oauthLoginUrl } from "@/api/auth";
+import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
+import { AuthShell } from "cliver-playbook-app-user/components/auth/AuthShell.tsx";
+import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
+import { Input } from "cliver-playbook-app-basic/components/ui/input.tsx";
+import { Label } from "cliver-playbook-app-basic/components/ui/label.tsx";
+import { apiErrorMessage } from "cliver-playbook-app-basic/api/client.ts";
+import { listOAuthProviders, oauthLoginUrl } from "cliver-playbook-app-user/api/auth.ts";
 
 /**
  * Password session login, plus SSO buttons for every configured OIDC

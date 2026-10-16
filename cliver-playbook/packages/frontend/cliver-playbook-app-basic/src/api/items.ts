@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api } from "cliver-playbook-app-basic/api/client.ts";
 
 /**
  * Item API — the reference shape for entity API modules: one interface for
