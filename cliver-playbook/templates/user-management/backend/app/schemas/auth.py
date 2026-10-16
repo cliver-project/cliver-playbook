@@ -205,6 +205,40 @@ class OauthGrantRevokeRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Linked external identities (self-service, profile page)
+# ---------------------------------------------------------------------------
+
+
+class IdentityLinkStart(BaseModel):
+    """Response of POST /auth/identities/{provider}/link: the IdP authorize
+    URL for the SPA to navigate to — a full-page navigation, because the
+    redirect chain must leave the SPA for the IdP and return to the backend
+    callback (same shape as a login, different signed state)."""
+
+    redirect_url: str
+
+
+class LinkedIdentityRead(BaseModel):
+    """One external identity attached to the viewer's account."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider: str
+    # Display label resolved through the settings registry (including
+    # disabled presets); identities whose key left the config fall back to
+    # the raw key. Display-only — the provider key is the stable value.
+    provider_label: str
+    email: str
+    display_name: str
+    linked_at: datetime
+    # True when unlinking this row would leave an OIDC-only account with no
+    # credential at all — DELETE refuses it with 409. Display-only hint; the
+    # server re-checks on the DELETE itself.
+    is_last_credential: bool
+
+
+# ---------------------------------------------------------------------------
 # Audit (admin)
 # ---------------------------------------------------------------------------
 

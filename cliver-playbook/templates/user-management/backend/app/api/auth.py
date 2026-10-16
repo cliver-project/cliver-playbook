@@ -1,5 +1,6 @@
 """Authentication endpoints: session login/logout, profile, password change,
-and OIDC login (delegated to app.auth.oidc).
+OIDC login, and self-service linking/unlinking of external identities
+(OIDC mechanics delegated to app.auth.oidc).
 
 Transaction discipline: unlike the scaffold's demo items (whose service
 commits), identity routers use one commit per request at the END — service
@@ -9,12 +10,13 @@ place that commits BEFORE raising, so the failure audit survives the 401.
 
 import hashlib
 import secrets
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.audit import write_audit
@@ -42,9 +44,11 @@ from app.auth.passwords import ahash_password, averify_password, needs_rehash
 from app.auth.tokens import issue_web_token, revoke_all_for_user, revoke_token_by_id
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.models.entities import Role, User, UserRole
+from app.models.entities import OauthIdentity, Role, User, UserRole
 from app.schemas.auth import (
     ChangePasswordRequest,
+    IdentityLinkStart,
+    LinkedIdentityRead,
     LoginRequest,
     LoginResponse,
     MeResponse,
@@ -349,8 +353,8 @@ async def oauth_callback(
         return _fail(error or "missing_code")
 
     blob = request.cookies.get(state_cookie_name, "")
-    verifier = verify_state_blob(blob, provider_key=provider, state=state)
-    if verifier is None:
+    data = verify_state_blob(blob, provider_key=provider, state=state)
+    if data is None:
         await write_audit(
             db,
             event="auth.oauth.callback",
@@ -360,6 +364,7 @@ async def oauth_callback(
         )
         await db.commit()
         return _fail("state_mismatch")
+    verifier = str(data["verifier"])
 
     try:
         document = await endpoints_for(config)
@@ -398,6 +403,24 @@ async def oauth_callback(
     subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
     if not subject:
         return _fail("no_subject")
+
+    # Account-linking flow (started from the profile page): attach the now-
+    # verified identity to the user pinned in the signed state. Never issues
+    # a session token — the user already has one; that is the whole point.
+    if data.get("mode") == "link":
+        link_user_id = data.get("user_id")
+        if not isinstance(link_user_id, int) or isinstance(link_user_id, bool) or link_user_id <= 0:
+            # A link blob without a valid pinned user id is corrupt.
+            return _fail("state_mismatch")
+        return await _complete_identity_link(
+            db,
+            request=request,
+            provider=provider,
+            userinfo=userinfo,
+            subject=subject,
+            user_id=link_user_id,
+            frontend=frontend,
+        )
 
     user_id = await find_linked_user(db, provider, subject)
     if user_id is None:
@@ -442,8 +465,6 @@ async def oauth_callback(
 
 async def _provision_user(db: AsyncSession, config, provider_key: str, userinfo: dict) -> int:
     """Create a local account + identity link for a first-time SSO user."""
-    from app.models.entities import OauthIdentity
-
     # Same claim mapping as the callback's identity lookup — the subject
     # stored here must byte-match what the next login will look up.
     subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
@@ -485,6 +506,256 @@ async def _provision_user(db: AsyncSession, config, provider_key: str, userinfo:
     )
     await db.flush()
     return user.id
+
+
+# ---------------------------------------------------------------------------
+# Linked external identities (profile page self-service)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/identities", response_model=list[LinkedIdentityRead])
+async def list_identities(
+    viewer: Viewer = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[LinkedIdentityRead]:
+    """The viewer's linked external identities ("Linked accounts" card).
+
+    provider_label resolves through the FULL settings registry — disabled
+    presets included — so a provider switched off after linking still shows a
+    sane name; an identity whose key vanished from the config falls back to
+    the raw key. is_last_credential flags the one row an OIDC-only account
+    cannot unlink (the DELETE enforces it with 409 regardless).
+    """
+    user = await users_service.get_user(db, viewer.user_id)
+    if user is None:  # raced with deletion mid-request
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    rows = (
+        (
+            await db.execute(
+                select(OauthIdentity)
+                .where(OauthIdentity.user_id == viewer.user_id)
+                .order_by(OauthIdentity.linked_at, OauthIdentity.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    labels = {
+        key: (provider.label or key.title())
+        for key, provider in get_settings().oidc.providers.items()
+    }
+    oidc_only = user.password_hash == ""
+    return [
+        LinkedIdentityRead(
+            id=row.id,
+            provider=row.provider,
+            provider_label=labels.get(row.provider, row.provider),
+            email=row.email,
+            display_name=row.display_name,
+            linked_at=row.linked_at,
+            # Only meaningful for an OIDC-only account down to its last row:
+            # a password account always has its password to fall back on.
+            is_last_credential=oidc_only and len(rows) == 1,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/identities/{provider}/link")
+async def start_identity_link(
+    provider: str,
+    request: Request,
+    viewer: Viewer = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """Begin linking an external identity to the signed-in account.
+
+    Same authorize redirect + state cookie as a login, but the signed blob
+    carries mode="link" plus the viewer's user id, so the callback attaches
+    the identity instead of issuing a session. Returns the IdP authorize URL
+    for the SPA to navigate to — a full-page navigation, since the redirect
+    chain must leave the SPA. IdP unavailability surfaces as a 502: this is
+    a direct API call (no redirect target to steer), so a plain error
+    response is the honest signal.
+    """
+    registry = build_provider_registry()
+    config = registry.get(provider)
+    if config is None:
+        raise HTTPException(status_code=404, detail="Unknown OAuth provider")
+
+    state = secrets.token_hex(16)
+    verifier, challenge = make_pkce_pair()
+    try:
+        document = await endpoints_for(config)
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(status_code=502, detail="Identity provider is unavailable")
+    url = build_authorize_url(
+        config,
+        document,
+        state=state,
+        code_challenge=challenge,
+        # Same callback URL as a login: the IdP sees one registered redirect
+        # URI per provider, the mode lives in the signed cookie, not the URL.
+        redirect_uri=_redirect_uri(request, provider),
+    )
+    response = JSONResponse(content=IdentityLinkStart(redirect_url=url).model_dump())
+    response.set_cookie(
+        state_cookie_name,
+        sign_state_blob(provider, state, verifier, mode="link", user_id=viewer.user_id),
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@router.delete("/identities/{identity_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_identity(
+    identity_id: int,
+    request: Request,
+    viewer: Viewer = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Remove one of the viewer's linked external identities.
+
+    A missing OR foreign identity is a plain 404 — no existence leak across
+    users. The last credential of an OIDC-only account (password_hash='')
+    is protected server-side with 409: greying the button out in the UI is
+    courtesy, this is the enforcement. A password account may unlink all
+    its identities; the password remains the fallback credential.
+    """
+    identity = (
+        await db.execute(select(OauthIdentity).where(OauthIdentity.id == identity_id))
+    ).scalar_one_or_none()
+    if identity is None or identity.user_id != viewer.user_id:
+        raise HTTPException(status_code=404, detail="Identity not found")
+
+    user = await users_service.get_user(db, viewer.user_id)
+    if user is None:  # raced with deletion mid-request
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if user.password_hash == "":
+        remaining = await db.scalar(
+            select(func.count())
+            .select_from(OauthIdentity)
+            .where(OauthIdentity.user_id == viewer.user_id)
+        )
+        if (remaining or 0) <= 1:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Cannot remove the last remaining credential of an account "
+                    "without a password; set a password first"
+                ),
+            )
+    await db.delete(identity)
+    await write_audit(
+        db,
+        event="auth.identity.unlink",
+        user_id=viewer.user_id,
+        username=viewer.username,
+        target=f"oidc:{identity.provider}",
+        request=request,
+    )
+    await db.commit()
+
+
+async def _complete_identity_link(
+    db: AsyncSession,
+    *,
+    request: Request,
+    provider: str,
+    userinfo: dict,
+    subject: str,
+    user_id: int,
+    frontend: str,
+) -> RedirectResponse:
+    """Attach a freshly-verified IdP identity to the pinned local account.
+
+    The user was authenticated by their session token at link START and the
+    signed blob pinned that user id; the callback only re-checks liveness.
+    Outcomes land on the profile page as URL fragments (#linked=provider /
+    #link_error=reason) for the SPA to toast — never a #token= fragment.
+    """
+
+    def _done(fragment: str) -> RedirectResponse:
+        redirect = RedirectResponse(
+            f"{frontend}/profile#{fragment}", status_code=status.HTTP_302_FOUND
+        )
+        redirect.delete_cookie(state_cookie_name)
+        return redirect
+
+    user = await users_service.get_user(db, user_id)
+    if user is None or not user.is_active:
+        return _done("link_error=not_allowed")
+    # Captured before any INSERT: a rollback below expires every instance in
+    # the session, and touching an expired attribute from sync audit code
+    # would trigger a lazy refresh outside async context.
+    username = user.username
+
+    existing_user_id = await find_linked_user(db, provider, subject)
+    if existing_user_id == user.id:
+        return _done(f"linked={quote(provider)}")  # idempotent re-link
+    if existing_user_id is not None:
+        # The IdP identity already belongs to another local account — the
+        # user should log in with it instead of attaching it here.
+        await write_audit(
+            db,
+            event="auth.identity.link",
+            user_id=user_id,
+            username=username,
+            target=f"oidc:{provider}",
+            ok=False,
+            error="already_linked",
+            request=request,
+        )
+        await db.commit()
+        return _done("link_error=already_linked")
+
+    # Snapshot columns (same shape as login-time provisioning), truncated to
+    # their column widths; nullable IdP emails coerce to "".
+    email = str(userinfo.get("email", "") or "")[:255]
+    display_name = str(
+        userinfo.get("name") or userinfo.get("preferred_username") or email or subject[:32]
+    )[:128]
+    db.add(
+        OauthIdentity(
+            provider=provider,
+            subject=subject,
+            user_id=user.id,
+            email=email,
+            display_name=display_name,
+        )
+    )
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Lost a race against a concurrent link/login of the same (provider,
+        # subject): the unique constraint tripped after our check above.
+        # Same user-visible outcome as the check — and the rollback keeps the
+        # failed insert from poisoning the audit write that follows.
+        await db.rollback()
+        await write_audit(
+            db,
+            event="auth.identity.link",
+            user_id=user_id,
+            username=username,
+            target=f"oidc:{provider}",
+            ok=False,
+            error="already_linked (race)",
+            request=request,
+        )
+        await db.commit()
+        return _done("link_error=already_linked")
+    await write_audit(
+        db,
+        event="auth.identity.link",
+        user_id=user.id,
+        username=user.username,
+        target=f"oidc:{provider}",
+        request=request,
+    )
+    await db.commit()
+    return _done(f"linked={quote(provider)}")
 
 
 # ---------------------------------------------------------------------------

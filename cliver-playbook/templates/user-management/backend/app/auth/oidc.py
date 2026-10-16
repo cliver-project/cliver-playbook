@@ -128,12 +128,22 @@ def make_pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-def sign_state_blob(provider_key: str, state: str, code_verifier: str) -> str:
+def sign_state_blob(
+    provider_key: str,
+    state: str,
+    code_verifier: str,
+    *,
+    mode: str = "login",
+    user_id: int | None = None,
+) -> str:
     """Serialize + HMAC-sign the state blob stored in the cookie.
 
     The verifier travels in the cookie (not the URL) so the browser redirect
     chain never exposes it; the signature stops a forged cookie from steering
-    the callback at an attacker-chosen authorization.
+    the callback at an attacker-chosen authorization. `mode` distinguishes a
+    login flow from an account-linking flow — "link" additionally pins the
+    user_id the callback may attach the identity to, since the linking user
+    is authenticated by their session token at link START, not at callback.
     """
     secret = get_settings().hmac_secret
     payload = json.dumps(
@@ -141,6 +151,9 @@ def sign_state_blob(provider_key: str, state: str, code_verifier: str) -> str:
             "provider": provider_key,
             "state": state,
             "verifier": code_verifier,
+            "mode": mode,
+            # Present only for link blobs; login blobs stay lean.
+            **({"user_id": user_id} if user_id is not None else {}),
             "exp": int(time.time()) + _STATE_TTL_SECONDS,
         },
         separators=(",", ":"),
@@ -149,11 +162,13 @@ def sign_state_blob(provider_key: str, state: str, code_verifier: str) -> str:
     return base64.urlsafe_b64encode(payload + b"." + sig.encode()).decode()
 
 
-def verify_state_blob(blob: str, *, provider_key: str, state: str) -> str | None:
+def verify_state_blob(blob: str, *, provider_key: str, state: str) -> dict[str, Any] | None:
     """Validate signature, expiry, provider, and state echo.
 
-    Returns the code_verifier on success, None on any mismatch — the caller
-    turns None into a 400 without details (do not help an attacker debug).
+    Returns the verified payload dict on success, None on any mismatch — the
+    caller turns None into a failure redirect without details (do not help an
+    attacker debug). Blobs signed before the `mode` field existed (cookies in
+    flight across a deploy) verify as mode="login", preserving compatibility.
     """
     secret = get_settings().hmac_secret
     try:
@@ -169,7 +184,8 @@ def verify_state_blob(blob: str, *, provider_key: str, state: str) -> str | None
             str(data["state"]), str(state)
         ):
             return None
-        return str(data["verifier"])
+        data.setdefault("mode", "login")
+        return data
     except (ValueError, KeyError, TypeError):
         return None
 
