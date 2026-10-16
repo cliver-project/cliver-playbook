@@ -206,6 +206,9 @@ class McpSettings(BaseModel):
     # Auth gate flag. Default OFF: local development / trusted networks.
     # ON = every request must carry a bearer token from the shared
     # auth_tokens table (same issuance/revocation path as the Web's).
+    # OFF is not "everyone is an admin": calls run under an anonymous
+    # viewer, so @public_tool tools answer and @require_perm tools are
+    # denied — auth off never silently grants permissions.
     auth_enabled: bool = False
 
     # Public path of the MCP endpoint on the parent app. Must start with
@@ -220,8 +223,18 @@ class McpSettings(BaseModel):
 
     # Agent self-identification: values outside the whitelist normalise to
     # "unknown" in audit rows. Empty list = accept any string (dev default).
+    # "web-playground" is this template's own Web UI test console — it
+    # declares a distinct type so its calls are never mistaken for an
+    # anonymous client that did not identify itself.
     agent_type_whitelist: list[str] = Field(
-        default_factory=lambda: ["claude-code", "workbuddy", "codex", "mcp-cli", "unknown"]
+        default_factory=lambda: [
+            "claude-code",
+            "workbuddy",
+            "codex",
+            "mcp-cli",
+            "web-playground",
+            "unknown",
+        ]
     )
 
     # Agent ids are stored verbatim up to this length, truncated beyond.

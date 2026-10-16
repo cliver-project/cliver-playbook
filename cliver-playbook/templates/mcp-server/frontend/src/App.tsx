@@ -11,10 +11,12 @@ import ChangePasswordPage from "@/pages/ChangePasswordPage";
 import HomePage from "@/pages/HomePage";
 import ItemsPage from "@/pages/ItemsPage";
 import LoginPage from "@/pages/LoginPage";
+import MCPPlaygroundPage from "@/pages/MCPPlaygroundPage";
 import OAuthAuthorizePage from "@/pages/OAuthAuthorizePage";
 import OAuthCallbackPage from "@/pages/OAuthCallbackPage";
 import ProfilePage from "@/pages/ProfilePage";
 import AuditPage from "@/pages/admin/AuditPage";
+import MCPAgentsPage from "@/pages/admin/MCPAgentsPage";
 import OAuthPage from "@/pages/admin/OAuthPage";
 import RolesPage from "@/pages/admin/RolesPage";
 import UsersPage from "@/pages/admin/UsersPage";
@@ -81,6 +83,26 @@ export default function App() {
                   element={
                     <RequirePerm code="audit:read">
                       <AuditPage />
+                    </RequirePerm>
+                  }
+                />
+                {/* MCP surface. The playground invokes tools
+                    (mcp:tools:invoke); the agents view reads MCP activity
+                    without needing the full identity audit trail
+                    (mcp:agents:read) — both enforced server-side too. */}
+                <Route
+                  path="mcp/playground"
+                  element={
+                    <RequirePerm code="mcp:tools:invoke">
+                      <MCPPlaygroundPage />
+                    </RequirePerm>
+                  }
+                />
+                <Route
+                  path="mcp/agents"
+                  element={
+                    <RequirePerm code="mcp:agents:read">
+                      <MCPAgentsPage />
                     </RequirePerm>
                   }
                 />

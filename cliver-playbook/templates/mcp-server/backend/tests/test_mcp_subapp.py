@@ -89,8 +89,7 @@ def test_root_mount_does_not_shadow_api_routes(booted_client: TestClient):
 
     last = app.router.routes[-1]
     assert isinstance(last, Mount) and last.app is build_mcp_subapp(), (
-        "the '/' mount must be the final route — anything declared after "
-        "it would be shadowed"
+        "the '/' mount must be the final route — anything declared after it would be shadowed"
     )
 
     assert booted_client.get("/api/v1/version").status_code == 200

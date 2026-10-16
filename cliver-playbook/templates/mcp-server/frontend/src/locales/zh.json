@@ -10,7 +10,9 @@
     "oauth": "OAuth",
     "audit": "审计日志",
     "items": "条目",
-    "profile": "个人资料"
+    "profile": "个人资料",
+    "mcpPlayground": "MCP 试调台",
+    "mcpAgents": "MCP Agent"
   },
   "theme": {
     "label": "主题",
@@ -221,5 +223,68 @@
     "created": "条目已创建",
     "updated": "条目已更新",
     "deleted": "条目已删除"
+  },
+  "mcp": {
+    "common": {
+      "copy": "复制",
+      "copied": "已复制到剪贴板",
+      "copyFailed": "无法访问剪贴板",
+      "unknownAgent": "unknown"
+    },
+    "playground": {
+      "title": "MCP 试调台",
+      "description": "用你自己的会话令牌，按真实 MCP 线协议调用本服务器的工具。这里的每次调用都会像 agent 调用一样写入审计。",
+      "endpointTitle": "接入地址",
+      "endpointDescription": "把 MCP 客户端指向这个地址。JSON-RPC 传输（streamable HTTP）对所有 agent 完全一致。",
+      "authOn": "需要认证",
+      "authOff": "认证关闭",
+      "authOffWarning": "认证已关闭：调用以匿名身份执行——需要权限的工具会全部被拒，能访问该地址的进程则可以调用公开工具。设置 CLIVER_MCP__AUTH_ENABLED=true 后即可用自己的令牌调用；将服务暴露到 localhost 之外前也请务必启用。",
+      "authOnNote": "请求必须携带 Bearer 令牌。你的会话令牌即可使用——试调台会自动附带。",
+      "cliHint": "添加到 MCP 客户端（以 Claude Code 为例）：",
+      "headersHint": "agent 可通过 X-MCP-Agent-Type / X-MCP-Agent-Id 头自报身份，审计中会记录这两项。",
+      "toolsTitle": "试调工具",
+      "toolsDescription": "完全按 agent 的方式发送 tools/list 与 tools/call。权限不足会以工具错误返回——这正是权限在执行。",
+      "toolsFailed": "无法获取工具列表",
+      "toolLabel": "工具",
+      "selectTool": "选择工具…",
+      "argsLabel": "调用参数（JSON）",
+      "argsInvalid": "参数不是合法的 JSON",
+      "argsObjectRequired": "参数必须是 JSON 对象，例如 {\"message\": \"hi\"}",
+      "call": "调用",
+      "calling": "调用中…",
+      "inputSchema": "入参 Schema",
+      "resultEmpty": "尚未调用——先选一个工具再调用。",
+      "toolOk": "成功",
+      "toolError": "工具错误",
+      "duration": "{{ms}} 毫秒",
+      "structured": "结构化内容",
+      "recentTitle": "最近调用",
+      "recentDescription": "最新的 MCP 动态，包含你上面的调用。",
+      "recentEmpty": "暂无 MCP 调用记录。",
+      "fullAudit": "打开 Agent 视图"
+    },
+    "agents": {
+      "title": "MCP Agent",
+      "description": "谁在用哪些机器调用本服务器的工具、结果如何。令牌缺失或无效被门禁拒绝的记录也在其中。",
+      "summaryTitle": "已出现的 Agent",
+      "summaryDescription": "按最新 {{count}} 条记录聚合。",
+      "recentTitle": "最近活动",
+      "agent": "Agent",
+      "calls": "调用次数",
+      "failures": "失败",
+      "lastSeen": "最近出现",
+      "when": "时间",
+      "user": "用户",
+      "tool": "工具",
+      "outcome": "结果",
+      "duration": "耗时",
+      "args": "参数",
+      "ok": "成功",
+      "failed": "失败",
+      "anonymous": "匿名",
+      "empty": "暂无 MCP 活动记录。",
+      "total": "共 {{total}} 条，显示 {{shown}} 条",
+      "refresh": "刷新"
+    }
   }
 }

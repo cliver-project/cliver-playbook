@@ -19,6 +19,14 @@ export default defineConfig({
         target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
+      // The MCP endpoint lives OUTSIDE /api (the SDK owns its path shape;
+      // default is settings.mcp.mount_path = /mcp) and the playground page is
+      // a real MCP client — POSTing JSON-RPC with SSE responses — so the dev
+      // proxy must forward it too. Keep in sync if mcp.mount_path changes.
+      "/mcp": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
     },
   },
 });

@@ -18,6 +18,7 @@ import logging
 
 from fastapi import FastAPI
 
+from app.mcp import api
 from app.mcp.tools import register_default_tools
 
 logger = logging.getLogger("mcp.module")
@@ -26,9 +27,10 @@ logger = logging.getLogger("mcp.module")
 def register(app: FastAPI) -> None:
     """Attach the MCP surface to the parent app.
 
-    ``app`` is currently unused — the parameter is the seam the parent
-    already calls with; future steps (per-environment tool gating,
-    custom routes) grow here without touching the call site.
+    The parent calls this BEFORE its ``/`` mount of the MCP sub-app
+    (Starlette matches in order), so routes included here win over the
+    sub-app's catch-all and are reachable as ordinary API endpoints.
     """
+    app.include_router(api.router)
     register_default_tools()
-    logger.debug("MCP module registered: built-in tools on the server singleton")
+    logger.debug("MCP module registered: discovery route + built-in tools on the server singleton")

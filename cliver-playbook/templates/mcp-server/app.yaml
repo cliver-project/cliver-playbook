@@ -96,6 +96,8 @@ mcp:
   # that exposes /mcp beyond the loopback; tokens then come from the
   # user-management `auth_tokens` table (same issuance/revocation path as the
   # Web's bearer tokens) or via OAuth 2.1 dynamic client registration.
+  # OFF is not "everyone is an admin": calls run under an anonymous viewer,
+  # so tools marked public answer while permission-gated tools are denied.
   auth_enabled: false
   # Public path of the MCP surface, mounted on the parent FastAPI app.
   mount_path: /mcp
@@ -105,11 +107,13 @@ mcp:
   # X-MCP-Agent-Id headers (or MCP_AGENT_TYPE / MCP_AGENT_ID env vars for
   # stdio); the audit row records both. An empty whitelist means "accept
   # any string", which is the right default for dev; tighten in prod.
+  # web-playground is the Web UI's own test console (MCPPlaygroundPage).
   agent_type_whitelist:
     - claude-code
     - workbuddy
     - codex
     - mcp-cli
+    - web-playground
     - unknown
   # Agent id is stored verbatim up to this length; longer is truncated.
   agent_id_max_length: 128

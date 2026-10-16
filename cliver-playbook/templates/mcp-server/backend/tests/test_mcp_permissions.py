@@ -99,9 +99,7 @@ async def test_seed_grants_admin_the_full_catalog_including_mcp(db, monkeypatch)
     )
     assert user_role_perms.scalar_one() == 0  # baseline role is permission-less
 
-    admin = (
-        await db.execute(select(User).where(User.username == "admin"))
-    ).scalar_one()
+    admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one()
     assert admin.must_change_password is False
     assert admin.is_active is True
 

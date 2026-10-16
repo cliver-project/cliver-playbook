@@ -54,6 +54,8 @@ export default function AppLayout() {
     { to: "/roles", label: t("nav.roles"), perm: "role:read" },
     { to: "/oauth", label: t("nav.oauth"), perm: "oauth:read" },
     { to: "/audit", label: t("nav.audit"), perm: "audit:read" },
+    { to: "/mcp/playground", label: t("nav.mcpPlayground"), perm: "mcp:tools:invoke" },
+    { to: "/mcp/agents", label: t("nav.mcpAgents"), perm: "mcp:agents:read" },
   ].filter((item) => item.perm === null || hasPerm(item.perm));
 
   async function handleLogout() {

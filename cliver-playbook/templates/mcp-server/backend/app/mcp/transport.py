@@ -78,9 +78,7 @@ async def run_stdio() -> None:
             )
         viewer = await resolve_viewer(token)
         if viewer is None:
-            raise SystemExit(
-                "MCP_BEARER_TOKEN is unknown, expired or revoked — refusing to start."
-            )
+            raise SystemExit("MCP_BEARER_TOKEN is unknown, expired or revoked — refusing to start.")
         if viewer.must_change_password:
             raise SystemExit(
                 "The MCP_BEARER_TOKEN's user must change their password before "
