@@ -24,30 +24,33 @@ overwriting it.
 | `backend/app/auth/permissions.py` | The code-defined permission catalog (the authority — no permissions table); 11 codes incl. `oauth:read`/`oauth:revoke` for provider administration. |
 | `backend/app/auth/dependencies.py` | `Viewer`, `get_current_user` (bearer → viewer, must-change-password 403 gate + allow-list), `require_perm()` with import-time code validation. |
 | `backend/app/auth/audit.py` | `write_audit()` + secret sanitizing (redact, truncate, depth-limit). |
-| `backend/app/auth/oidc.py` | OIDC client: provider registry, discovery cache, PKCE, HMAC state cookie, userinfo identification, `_open_client()` test seam. |
+| `backend/app/auth/oidc.py` | OIDC client: multi-provider registry built from the nested `oidc.providers` settings block (discovery-based or explicit-endpoint providers, `subject_claim` mapping, labels), discovery cache, PKCE, HMAC state cookie with login/link modes, userinfo identification, `_open_client()` test seam. |
 | `backend/app/auth/oauth21.py` | OAuth 2.1 provider: DCR, PKCE, HMAC login-blob hand-off to the SPA authorize page, atomic code claim, refresh rotation + replay detection, family revocation, AS/PRM metadata, `mount_oauth_routes()`. Exposes `revoke_grant()` (caller-session, no commit) — the per-(user × client) revocation the admin endpoint uses. |
 | `backend/app/core/timeutil.py` | `utcnow()` tz-aware helper (scaffold uses inline `func.now()` defaults; identity code needs Python-side timestamps). |
 | `backend/app/services/users.py` | User CRUD + role assignment, self-protections, last-admin guard, `authenticate()` with lockout. |
 | `backend/app/services/roles.py` | Role CRUD, catalog-validated permission binding, system-role protection. |
 | `backend/app/schemas/auth.py` | All identity request/response models (never exposes hashes). |
-| `backend/app/api/auth.py` | `/api/v1/auth/*`: login/logout/me/change-password/profile (self-service contact edit), OIDC login+callback, OAuth authorize info+submit. One commit per request at the end; failed login commits audit before raising. |
+| `backend/app/api/auth.py` | `/api/v1/auth/*`: login/logout/me/change-password/profile (self-service contact edit), OIDC login+callback for any configured provider, self-service identity linking (`GET /identities`, link start, unlink with the last-credential 409 guard), OAuth authorize info+submit. One commit per request at the end; failed login commits audit before raising. |
 | `backend/app/api/admin.py` | `/api/v1/admin/*`: permissions catalog, users CRUD + reset-password + force-logout, roles CRUD, OAuth provider administration (client listing, live grants, per-grant revoke — DCR is open, so the listing is the operator's only visibility), audit listing. Every endpoint declares `require_perm`. |
-| `backend/alembic/versions/0002_user_management.py` | 10 identity tables + seed (admin role = all catalog permissions, user role, admin user with forced first-login change). Chains onto `0001_scaffold_base`. |
+| `backend/alembic/versions/0002_user_management.py` | 10 identity tables + seed (admin role = all catalog permissions, user role, admin user with forced first-login change). The seed reads `initial_admin_password` through the layered Settings — env wins, but a value in `.env` or `app.yaml` now works too (the pre-layered version read bare `os.environ`, so `.env` was silently ignored). Chains onto `0001_scaffold_base`. |
 | `backend/tests/helpers.py` | `seed_admin()`, `login()` shared by the identity suites. |
 | `backend/tests/test_auth_password.py` | 9 tests: login, 401 audit, lockout, gate, change-password semantics, revocation, expiry. |
 | `backend/tests/test_rbac.py` | 9 tests: catalog, role CRUD, permission effectiveness, 403 matrix, self/last-admin protections, token-kind isolation, audit listing. |
-| `backend/tests/test_oidc.py` | 7 tests via `httpx.MockTransport` (zero network): redirect shape, callback provision/linking (incl. `phone_number` claim), state tamper. |
+| `backend/tests/test_oidc.py` | 13 tests via `httpx.MockTransport` (zero network): provider listing with labels, redirect shape, callback provision/linking (incl. `phone_number` claim), the two endpoint shapes (discovery vs explicit URLs with an int `id` subject), state tamper, IdP failure paths. |
 | `backend/tests/test_oauth21.py` | 14 tests: metadata shape (byte-exact iss), DCR, full code+PKCE flow, single-use codes, refresh rotation/replay, revocation — incl. the regressions that password change / force logout / admin reset also kill OAuth refresh tokens (no grant revival after re-password), and the admin surface: client/grant listings, per-grant revoke (kills access + refresh, idempotent, audited), permission 403 matrix. |
 | `backend/tests/test_profile.py` | 6 tests: admin phone roundtrip (set/absent-unchanged/""-clears), duplicate-email 409 (admin + self paths), self profile update + field-list audit, unset-vs-clear semantics, must-change-gate whitelist. |
+| `backend/tests/test_oidc_config.py` | 4 tests on the nested `oidc` settings block: enabled-requires-credentials-and-endpoints startup error, provider-key case folding + cross-source merge, reserved/invalid keys rejected, scopes as list-or-string. |
+| `backend/tests/test_identity_link.py` | 17 tests on self-service linking: state-blob modes (link roundtrip, legacy login blobs, missing user id fails closed), link start (cookie pins the user, unknown provider 404, IdP down 502), callback attach (idempotent, inactive user, owned-by-other, unique-constraint race), listing with label fallback, unlink (happy, foreign 404, last-credential 409), must-change gate. |
 
 ## Backend — REPLACE (scaffold-owned files, strict supersets)
 
 | File | What changed vs scaffold |
 |---|---|
 | `backend/app/models/entities.py` | Same demo `Item`; adds the 10 identity tables (users, roles, user_roles, role_permissions, oauth_identities, oauth_clients, oauth_codes, oauth_refresh_tokens, auth_tokens, audit_logs) with named constraints/indexes. `Item` timestamps gained explicit `DateTime(timezone=True)` — mirror that onto a diverged target (keeps `alembic autogenerate` quiet). |
-| `backend/app/core/config.py` | Adds the identity settings block: `secret_key`/`hmac_secret`, `initial_admin_password`, token TTL, lockout, `oidc_*`, `web_base_url`, `oauth21_*`. Scaffold settings untouched. |
+| `backend/app/core/config.py` | Adds the identity settings block: `secret_key`/`hmac_secret`, `initial_admin_password`, token TTL, lockout, the nested `oidc` registry (`redirect_base` + `providers` map with per-provider validation), `web_base_url`, `oauth21_*`. Scaffold settings and the layered-config wiring (`settings_customise_sources` + `JinjaYamlSource`, added to the scaffold in the same phase) are untouched prefixes. |
+| `backend/app/core/config_yaml.py` | Identical mirror of the scaffold's — kept byte-identical on purpose (drift check enforces); listed here only so a diverged target knows it must exist. |
 | `backend/app/main.py` | Adds `RequestMetaMiddleware` (ip/user-agent capture for audit), includes the auth + admin routers, and mounts the OAuth 2.1 routes at the root when enabled. The mcp-server template later moves that mount into its sub-app. |
-| `backend/pyproject.toml` | Adds `email-validator` (EmailStr) and `mcp>=2.2.0,<3` (OAuth 2.1 routes use the SDK's request/response models). |
+| `backend/pyproject.toml` | Adds `email-validator` (EmailStr) and `mcp>=2.2.0,<3` (OAuth 2.1 routes use the SDK's request/response models). (`jinja2`/`pyyaml` come from the scaffold since the layered-config phase.) |
 | `backend/tests/conftest.py` | Same DB lifecycle; adds the `admin_headers` fixture (seed + login). |
 | `backend/tests/__init__.py` | Adds the package docstring (pytest 9 resolves helpers as `tests.<module>`). |
 
@@ -55,7 +58,7 @@ overwriting it.
 
 | File | Contents |
 |---|---|
-| `frontend/src/api/auth.ts` | Typed wrappers for every identity endpoint (session incl. `updateProfile`, SSO, authorize, admin users/roles/permissions/OAuth clients+grants+revoke/audit). |
+| `frontend/src/api/auth.ts` | Typed wrappers for every identity endpoint (session incl. `updateProfile`, SSO providers, linked identities list/link-start/unlink, authorize, admin users/roles/permissions/OAuth clients+grants+revoke/audit). |
 | `frontend/src/components/auth/AuthContext.tsx` | Session state (`loading`/`authenticated`/`anonymous`), token storage, login/logout/adoptToken/refresh, `hasPerm` for display gating. |
 | `frontend/src/components/auth/RequirePerm.tsx` | Route-level permission gate rendering an explicit no-access panel. |
 | `frontend/src/components/auth/AuthShell.tsx` | Centered card chrome for the standalone auth pages. |
@@ -63,7 +66,7 @@ overwriting it.
 | `frontend/src/pages/ChangePasswordPage.tsx` | Self-service change; lands here for must-change accounts (also reachable directly). |
 | `frontend/src/pages/OAuthCallbackPage.tsx` | OIDC landing: parses `#token=…`/`#error=…`, scrubs the fragment, adopts the session. |
 | `frontend/src/pages/OAuthAuthorizePage.tsx` | OAuth 2.1 agent consent: shows client + scopes from the signed blob, submits credentials once, navigates the returned redirect URL. |
-| `frontend/src/pages/ProfilePage.tsx` | Self-service profile (`/profile`, every authenticated user): display-name/email/phone form + inline password change that adopts the re-issued token. |
+| `frontend/src/pages/ProfilePage.tsx` | Self-service profile (`/profile`, every authenticated user): display-name/email/phone form + inline password change that adopts the re-issued token + the linked-accounts card (list, connect buttons for enabled unlinked providers, unlink behind a confirm; consumes and scrubs the `#linked=`/`#link_error=` outcome fragment). |
 | `frontend/src/pages/admin/UsersPage.tsx` | Users table + create/edit dialogs, reset password, force logout, delete — every action permission-gated in the UI. |
 | `frontend/src/pages/admin/RolesPage.tsx` | Roles table + editor with the permission catalog grouped by `group`; system roles protected. |
 | `frontend/src/pages/admin/OAuthPage.tsx` | OAuth provider view (`/oauth`, gated by `oauth:read`): active grants (user × client × scopes × expiry) with per-grant revoke behind `oauth:revoke`, plus the registered-client listing. |
@@ -83,7 +86,8 @@ overwriting it.
 
 | File | What changed vs scaffold |
 |---|---|
-| `.env.example` | Documents the identity settings block (all commented; defaults shown). |
+| `app.yaml` | Same header + `app_name`/`log_level`/`database_url` blocks as the scaffold's; appends the `oidc` section: `redirect_base` plus `google` and `github` presets, both `enabled: false` with empty credentials (an enabled provider without credentials would fail startup). Deliberately does NOT set `oauth21_issuer_url`. |
+| `.env.example` | Documents the identity settings block (all commented; defaults shown), including the nested OIDC override names (`CLIVER_OIDC__PROVIDERS__<KEY>__*`). |
 
 ## EDIT
 
@@ -101,7 +105,7 @@ no edits either: `0002_user_management` hangs off `0001_scaffold_base`
    the OAuth catalog codes existed) needs the admin role granted
    `oauth:read`/`oauth:revoke` manually — fresh installs seed them from the
    catalog automatically.
-3. `uv run pytest` — 54 tests (45 identity + 9 scaffold), all offline-capable
+3. `uv run pytest` — 87 tests (78 identity + 9 scaffold), all offline-capable
    except the DB (needs the compose PostgreSQL).
 4. `cd frontend && pnpm install && pnpm build` — no new frontend dependencies.
 5. Manual: log in as admin → forced password change → Users/Roles/OAuth/Audit
@@ -110,6 +114,25 @@ no edits either: `0002_user_management` hangs off `0001_scaffold_base`
    details and change the password (other sessions drop); connect an agent via
    OAuth once → the grant appears on the OAuth page → revoke it → the agent's
    token dies.
+
+## Migrating a project from the pre-layered template (breaking)
+
+The identity settings moved to layered configuration in the layered-config
+phase. Projects copied from an older template must:
+
+- Copy `backend/app/core/config_yaml.py`, the `settings_customise_sources`
+  wiring in `config.py`, and root `app.yaml` (the three together are the
+  mechanism — see the scaffold's README for the precedence model).
+- **Rename the flat OIDC env vars to nested ones.** The old
+  `CLIVER_OIDC_ISSUER` / `CLIVER_OIDC_CLIENT_ID` / … are `extra="ignore"`:
+  they are SILENTLY DROPPED, and the login page's SSO buttons disappear
+  without any error. The nested spellings are
+  `CLIVER_OIDC__PROVIDERS__<KEY>__ISSUER`, `…__CLIENT_ID`, `…__CLIENT_SECRET`,
+  `…__SCOPES`, `…__AUTO_PROVISION`, `…__DEFAULT_ROLE`, plus
+  `CLIVER_OIDC__REDIRECT_BASE` for the redirect base. (`extra="ignore"` stays
+  on purpose: the test suite injects `CLIVER_TEST_DATABASE_URL` through it.)
+- Re-pin `pydantic-settings>=2.16,<3` and add `jinja2`/`pyyaml` (already
+  direct scaffold deps).
 
 ## Not included (deliberate)
 

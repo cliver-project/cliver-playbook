@@ -15,9 +15,18 @@ What you get beyond the scaffold:
   brute-force lockout, transparent PBKDF2 re-hash upgrades, and a
   server-enforced must-change-password gate (first login after seeding or an
   admin reset).
-- **SSO**: a generic OIDC client — configure issuer/client_id/secret and the
-  login page grows SSO buttons; identities link to local accounts with
-  optional auto-provisioning.
+- **SSO**: a multi-provider OIDC client — each provider is a settings entry
+  (`oidc.providers.<key>`, discovery-based `issuer` or explicit endpoint
+  URLs), the login page grows one button per enabled provider, and identities
+  attach to local accounts with optional auto-provisioning. Google and
+  GitHub presets ship in `app.yaml`, disabled with empty credentials.
+- **Linked accounts**: the profile page lists a user's external identities,
+  links new ones through the same OIDC redirect chain, and unlinks them —
+  with a server-enforced guard that a passwordless account keeps its last
+  credential.
+- **Layered configuration**: `app.yaml` (committed, secret-free) under
+  `.env`/environment overrides under init kwargs — the scaffold mechanism
+  with the identity block on top.
 - **OAuth 2.1 provider**: DCR + PKCE for agent clients (MCP-style), refresh
   rotation with replay detection, a consent page in the SPA
   (`/oauth/authorize`) fed by a signed short-lived hand-off blob, and an
@@ -34,7 +43,8 @@ make backend-start          # starts db container, migrates (seeds admin), serve
 make web-ui-start           # serves http://127.0.0.1:5173 (proxies /api to :8000)
 # No .env needed: defaults match the bundled compose db. Copy .env.example
 # to .env to override — e.g. set CLIVER_INITIAL_ADMIN_PASSWORD to skip the
-# one-time random password print during the first migration.
+# one-time random password print during the first migration. Non-secret
+# structure lives in the committed app.yaml (env/.env beat it).
 ```
 
 First login: `admin` / your `CLIVER_INITIAL_ADMIN_PASSWORD` (or the random
@@ -45,7 +55,7 @@ Verify:
 
 ```bash
 curl http://127.0.0.1:8000/api/v1/health             # {"status":"ok"}
-make backend-test                                      # 54 tests: 45 identity + 9 scaffold
+make backend-test                                      # 87 tests: 78 identity + 9 scaffold
 pnpm --dir frontend build                              # type-check + production build
 curl -i http://127.0.0.1:8000/.well-known/oauth-authorization-server
 ```
@@ -53,6 +63,7 @@ curl -i http://127.0.0.1:8000/.well-known/oauth-authorization-server
 ## Layout
 
 ```
+app.yaml                   # layered config base: presets + non-secret structure (no secrets)
 backend/
   app/auth/              # the identity core
     passwords.py         #   PBKDF2 hash/verify (+ async wrappers)
@@ -60,13 +71,15 @@ backend/
     permissions.py       #   the code-defined permission catalog
     dependencies.py      #   get_current_user (gate) + require_perm
     audit.py             #   write_audit + secret sanitizing
-    oidc.py              #   OIDC client (discovery/PKCE/state/userinfo)
+    oidc.py              #   OIDC client (multi-provider registry, PKCE, state, userinfo)
     oauth21.py           #   OAuth 2.1 provider (DCR/PKCE/rotation/replay)
+  app/core/              # config.py (nested oidc block) + config_yaml.py (scaffold mirror)
   app/services/          # users.py, roles.py (+ scaffold items.py)
   app/api/               # auth.py, admin.py (+ scaffold meta/items)
   app/schemas/auth.py    # request/response contracts (no hashes ever)
   alembic/versions/      # 0001_scaffold_base -> 0002_user_management (tables + seed)
-  tests/                 # auth_password, rbac, oidc, oauth21, profile (+ scaffold)
+  tests/                 # config, auth_password, rbac, oidc_config, oidc, oauth21, profile,
+                         # identity_link (+ scaffold)
 frontend/
   src/api/auth.ts        # typed wrappers for every identity endpoint
   src/components/auth/   # AuthContext, RequirePerm, AuthShell
