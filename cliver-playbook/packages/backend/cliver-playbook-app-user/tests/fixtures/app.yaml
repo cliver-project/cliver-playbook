@@ -1,0 +1,28 @@
+# Test-session configuration layer (pinned via CLIVER_CONFIG_FILE from
+# conftest.py).
+#
+# The identity suites assert on the OIDC provider registry — a disabled
+# provider still labels its rows, an unconfigured one falls back to its raw
+# key — so the registry under test must be the package's own, not whichever
+# app.yaml the surrounding checkout happens to ship.
+#
+# The shape below is the one a project's app.yaml uses. Keys are BARE
+# Settings field names (the CLIVER_ prefix belongs to the env layer only),
+# and everything here is a non-secret default: no credentials.
+
+oidc:
+  redirect_base: ""
+  providers:
+    google:
+      enabled: false
+      label: Google
+      issuer: https://accounts.google.com
+      scopes: openid profile email
+    github:
+      enabled: false
+      label: GitHub
+      authorize_url: https://github.com/login/oauth/authorize
+      token_url: https://github.com/login/oauth/access_token
+      userinfo_url: https://api.github.com/user
+      subject_claim: id
+      scopes: read:user user:email

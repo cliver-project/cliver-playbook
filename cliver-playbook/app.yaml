@@ -34,3 +34,55 @@ log_level: INFO
 # fields). Quoted so special characters in a composed password stay valid
 # YAML.
 database_url: "postgresql://{{ env('CLIVER_DB_USER', 'cliver') }}:{{ env('CLIVER_DB_PASSWORD', 'cliver') }}@{{ env('CLIVER_DB_HOST', '127.0.0.1') }}:{{ env('CLIVER_DB_PORT', '5432') }}/{{ env('CLIVER_DB_NAME', 'cliver_app') }}"
+
+# --- OIDC provider registry (identity domain, cliver-playbook-app-user) -----
+#
+# Bundled presets below, all disabled: enabling a provider is a deployment
+# decision. Enable/override from the environment without editing this file,
+# using nested env names, e.g.
+#
+#   CLIVER_OIDC__PROVIDERS__GOOGLE__ENABLED=true
+#   CLIVER_OIDC__PROVIDERS__GOOGLE__CLIENT_ID=...
+#   CLIVER_OIDC__PROVIDERS__GOOGLE__CLIENT_SECRET=...
+#
+# (the env layer beats this file; provider keys match case-insensitively).
+# An enabled provider must carry client_id + client_secret plus either an
+# issuer (discovery) or all three explicit endpoint URLs — validated at
+# startup, fail fast. Client secrets NEVER go in this file (it is checked
+# in) — env/.env only.
+#
+# Note: env can override values here but cannot REMOVE these presets (deep
+# merge is additive); unwanted providers simply stay disabled. Deliberately
+# absent: oauth21_issuer_url — empty, the provider derives `iss` per request
+# from the incoming Host, and pinning it here would freeze that fallback.
+oidc:
+  # Absolute base URL of THIS backend as the IdP sees it, for the registered
+  # redirect URI <base>/api/v1/auth/oauth/<key>/callback.
+  # Empty -> derived from the incoming request.
+  redirect_base: ""
+  providers:
+    google:
+      enabled: false
+      label: Google
+      # Standard OIDC: the three endpoints come from the issuer's
+      # /.well-known/openid-configuration document.
+      issuer: https://accounts.google.com
+      client_id: ""
+      client_secret: ""
+      scopes: openid profile email
+      auto_provision: true
+      default_role: user
+    github:
+      enabled: false
+      label: GitHub
+      # GitHub speaks plain OAuth2 with no discovery document: explicit
+      # endpoints, and the numeric account id is the stable subject.
+      authorize_url: https://github.com/login/oauth/authorize
+      token_url: https://github.com/login/oauth/access_token
+      userinfo_url: https://api.github.com/user
+      subject_claim: id
+      client_id: ""
+      client_secret: ""
+      scopes: read:user user:email
+      auto_provision: true
+      default_role: user

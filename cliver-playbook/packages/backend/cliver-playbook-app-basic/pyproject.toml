@@ -69,3 +69,10 @@ target-version = "py312"
 [tool.ruff.lint]
 # B008: FastAPI's `Depends(...)` in argument defaults is the framework idiom.
 ignore = ["B008"]
+
+[tool.ruff.lint.isort]
+# `cliver_playbook` is ONE namespace shared by several distributions: pin it
+# as first-party in every package, or import grouping would depend on which
+# subtree the current distribution happens to own (ruff otherwise classifies
+# the sibling packages' modules as third-party).
+known-first-party = ["cliver_playbook"]
