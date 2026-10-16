@@ -28,7 +28,6 @@ Revises: 0001_scaffold_base
 Create Date: 2026-10-15
 """
 
-import os
 import secrets
 from collections.abc import Sequence
 
@@ -41,6 +40,7 @@ from alembic import op
 # Alembic runs on the sync driver, and both helpers are plain sync functions.
 from app.auth.passwords import hash_password
 from app.auth.permissions import PERMISSION_CATALOG
+from app.core.config import get_settings
 
 revision: str = "0002_user_management"
 down_revision: str | None = "0001_scaffold_base"
@@ -349,7 +349,11 @@ def _seed() -> None:
         )
 
         if conn.execute(sa.text("SELECT 1 FROM users WHERE username = 'admin'")).scalar() is None:
-            password = os.environ.get("CLIVER_INITIAL_ADMIN_PASSWORD", "")
+            # Read through the layered Settings (env > .env > app.yaml > field
+            # default) instead of raw os.environ: the raw read never saw the
+            # .env file, so the documented "set CLIVER_INITIAL_ADMIN_PASSWORD
+            # in .env" setup silently fell back to a generated password.
+            password = get_settings().initial_admin_password
             generated = not password
             if generated:
                 password = secrets.token_urlsafe(9)

@@ -16,7 +16,16 @@ dependencies = [
     "greenlet>=3.1.0",
     # Configuration and validation
     "pydantic>=2.11.0",
-    "pydantic-settings>=2.10.0",
+    # 2.16 introduced the YamlConfigSettingsSource._read_file seam that
+    # app/core/config_yaml.py subclasses; the upper bound guards that
+    # private API against silent breakage (tests fail loudly if it moves).
+    "pydantic-settings>=2.16,<3",
+    # Layered config: the app.yaml tier is Jinja2-rendered, then YAML-parsed.
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+    # Read directly by config_yaml.py for the template env() helper's
+    # .env fallback (also a transitive pydantic-settings dependency).
+    "python-dotenv>=1.0",
     "email-validator>=2.1.0",
     # HTTP client (outbound calls)
     "httpx>=0.28.0",

@@ -1,8 +1,16 @@
 """Application settings.
 
-Single source of truth for configuration: every variable uses the `CLIVER_`
-env prefix (the project-rename surface — see ADR-0002) and is loaded from the
-environment plus an optional `.env` file.
+Single source of truth for configuration *structure*: the fields of the
+Settings class below define what exists; the values come from a layered
+resolution (highest precedence first):
+
+    constructor kwargs > CLIVER_-prefixed environment > project-root .env
+    > project-root app.yaml (Jinja2-rendered) > field defaults
+
+The YAML layer (see app/core/config_yaml.py) is optional and checked in with
+non-secret defaults; env/.env carry per-deployment values and secrets. The
+`CLIVER_` env prefix is part of the project-rename surface (ADR-0002) — note
+that YAML keys are the *bare field names*, without the prefix.
 
 Database URL contract (ADR-0001):
 - `CLIVER_DATABASE_URL` holds the *canonical* form `postgresql://user:pass@host:port/db`.
@@ -15,16 +23,24 @@ Database URL contract (ADR-0001):
 Identity-domain settings (this template's additions over the scaffold):
 - `secret_key` signs short-lived HMAC blobs (OIDC state, OAuth login tickets).
 - `initial_admin_password` is read by the migration seed only.
-- `oidc_*` configures the external IdP this app trusts for login (ADR-0005
-  keeps us a *client* of some IdP; the app is an OIDC relying party).
+- `oidc` is the external-IdP registry this app trusts for login and account
+  linking (ADR-0005 keeps us a *client* of some IdP; the app is an OIDC
+  relying party). One nested entry per provider under `oidc.providers.<key>`;
+  env overrides use the "__" delimiter, e.g.
+  CLIVER_OIDC__PROVIDERS__GOOGLE__CLIENT_SECRET.
 - `oauth21_*` configures the OAuth 2.1 *provider* side for AI-agent clients.
 """
 
 import hashlib
+import re
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+from app.core.config_yaml import JinjaYamlSource, resolve_config_path
 
 # The .env file lives at the PROJECT ROOT (next to the Makefile and
 # docker-compose.yml). Anchoring it to this module's location instead of the
@@ -37,9 +53,179 @@ _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 # local development; real deployments override via env or .env.
 _DEFAULT_DATABASE_URL = "postgresql://cliver:cliver@127.0.0.1:5432/cliver_app"
 
+# Provider registry keys double as URL path segments
+# (/api/v1/auth/oauth/<key>/login|callback) and as oauth_identities.provider
+# column values (String(32)) — keep them to a conservative, stable charset.
+_PROVIDER_KEY_PATTERN = r"[a-z][a-z0-9_-]{0,31}"
+_PROVIDER_KEY_RE = re.compile(f"^{_PROVIDER_KEY_PATTERN}$")
+
+# Keys that would collide with the fixed sibling routes under
+# /api/v1/auth/oauth/ (the providers listing, the OAuth 2.1 authorize
+# hand-off). Rejected prophylactically: a provider segment and a fixed-route
+# segment are indistinguishable in the URL space.
+_RESERVED_PROVIDER_KEYS = frozenset({"providers", "authorize", "callback", "login"})
+
+
+class OidcProviderSettings(BaseModel):
+    """One external identity provider (login + profile account linking).
+
+    Two endpoint shapes, complementary:
+    - discovery: `issuer` set -> the three endpoints come from the standard
+      /.well-known/openid-configuration document (cached 1h);
+    - explicit: `authorize_url`/`token_url`/`userinfo_url` set -> for OAuth2
+      services without discovery (e.g. GitHub).
+
+    `subject_claim` names the userinfo field carrying the provider-side
+    stable user id: "sub" for standard OIDC, "id" for GitHub-style APIs
+    returning a numeric account id.
+
+    Defaults keep disabled/empty presets harmless: the bundled app.yaml ships
+    provider presets with `enabled: false`, and the credential/endpoint
+    validation only fires once a provider is actually enabled.
+    """
+
+    enabled: bool = False
+    # Button text in the login/profile UI; empty -> key.title() at the edge.
+    label: str = ""
+    client_id: str = ""
+    client_secret: str = ""
+    issuer: str = ""
+    authorize_url: str = ""
+    token_url: str = ""
+    userinfo_url: str = ""
+    # Space-separated string (what the IdP authorize URL expects on the wire).
+    scopes: str = "openid profile email"
+    subject_claim: str = "sub"
+    # Auto-create a local account on first login of an unknown identity.
+    auto_provision: bool = True
+    default_role: str = "user"
+
+    @field_validator("scopes", mode="before")
+    @classmethod
+    def _join_scopes(cls, value: Any) -> Any:
+        # YAML authors naturally write scopes as a list, but the field must
+        # stay `str`: the env layer JSON-parses complex-typed fields, so a
+        # `list[str]` annotation would reject the plain space-separated
+        # CLIVER_OIDC__...__SCOPES form. Accept both shapes here instead.
+        if isinstance(value, (list, tuple)):
+            return " ".join(str(v) for v in value)
+        return value
+
+    @model_validator(mode="after")
+    def _check_credentials_and_endpoints(self) -> "OidcProviderSettings":
+        # Fail at startup, not at first login: an enabled provider without
+        # credentials or endpoints can never complete a flow. The pydantic
+        # ValidationError carries the providers.<key> path, naming the culprit.
+        if not self.enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("client_id", self.client_id),
+                ("client_secret", self.client_secret),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"enabled provider is missing {', '.join(missing)}")
+        if not self.issuer and not (self.authorize_url and self.token_url and self.userinfo_url):
+            raise ValueError(
+                "enabled provider needs either `issuer` (OIDC discovery) or all of "
+                "authorize_url/token_url/userinfo_url (explicit endpoints)"
+            )
+        return self
+
+
+class OidcSettings(BaseModel):
+    """OIDC client block: shared redirect base + the provider registry."""
+
+    # Absolute base URL of THIS backend as the IdP sees it, for building the
+    # redirect_uri (must be registered with the IdP). Empty -> derived from
+    # the incoming request; set it when running behind a proxy that rewrites
+    # Host.
+    redirect_base: str = ""  # e.g. http://127.0.0.1:8000
+    providers: dict[str, OidcProviderSettings] = Field(default_factory=dict)
+
+    @field_validator("providers", mode="before")
+    @classmethod
+    def _lowercase_keys(cls, value: Any) -> Any:
+        # Env-sourced dict keys are lowercased by pydantic-settings while
+        # YAML preserves author casing, and the cross-source merge happens
+        # on RAW dicts BEFORE field validation — so a yaml `Google:` entry
+        # plus a CLIVER_OIDC__PROVIDERS__GOOGLE__* env override arrive here
+        # as two sibling keys. Fold them onto one lowercase key, merging
+        # entry dicts. Later siblings win scalar conflicts, which matches
+        # source precedence: the settings merger uses each lower-priority
+        # source as the base, so iteration order here is lowest-priority
+        # first (yaml, then .env, then environment, then init kwargs).
+        if not isinstance(value, dict):
+            return value
+        merged: dict[str, Any] = {}
+        for key, entry in value.items():
+            low = str(key).lower()
+            current = merged.get(low)
+            if isinstance(current, dict) and isinstance(entry, dict):
+                merged[low] = {**current, **entry}
+            else:
+                merged[low] = entry
+        return merged
+
+    @model_validator(mode="after")
+    def _check_keys(self) -> "OidcSettings":
+        for key in self.providers:
+            if not _PROVIDER_KEY_RE.match(key):
+                raise ValueError(
+                    f"provider key {key!r} is invalid: must match {_PROVIDER_KEY_PATTERN} "
+                    "(it becomes a URL path segment and a database column value)"
+                )
+            if key in _RESERVED_PROVIDER_KEYS:
+                raise ValueError(
+                    f"provider key {key!r} is reserved (collides with the fixed auth routes)"
+                )
+        return self
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=_ENV_FILE, env_prefix="CLIVER_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILE,
+        env_prefix="CLIVER_",
+        # Unknown env vars are ignored on purpose: the shell carries plenty of
+        # non-Settings CLIVER_* helpers (e.g. CLIVER_TEST_DATABASE_URL for the
+        # test bootstrap), and BaseSettings' default `forbid` would reject them.
+        extra="ignore",
+        # "__" separates nesting levels when an env var overrides a composite
+        # field, e.g. CLIVER_OIDC__PROVIDERS__GOOGLE__CLIENT_SECRET (used by
+        # the user-management template's provider registry). Dict keys that
+        # arrive through env are lowercased by pydantic-settings.
+        env_nested_delimiter="__",
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Layered precedence: env > .env > app.yaml > field defaults.
+
+        Tuple order IS precedence (first source holding a value wins). The
+        YAML layer is appended last as the Jinja2-rendered source; the stock
+        `file_secret_settings` (secrets_dir mechanism) is dropped — this stack
+        keeps secrets in the environment, not in a secrets directory.
+
+        The config-file path resolves per instantiation (not once at class
+        creation) so tests can point $CLIVER_CONFIG_FILE at a temp file and
+        construct a fresh Settings() directly.
+        """
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            JinjaYamlSource(settings_cls, yaml_file=resolve_config_path()),
+        )
 
     # Canonical PostgreSQL URL. Default = the bundled compose db; override
     # for any other environment. Explicitly-empty still refuses to start.
@@ -74,20 +260,13 @@ class Settings(BaseSettings):
     login_lockout_threshold: int = 5
     login_lockout_minutes: int = 15
 
-    # --- OIDC client (login via an external IdP) ---
-    # Disabled by default: no IdP configured -> the login page just won't show SSO.
-    oidc_enabled: bool = False
-    oidc_issuer: str = ""  # e.g. https://accounts.example.com (discovery base)
-    oidc_client_id: str = ""
-    oidc_client_secret: str = ""
-    oidc_scopes: str = "openid profile email"
-    # Auto-create a local account on first login of an unknown IdP identity.
-    oidc_auto_provision: bool = True
-    oidc_default_role: str = "user"
-    # Absolute base URL of THIS backend as the IdP sees it, for building the
-    # redirect_uri (must be registered with the IdP). Empty -> derived from the
-    # incoming request; set it when running behind a proxy that rewrites Host.
-    oidc_redirect_base: str = ""  # e.g. http://127.0.0.1:8000
+    # --- OIDC client (login via external identity providers) ---
+    # Nested registry: one entry per provider under `oidc.providers.<key>`.
+    # Empty/disabled by default -> the login page shows no SSO buttons.
+    # Env override form uses the "__" nesting delimiter, e.g.
+    # CLIVER_OIDC__PROVIDERS__GOOGLE__CLIENT_SECRET=... (dict keys arriving
+    # through env are lowercased; the model lowercases YAML keys to match).
+    oidc: OidcSettings = Field(default_factory=OidcSettings)
 
     # --- Frontend ---
     # Where the SPA lives; the backend redirects there after OIDC login with

@@ -20,8 +20,9 @@ Design choices:
   payload is at least as trustworthy as a locally-verified JWT would be, and
   we avoid a PyJWT/JWKS dependency plus key-rotation handling. This is the
   same trade the backend-for-frontend pattern usually makes.
-- **One provider from flat settings, registry-shaped code.** `PROVIDERS` is a
-  dict so extra providers can be registered without touching flow code.
+- **Registry-shaped, settings-driven.** The provider registry is built from
+  the nested `oidc.providers` settings block; adding an identity provider is
+  a configuration change, never a code change.
 - **Discovery cached 1h** per issuer — the document is static in practice, and
   this keeps the login path at two IdP round-trips (token + userinfo).
 - The HTTP entry points accept an injected `httpx.AsyncClient` — tests drive
@@ -63,25 +64,29 @@ class ProviderConfig:
 
 
 def build_provider_registry() -> dict[str, ProviderConfig]:
-    """Registry from flat CLIVER_OIDC_* settings (single provider, 'default').
+    """Registry from the nested `oidc.providers` settings block.
 
-    Structured as a dict from day one: registering a second provider later is
-    an additive change (env parsing here + a button in the UI), not a refactor.
+    Only enabled providers are registered: a disabled preset (the bundled
+    app.yaml ships google/github that way) contributes nothing, and the login
+    page hides its button. Keys are validated by the settings model
+    (charset + reserved words), so they are safe as URL path segments and as
+    oauth_identities.provider column values.
     """
     settings = get_settings()
-    if not (settings.oidc_enabled and settings.oidc_issuer and settings.oidc_client_id):
-        return {}
-    return {
-        "default": ProviderConfig(
-            key="default",
-            issuer=settings.oidc_issuer.rstrip("/"),
-            client_id=settings.oidc_client_id,
-            client_secret=settings.oidc_client_secret,
-            scopes=settings.oidc_scopes,
-            auto_provision=settings.oidc_auto_provision,
-            default_role=settings.oidc_default_role,
+    registry: dict[str, ProviderConfig] = {}
+    for key, provider in settings.oidc.providers.items():
+        if not provider.enabled:
+            continue
+        registry[key] = ProviderConfig(
+            key=key,
+            issuer=provider.issuer.rstrip("/"),
+            client_id=provider.client_id,
+            client_secret=provider.client_secret,
+            scopes=provider.scopes,
+            auto_provision=provider.auto_provision,
+            default_role=provider.default_role,
         )
-    }
+    return registry
 
 
 # ---------------------------------------------------------------------------

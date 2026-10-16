@@ -262,8 +262,8 @@ async def oauth_providers() -> dict:
 def _redirect_uri(request: Request, provider_key: str) -> str:
     settings = get_settings()
     base = (
-        settings.oidc_redirect_base.rstrip("/")
-        if settings.oidc_redirect_base
+        settings.oidc.redirect_base.rstrip("/")
+        if settings.oidc.redirect_base
         else str(request.base_url).rstrip("/")
     )
     return f"{base}/api/v1/auth/oauth/{provider_key}/callback"
