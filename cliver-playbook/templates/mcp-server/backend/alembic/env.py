@@ -19,7 +19,12 @@ from app.models import entities  # noqa: F401 — imported for its table definit
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True, which silently disables every
+    # logger that already exists when this env runs — fatal when migrations
+    # run in-process (tests, scripted deploys) after the application's
+    # loggers have been created. False keeps them emitting; alembic.ini
+    # still owns the loggers it explicitly configures.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Single source of truth: canonical URL -> sync (psycopg) DSN.
 config.set_main_option("sqlalchemy.url", settings.sync_db_url)

@@ -148,3 +148,15 @@ async def write_tool_audit(
     # constraint, driver error) must not propagate into the tool result.
     except Exception as exc:  # noqa: BLE001  # pragma: no cover — best-effort
         logger.warning("MCP audit write failed for %s/%s: %s", method, target, exc)
+
+
+async def write_auth_rejection(*, error: str, description: str = "") -> None:
+    """Audit row for a gate rejection (401/403): event ``mcp.auth.reject``.
+
+    Same wrapper, same best-effort policy — a DB hiccup must not turn a
+    clean 401 into a 500. The agent identity headers are recorded even
+    though nobody authenticated: brute-force attempts should leave a
+    trail of *which machine* tried.
+    """
+    error_text = f"{error}: {description}" if description else error
+    await write_tool_audit(method="auth/reject", target="gate", ok=False, error=error_text)

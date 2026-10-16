@@ -71,7 +71,24 @@ def build_mcp_subapp() -> Starlette | None:
             transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
         ),
     )
-    # M3 hooks in here: wrap the SDK route with the auth gate when
-    # settings.mcp.auth_enabled is true (replacing the route's endpoint
-    # in place, so the mount and lifespan wiring above stay untouched).
+
+    # Wrap the SDK route's ASGI app with the auth gate, in place: the route
+    # keeps its exact path and the sub-app keeps its lifespan (the session
+    # manager still boots exactly once via the parent's lifespan). The gate
+    # is ALWAYS in the chain — it reads settings.mcp.auth_enabled per
+    # request, so the ON/OFF switch never requires rebuilding the app (and
+    # the build can never accidentally ship without the gate).
+    from starlette.routing import Route
+
+    from app.mcp.auth import MCPGateMiddleware
+
+    for route in _subapp.router.routes:
+        if isinstance(route, Route) and route.path == settings.mcp.mount_path:
+            route.app = MCPGateMiddleware(route.app)
+            break
+    else:  # pragma: no cover — SDK layout change would break this loudly
+        raise RuntimeError(
+            f"SDK route for {settings.mcp.mount_path!r} not found in the "
+            "streamable-http app — mcp package layout changed?"
+        )
     return _subapp

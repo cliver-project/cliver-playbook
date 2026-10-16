@@ -1,17 +1,15 @@
 """M1 structural tests for the MCP module skeleton.
 
-The skeleton ships with no behavior yet — these tests are about the
-*shape* being right: the catalog registers without breaking UM, the
-viewer/agent accessors behave correctly under a no-gate scenario,
-the audit wrapper writes rows that match the audit_logs contract, and
-the gate middleware refuses to run (M3 will replace this with real
-behavior). The point is to lock down the surface so M2/M3 can grow
-into it without backtracking.
+These tests are about the *shape* being right: the catalog extension
+without breaking UM, the viewer/agent accessors behaving correctly
+under a no-gate scenario, and the audit wrapper writing rows that
+match the audit_logs contract. The point is to lock down the surface
+so later steps can grow into it without backtracking. (The gate's own
+behaviour is covered by test_mcp_gate.py; the sub-app's by
+test_mcp_subapp.py.)
 """
 
 from __future__ import annotations
-
-import asyncio
 
 import pytest
 
@@ -193,7 +191,16 @@ async def test_audit_wrapper_truncates_long_args(db):
 
 async def test_audit_wrapper_swallows_exceptions(caplog):
     """A write_audit that raises is logged + swallowed, not propagated —
-    a DB hiccup must not break an otherwise-successful tool call."""
+    a DB hiccup must not break an otherwise-successful tool call.
+
+    (This is also the regression test for the alembic interplay: env.py
+    runs fileConfig with disable_existing_loggers=False precisely so
+    the "mcp.audit" logger — created at app import, before conftest's
+    in-process migrations run — keeps emitting; with the default True
+    the logger is disabled and this warning vanishes silently.)
+    """
+    import logging
+
     from app.mcp.audit import write_tool_audit
     from app.mcp.context import AgentIdentity, bind_agent, bind_request, bind_viewer
 
@@ -201,8 +208,6 @@ async def test_audit_wrapper_swallows_exceptions(caplog):
     bind_agent(AgentIdentity())
     bind_request({"type": "http", "client": ("127.0.0.1", 1), "headers": []})
 
-    # Force write_audit to raise by monkey-patching it on the module alias
-    # the wrapper imports from.
     import app.mcp.audit as mcp_audit_mod
 
     async def boom(*args, **kwargs):
@@ -211,11 +216,11 @@ async def test_audit_wrapper_swallows_exceptions(caplog):
     original = mcp_audit_mod.write_audit
     mcp_audit_mod.write_audit = boom  # type: ignore[assignment]
     try:
-        with caplog.at_level("WARNING"):
+        with caplog.at_level(logging.WARNING, logger="mcp.audit"):
             await write_tool_audit(method="tools/call", target="x", ok=True)
     finally:
         mcp_audit_mod.write_audit = original  # type: ignore[assignment]
-    assert any("MCP audit write failed" in rec.message for rec in caplog.records)
+    assert any("MCP audit write failed" in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -230,21 +235,3 @@ def test_server_singleton_is_an_mcp_instance():
 
     assert isinstance(mcp, MCPServer)
     assert mcp.name == "cliver-app-mcp"
-
-
-# ---------------------------------------------------------------------------
-# gate middleware stub raises (M3 will fill in)
-# ---------------------------------------------------------------------------
-
-
-def test_gate_middleware_call_raises_not_implemented():
-    """M1 stub: the gate refuses to run. M3 will replace the body."""
-
-    from app.mcp.auth import MCPGateMiddleware
-
-    async def _inner(scope, receive, send):
-        return None
-
-    gate = MCPGateMiddleware(_inner)
-    with pytest.raises(NotImplementedError, match="M3"):
-        asyncio.run(gate.__call__({}, None, None))
