@@ -1,0 +1,5 @@
+# Frontend workspace: the packages, plus each package's development shell
+# (an app that consumes the package by name, inside the package directory).
+packages:
+  - "packages/frontend/*"
+  - "packages/frontend/*/dev"

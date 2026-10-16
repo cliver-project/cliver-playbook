@@ -1,0 +1,42 @@
+<!doctype html>
+<!--
+  Canonical app shell for a project built on these packages: copy this file to
+  the app root and adjust the title, the favicon and the module entry point.
+
+  The inline script in <head> is the one piece that cannot move into the
+  bundle: it must set data-theme before the first paint, or a dark-theme user
+  sees a flash of the light palette. Keep its storage key ("cliver-theme") in
+  sync with ThemeProvider and its logic in sync with the theme module.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>cliver-app</title>
+    <script>
+      // Theme no-flash: resolve the persisted theme (or system preference)
+      // before first paint. Must run before the bundle loads. The storage key
+      // matches ThemeProvider ("cliver-theme") — keep them in sync.
+      (function () {
+        var theme = "light";
+        try {
+          var stored = localStorage.getItem("cliver-theme") || "system";
+          theme =
+            stored === "dark" ||
+            (stored === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+              ? "dark"
+              : "light";
+        } catch (e) {
+          /* localStorage unavailable — default light */
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
