@@ -3,9 +3,13 @@ into the FastAPI application.
 
 The ``mcp:*`` permission codes are part of the shared catalog via a
 static edit to ``app/auth/permissions.py`` (see INTEGRATION.md) — nothing
-to register at runtime. This seam exists so the parent ``main.py`` has a
-single call that future steps can grow into (M2: sub-app mount helpers,
-M4: default tool registration).
+to register at runtime.
+
+Tool registration lives behind this seam so every process that
+assembles the app (uvicorn, tests, the standalone entry in M6) exposes
+the same tool set. The sub-app mount itself stays in ``main.py``: its
+lifespan must compose with the parent's, which only the assembly site
+can arrange.
 """
 
 from __future__ import annotations
@@ -14,17 +18,17 @@ import logging
 
 from fastapi import FastAPI
 
+from app.mcp.tools import register_default_tools
+
 logger = logging.getLogger("mcp.module")
 
 
 def register(app: FastAPI) -> None:
-    """Attach the MCP surface to the parent app. No-op at M1.
+    """Attach the MCP surface to the parent app.
 
-    Kept as an explicit seam: the parent main.py calls this once at
-    assembly time. Later steps add the default tool registration here
-    (the sub-app mount itself stays in main.py so the lifespan context
-    composes with the parent's, not per-module).
+    ``app`` is currently unused — the parameter is the seam the parent
+    already calls with; future steps (per-environment tool gating,
+    custom routes) grow here without touching the call site.
     """
-    logger.debug("MCP module registered (no-op at M1)")
-    # M4 will add: from app.mcp.tools import register_default_tools
-    #               register_default_tools()
+    register_default_tools()
+    logger.debug("MCP module registered: built-in tools on the server singleton")

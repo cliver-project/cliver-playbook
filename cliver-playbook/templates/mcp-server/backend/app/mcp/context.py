@@ -51,11 +51,9 @@ class AnonymousViewer:
     "this row was written by an unauthenticated caller". ``has`` is
     always False: an anonymous caller never holds any permission,
     even when the tool would otherwise be marked public via
-    ``@public_tool``.
+    ``@public_tool``. Agent identity is NOT mirrored here — it lives
+    only in :class:`AgentIdentity`, a single source of truth.
     """
-
-    agent_type: str = "unknown"
-    agent_id: str = ""
 
     user_id: int | None = None
     username: str | None = None
