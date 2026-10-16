@@ -80,15 +80,18 @@ oidc:
       auto_provision: true
       default_role: user
 
-# --- MCP server (Phase 3 delta) --------------------------------------------
+# --- MCP server (this template's delta) -------------------------------------
 #
-# The MCP server runs as a sub-application of THIS backend on the
-# `/mcp` URL prefix (and, when auth is on, OAuth 2.1 routes under
-# `/mcp/oauth` and the well-known metadata at `/mcp/.well-known/...`).
-# stdio transport is also supported via `python -m app.mcp --transport stdio`.
+# The MCP server runs as a sub-application of THIS backend at the `/mcp`
+# URL prefix; stdio transport is supported via `python -m app.mcp
+# --transport stdio`. There is no MCP-specific OAuth block: the surface
+# reuses the Web's OAuth 2.1 provider (the top-level `oauth21_*` keys
+# below), whose protected-resource metadata already names `{base}/mcp`
+# as the resource — exactly what the gate's 401 WWW-Authenticate points
+# clients at.
 #
-# The settings below compose into Settings.mcp.* under the CLIVER_MCP__... env
-# prefix; the layered-config mechanism (Phase 2.5) carries them through.
+# The settings below compose into Settings.mcp.* under the CLIVER_MCP__...
+# env prefix; the layered-config mechanism carries them through.
 mcp:
   # Auth gate. Default OFF: the server is reachable without a token, which is
   # the right default for local development and for agents running in a
@@ -117,17 +120,3 @@ mcp:
     - unknown
   # Agent id is stored verbatim up to this length; longer is truncated.
   agent_id_max_length: 128
-  # OAuth 2.1 AS/PRM metadata lives under <mount_path>/.well-known/... and
-  # the OAuth routes under <mount_path>/oauth/... when auth_enabled is true.
-  # When this server runs alongside the user-management OAuth 2.1 provider
-  # (which it always does — MCP cannot be composed without identity), the
-  # MCP's own OAuth mount is at /mcp/oauth so the Web's root-mounted
-  # .well-known routes and the MCP's are distinct and unambiguous.
-  oauth:
-    # AS metadata path; empty = default <mount_path>/.well-known/oauth-authorization-server
-    issuer_url: ""
-    # Access token TTL. MCP access tokens live in auth_tokens with
-    # client_id SET; long TTL is the wrong default for an agent gateway.
-    access_ttl_seconds: 3600
-    refresh_ttl_seconds: 2592000
-    code_ttl_seconds: 300

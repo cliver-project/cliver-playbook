@@ -1,7 +1,7 @@
 """Per-request MCP state held in ContextVars.
 
-Three independent slots, all set by the auth gate (M3) and read by tool
-functions / the audit wrapper:
+Three independent slots, all bound by the auth gate (HTTP) or the stdio
+bootstrap, and read by tool functions / the audit wrapper:
 
 - :func:`current_viewer` — the user-management ``Viewer`` when auth is
   on, an :class:`AnonymousViewer` when auth is off. A tool that declares
@@ -135,7 +135,8 @@ _current_request: ContextVar[dict[str, Any] | None] = ContextVar(
 
 
 def bind_viewer(viewer: Viewer | AnonymousViewer | None) -> None:
-    """Set the viewer for the current task. M3 calls this from the gate."""
+    """Set the viewer for the current task. Called by the gate (HTTP) and
+    the stdio bootstrap — the only two entry points that resolve identity."""
     _current_viewer.set(viewer)
 
 

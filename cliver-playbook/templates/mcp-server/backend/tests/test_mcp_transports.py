@@ -1,4 +1,4 @@
-"""M6: real transports — real server subprocess, real SDK client, real pipes.
+"""Real transports — real server subprocess, real SDK client, real pipes.
 
 Both shapes are exercised end to end, nothing in-process:
 

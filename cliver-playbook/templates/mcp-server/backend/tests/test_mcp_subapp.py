@@ -1,4 +1,4 @@
-"""M2: the MCP sub-application is live inside the parent FastAPI app.
+"""The MCP sub-application is live inside the parent FastAPI app.
 
 These tests boot the *real* application object through Starlette's
 TestClient, whose context manager runs the parent lifespan — which in

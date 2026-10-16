@@ -185,21 +185,6 @@ class OidcSettings(BaseModel):
         return self
 
 
-class McpOauthSettings(BaseModel):
-    """OAuth 2.1 issuer knobs for the MCP-mounted authorization server.
-
-    Kept separate from the Web's oauth21_* block: the MCP surface may run
-    standalone (different origin/port), so its issuer and TTLs can differ
-    from the Web's. TTL defaults mirror the Web's values.
-    """
-
-    # AS metadata base; empty = derived per-request from Host/protocol.
-    issuer_url: str = ""
-    access_ttl_seconds: int = 3600
-    refresh_ttl_seconds: int = 30 * 86400
-    code_ttl_seconds: int = 300
-
-
 class McpSettings(BaseModel):
     """MCP server block (see app.yaml's `mcp:` section for the narrative)."""
 
@@ -240,7 +225,10 @@ class McpSettings(BaseModel):
     # Agent ids are stored verbatim up to this length, truncated beyond.
     agent_id_max_length: int = 128
 
-    oauth: McpOauthSettings = Field(default_factory=McpOauthSettings)
+    # No OAuth block here on purpose: the MCP surface reuses the Web's
+    # OAuth 2.1 provider (top-level `oauth21_*` settings), whose
+    # protected-resource metadata already names `{base}/mcp` as the
+    # resource. A second knob set would let the two copies disagree.
 
     @field_validator("mount_path")
     @classmethod

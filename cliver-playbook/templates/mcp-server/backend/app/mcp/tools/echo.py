@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.config import settings
 from app.mcp.context import (
     AnonymousViewer,
     current_agent,
@@ -48,7 +49,7 @@ async def echo(message: str = "") -> dict[str, Any]:
         "user": user,
         "agent": {
             "type": agent.normalised_type(),
-            "id": agent.truncated_id(128),
+            "id": agent.truncated_id(settings.mcp.agent_id_max_length),
         },
         # The ASGI scope tag: "http" for the streamable-http transport,
         # "stdio" for the standalone stdio entry, "unknown" when the

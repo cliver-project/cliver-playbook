@@ -1,4 +1,4 @@
-"""M5: the concurrency cap around tool execution.
+"""The audit wrapper and the concurrency cap around tool execution.
 
 ``_call_slot()`` is the semaphore toolkit's wrapper acquires around
 every tool body (per process, per event loop). These tests drive it

@@ -1,4 +1,4 @@
-"""M3: the auth gate — 401 shapes, context binding, rejection audit rows.
+"""The auth gate — 401 shapes, context binding, rejection audit rows.
 
 Two invocation styles, on purpose:
 

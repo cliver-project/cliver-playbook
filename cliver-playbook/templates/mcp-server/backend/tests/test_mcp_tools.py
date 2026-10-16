@@ -1,10 +1,10 @@
-"""M4: built-in tools — schemas, permission enforcement, audit rows.
+"""Built-in tools — schemas, permission enforcement, audit rows.
 
 Direct ``mcp.call_tool(...)`` invocation, no transport and no lifespan:
 the tool manager resolves by name, validates arguments and runs the
 decorated function exactly as a network call would, while the test
 binds the same ContextVars the gate binds. Wire-level tool calls (real
-client, real port) ride the transport tests in M6.
+client, real port) ride the transport tests in test_mcp_transports.py.
 
 What is locked down here:
 

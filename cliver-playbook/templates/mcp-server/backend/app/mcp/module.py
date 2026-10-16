@@ -6,10 +6,10 @@ static edit to ``app/auth/permissions.py`` (see INTEGRATION.md) — nothing
 to register at runtime.
 
 Tool registration lives behind this seam so every process that
-assembles the app (uvicorn, tests, the standalone entry in M6) exposes
-the same tool set. The sub-app mount itself stays in ``main.py``: its
-lifespan must compose with the parent's, which only the assembly site
-can arrange.
+assembles the app (uvicorn, tests, the standalone ``python -m app.mcp``
+entry) exposes the same tool set. The sub-app mount itself stays in
+``main.py``: its lifespan must compose with the parent's, which only
+the assembly site can arrange.
 """
 
 from __future__ import annotations

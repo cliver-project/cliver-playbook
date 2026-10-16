@@ -2,8 +2,8 @@
 
 Every tool / prompt / resource call lands one row in the existing
 ``audit_logs`` table. The MCP delta on top of UM's row is the
-``event`` name (``mcp.tool.call`` / ``mcp.prompt.get`` /
-``mcp.resource.read``) and the agent_* fields extracted from the
+``event`` name (``mcp.tools.call`` / ``mcp.prompts.get`` /
+``mcp.resources.read``) and the agent_* fields extracted from the
 request context. ``user_id`` is set when an authenticated viewer's
 ``user_id`` is known; anonymous rows carry ``user_id=None`` but the
 agent_* fields are still present, so a single log view answers

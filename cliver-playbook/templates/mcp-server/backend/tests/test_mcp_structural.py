@@ -1,12 +1,11 @@
-"""M1 structural tests for the MCP module skeleton.
+"""Structural tests for the MCP module.
 
 These tests are about the *shape* being right: the catalog extension
 without breaking UM, the viewer/agent accessors behaving correctly
 under a no-gate scenario, and the audit wrapper writing rows that
 match the audit_logs contract. The point is to lock down the surface
-so later steps can grow into it without backtracking. (The gate's own
-behaviour is covered by test_mcp_gate.py; the sub-app's by
-test_mcp_subapp.py.)
+so future changes cannot quietly drift. (The gate's own behaviour is
+covered by test_mcp_gate.py; the sub-app's by test_mcp_subapp.py.)
 """
 
 from __future__ import annotations

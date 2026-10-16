@@ -10,7 +10,7 @@ this git repository; skills read from it at project-creation time (ADR-0007).
 |-------------------|-------------------------------------------------------------------------------|
 | `service-scaffold` | Full-stack starter: FastAPI + async SQLAlchemy + PostgreSQL, React 19 + Vite + Tailwind v4 + shadcn/ui, i18n (en/zh), light/dark theming, migrations, tests |
 | `user-management`  | Complete RBAC (users / roles / permissions), password login with lockout + must-change-password, generic OIDC login, OAuth 2.1 provider for AI-agent clients, admin UI, unified audit log |
-| `mcp-server`       | MCP server (official SDK, streamable-http) mounted into the app: token gate, OAuth handshake, example tools with permission enforcement, tool-call audit |
+| `mcp-server`       | MCP server (official SDK; streamable-http at `/mcp` + standalone stdio) mounted into the app: auth ON/OFF gate over the shared token table, agent identity + call audit, permission-enforced example tools, playground and agents views |
 
 Every template is a **complete runnable application** on its own — clone, `make init`,
 `make backend-test`, green. Integration into a scaffold-based project is a documented
@@ -41,9 +41,12 @@ Skills resolve this repository via `CLIVER_PLAYBOOK_ROOT` (default:
 - 0003 RBAC tables + code-defined permission catalog
 - 0004 One `auth_tokens` table, three token kinds
 - 0005 OAuth 2.1 provider ownership (identity domain)
-- 0006 MCP sub-app mounting + lifespan composition
+- 0006 MCP sub-app mounting + lifespan composition — written
 - 0007 Copy-merge template model + Alembic chaining
 - 0008 Frontend platform: Vite (not Next), i18n, theming, axios + TanStack Query
+- 0009–0013 Reserved for decisions that shipped ahead of their write-up (layered
+  configuration, identity-phase additions) — filled in the docs pass
+- 0014 MCP auth ON/OFF, agent identity fields, shared `auth_tokens` table — written
 
 ## Maintenance
 

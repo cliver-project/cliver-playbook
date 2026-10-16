@@ -32,9 +32,9 @@ build would orphan the first app's manager. ``main.py`` builds it at
 module import, mounts it, and re-enters it via
 ``subapp.router.lifespan_context(subapp)`` inside the parent lifespan —
 that context is what boots/shuts the streamable-http session manager
-(spike-verified against mcp 2.3.0). The standalone entry (M6) serves
-the same object with uvicorn directly, whose own lifespan handling
-runs the same context.
+(spike-verified against mcp 2.3.0). The standalone ``--transport http``
+entry serves the same parent app with uvicorn directly, whose own
+lifespan handling runs the same context.
 """
 
 from __future__ import annotations
@@ -47,9 +47,9 @@ from starlette.applications import Starlette
 from app.core.config import settings
 from app.mcp.server import mcp
 
-# Process-wide single instance. ``None`` until the first build; the parent
-# treats a ``None`` return as "MCP surface absent" (kept from the M0 stub
-# contract so assembly code never needs to change shape).
+# Process-wide single instance. ``None`` until the first build; the
+# ``Starlette | None`` return keeps the parent assembly tolerant of an
+# absent MCP surface without a special case at the call site.
 _subapp: Starlette | None = None
 
 

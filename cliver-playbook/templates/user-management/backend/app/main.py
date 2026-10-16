@@ -2,8 +2,9 @@
 
 Routers are included explicitly — assembly stays visible in one place. This
 file is the user-management superset of the scaffold's main.py: it adds the
-auth and admin routers. (The mcp-server template later replaces the direct
-OAuth mount with its sub-app — see that template's INTEGRATION.md.)
+auth and admin routers. (The mcp-server template supersets this file with the
+MCP sub-app mount; the OAuth mount below is kept as-is there — the MCP
+surface reuses this provider rather than owning a copy.)
 
 Unit of work: identity routers commit once per request at the end (service
 mutations + audit row together); the scaffold's items service commits itself.

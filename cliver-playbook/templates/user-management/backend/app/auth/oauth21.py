@@ -803,9 +803,9 @@ class RequestMetaMiddleware:
 
 
 def mount_oauth_routes(app) -> None:
-    """Mount the OAuth 2.1 routes at the app ROOT (well-known discovery lives
-    at `/.well-known/*` — a prefix would break it; ADR-0006 covers this for
-    the MCP sub-app variant).
+    """Mount the OAuth 2.1 routes at the app ROOT (the well-known discovery
+    documents are served from the origin root). One provider serves every
+    client — the Web's SPA flow and MCP agents alike (ADR-0006).
 
     Composition: shadow AS metadata (adds "none" + iss advertising) + SDK auth
     routes (well-known / authorize / token / register / revoke) + PRM routes +

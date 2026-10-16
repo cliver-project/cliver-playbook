@@ -1,4 +1,4 @@
-"""M7: the seeded admin holds the MCP permissions on a fresh database.
+"""The seeded admin holds the MCP permissions on a fresh database.
 
 Migration 0002 seeds the admin role from ``PERMISSION_CATALOG``
 dynamically, so the ``mcp:*`` codes this template adds to the catalog

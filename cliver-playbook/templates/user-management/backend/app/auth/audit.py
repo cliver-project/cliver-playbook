@@ -95,7 +95,7 @@ async def write_audit(
     """Append one audit row in the caller's transaction.
 
     Keep `event` names stable and dot-namespaced by domain ("auth.login",
-    "admin.user.create", "mcp.tool.call") — the audit UI groups on them.
+    "admin.user.create", "mcp.tools.call") — the audit UI groups on them.
 
     Prefer `request` (ip/ua derived from it). The explicit `ip`/`user_agent`
     kwargs serve call sites that hold no Request object — the OAuth provider,

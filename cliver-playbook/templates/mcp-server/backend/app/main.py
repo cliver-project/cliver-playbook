@@ -4,8 +4,9 @@ Routers are included explicitly — assembly stays visible in one place. This
 file is the mcp-server superset of the user-management template's main.py: in
 addition to UM's auth and admin routers, it mounts the MCP server's
 sub-application at ``settings.mcp.mount_path`` (default ``/mcp``) and drives
-its lifespan from the parent's. The MCP subapp owns the OAuth 2.1 routes
-under its prefix, so the Web's root-level OAuth mount is suppressed here.
+its lifespan from the parent's. The OAuth 2.1 provider stays mounted at the
+root exactly as in UM — the MCP surface reuses it rather than owning a copy
+(see app/mcp/__init__.py for why that is sufficient).
 
 Unit of work: identity routers commit once per request at the end (service
 mutations + audit row together); the scaffold's items service commits itself.
@@ -55,8 +56,9 @@ app.include_router(items.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 
-# MCP module seam: catalog is extended statically (see app/mcp/permissions.py);
-# later steps hang default-tool registration off this call.
+# MCP module seam: includes the MCP API routes and registers the built-in
+# tools on the server singleton. The mcp:* permission codes are a static
+# catalog edit, not runtime state (see app/mcp/permissions.py).
 mcp_register(app)
 
 # MCP sub-application mounted at "/" AFTER the API routers: Starlette
@@ -67,13 +69,12 @@ if _mcp_subapp is not None:
     app.mount("/", _mcp_subapp)
     logger.info("MCP endpoint mounted at %s", settings.mcp.mount_path)
 
-# OAuth 2.1 provider surface stays at the root exactly as in user-management:
-# routes are added BEFORE the "/" mount below, so they win over the sub-app
-# and the Web's DCR/authorize flows are byte-identical to the UM template.
-# (A future step may mount an MCP-scoped copy under settings.mcp.mount_path
-# + /oauth via a mount_path parameter on mount_oauth_routes, for agents that
-# discover the AS from the MCP WWW-Authenticate header; that addition will
-# not remove this root mount.)
+# OAuth 2.1 provider surface stays at the root exactly as in user-management.
+# Mount order is safe even though this call lands after the "/" mount above:
+# mount_oauth_routes prepends to app.router.routes ([:0]), so the OAuth and
+# well-known routes always match before the sub-app's catch-all. The MCP
+# gate's WWW-Authenticate header points agents at the root PRM, whose
+# `resource` value is `{base}/mcp` — the two surfaces share one provider.
 app.add_middleware(RequestMetaMiddleware)
 if settings.oauth21_enabled:
     mount_oauth_routes(app)
