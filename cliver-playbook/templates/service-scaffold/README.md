@@ -30,15 +30,17 @@ Verify:
 
 ```bash
 curl http://127.0.0.1:8000/api/v1/health     # {"status":"ok"}
-make backend-test                            # 9 tests against a temp PostgreSQL DB
+make backend-test                            # 15 tests against a temp PostgreSQL DB
 pnpm --dir frontend build                    # type-check + production build
 ```
 
 ## Layout
 
 ```
+app.yaml                 # lowest config layer: Jinja2-rendered YAML (checked in, no secrets)
 backend/
   app/core/config.py     # pydantic-settings; CLIVER_ prefix; dual DB URLs (async/sync)
+  app/core/config_yaml.py # the YAML+Jinja2 layer (env > .env > app.yaml > defaults)
   app/db/                # async engine, session factory, get_db dependency
   app/models/entities.py # ORM entities (demo: Item)
   app/schemas/           # Pydantic request/response contracts
@@ -63,6 +65,14 @@ frontend/
 - **Python package stays `app`** — it is never renamed (ADR-0002). Project renaming
   touches three tokens only: `cliver_app` (ids), `cliver-app` (display), `CLIVER_` (env).
 - One canonical `CLIVER_DATABASE_URL`; the app derives the asyncpg and psycopg DSNs.
+- Configuration is layered: **env > .env > `app.yaml` > field defaults** (first
+  value wins). `app.yaml` (project root) is Jinja2-rendered before parsing —
+  its `env(name, default)` helper composes values from the environment/.env,
+  and a required variable without a default fails startup loudly. Keys in the
+  YAML are bare Settings field names (no `CLIVER_` prefix); the Settings class
+  in `backend/app/core/config.py` is the structure authority. Secrets never go
+  in `app.yaml` (it is checked in) — env/.env only. Restart the backend after
+  editing it (`--reload` watches `backend/` only).
 - UI copy always goes through `t()`; add keys to both `en.json` and `zh.json`.
 - New entities: model in `entities.py`, schemas, service, router, then
   `uv run alembic revision --autogenerate -m "..."`.
