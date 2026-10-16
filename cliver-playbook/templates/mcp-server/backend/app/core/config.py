@@ -213,7 +213,9 @@ class McpSettings(BaseModel):
     # no trailing-slash redirect).
     mount_path: str = "/mcp"
 
-    # Per-viewer in-flight tool call budget (M5 enforcement point).
+    # Process-wide cap on concurrently executing MCP tool calls (a
+    # semaphore in app/mcp/toolkit.py). Queueing, not rejection; values
+    # below 1 are clamped to 1 at use.
     max_concurrent_calls: int = 16
 
     # Agent self-identification: values outside the whitelist normalise to

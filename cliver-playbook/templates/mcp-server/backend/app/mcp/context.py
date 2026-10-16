@@ -34,9 +34,12 @@ spun off the stdin reader, same story.
 
 from __future__ import annotations
 
+import os
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from app.core.config import settings
 
 if TYPE_CHECKING:
     from app.auth.dependencies import Viewer
@@ -87,6 +90,35 @@ class AgentIdentity:
 
     def truncated_id(self, max_length: int) -> str:
         return (self.agent_id or "")[:max_length]
+
+
+def build_agent_identity(agent_type: str = "", agent_id: str = "") -> AgentIdentity:
+    """Normalise raw self-reported identity fields into an :class:`AgentIdentity`.
+
+    The single normalisation implementation: the HTTP gate feeds it
+    header values (``X-MCP-Agent-Type`` / ``X-MCP-Agent-Id``), the stdio
+    bootstrap feeds it environment values. Whitelist filtering and
+    truncation must happen exactly once, at bind time, so every
+    downstream reader (audit rows, tool context) sees the same
+    normalised form and no reader re-applies its own rules.
+    """
+    raw = AgentIdentity(agent_type=agent_type, agent_id=agent_id)
+    whitelist = set(settings.mcp.agent_type_whitelist) or None
+    return AgentIdentity(
+        agent_type=raw.normalised_type(whitelist),
+        agent_id=raw.truncated_id(settings.mcp.agent_id_max_length),
+    )
+
+
+def agent_identity_from_env() -> AgentIdentity:
+    """Agent identity for the stdio transport, from ``MCP_AGENT_TYPE`` /
+    ``MCP_AGENT_ID`` — the environment-variable equivalent of the HTTP
+    headers. Read per call: the environment is fixed when the agent
+    spawns the server process and never changes mid-session."""
+    return build_agent_identity(
+        agent_type=os.environ.get("MCP_AGENT_TYPE", ""),
+        agent_id=os.environ.get("MCP_AGENT_ID", ""),
+    )
 
 
 _current_viewer: ContextVar[Viewer | AnonymousViewer | None] = ContextVar(

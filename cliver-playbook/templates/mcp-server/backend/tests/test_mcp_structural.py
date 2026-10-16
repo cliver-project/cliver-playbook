@@ -96,6 +96,27 @@ def test_agent_identity_truncated_id():
     assert len(a.truncated_id(128)) == 128
 
 
+def test_agent_identity_from_env_normalised(monkeypatch):
+    """The stdio path (env vars) goes through the same normalisation as
+    the header path — build_agent_identity is the single implementation,
+    so whitelist filtering and truncation cannot drift between them."""
+    from app.core.config import settings as app_settings
+    from app.mcp.context import agent_identity_from_env
+
+    monkeypatch.setattr(app_settings.mcp, "agent_type_whitelist", ["workbuddy"])
+    monkeypatch.setenv("MCP_AGENT_TYPE", "WorkBuddy")
+    monkeypatch.setenv("MCP_AGENT_ID", "i" * 500)
+    ident = agent_identity_from_env()
+    assert ident.agent_type == "workbuddy"  # lowered + whitelisted
+    assert len(ident.agent_id) == app_settings.mcp.agent_id_max_length
+
+    monkeypatch.setenv("MCP_AGENT_TYPE", "rogue")
+    assert agent_identity_from_env().agent_type == "unknown"
+
+    monkeypatch.delenv("MCP_AGENT_TYPE")
+    assert agent_identity_from_env().agent_type == "unknown"
+
+
 # ---------------------------------------------------------------------------
 # audit wrapper contract
 # ---------------------------------------------------------------------------

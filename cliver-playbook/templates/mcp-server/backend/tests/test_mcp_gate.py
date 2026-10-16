@@ -220,6 +220,29 @@ async def test_gate_on_binds_viewer_and_forwards(db, monkeypatch):
     assert captured["agent"].agent_type == "workbuddy"
 
 
+async def test_resolve_viewer_token_paths(db):
+    """resolve_viewer is the shared token→Viewer plumbing both transports
+    use: empty and unknown tokens resolve to None, a valid token to the
+    fresh Viewer the Web would build (so role changes apply on the next
+    call)."""
+    from app.auth.tokens import issue_web_token
+    from app.mcp.auth import resolve_viewer
+    from tests.helpers import seed_admin
+
+    assert await resolve_viewer("") is None
+    assert await resolve_viewer("not-a-real-token") is None
+
+    user_id = await seed_admin(db)
+    token = await issue_web_token(db, user_id=user_id)
+    await db.commit()
+
+    viewer = await resolve_viewer(token)
+    assert viewer is not None
+    assert viewer.user_id == user_id
+    assert viewer.token_id is not None
+    assert viewer.has("mcp:tools:invoke")
+
+
 async def test_gate_on_revoked_token_rejected(db, monkeypatch):
     """Force-logout semantics: revoking the token row kills MCP access on
     the very next request (same table, same predicate as the Web)."""

@@ -42,7 +42,7 @@ from typing import Any
 
 from starlette.responses import JSONResponse
 
-from app.auth.dependencies import load_viewer
+from app.auth.dependencies import Viewer, load_viewer
 from app.auth.tokens import verify_bearer
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -53,6 +53,7 @@ from app.mcp.context import (
     bind_agent,
     bind_request,
     bind_viewer,
+    build_agent_identity,
 )
 
 logger = logging.getLogger("mcp.auth")
@@ -70,22 +71,35 @@ def _request_headers(scope: dict[str, Any]) -> dict[str, str]:
 
 
 def _agent_from_headers(headers: dict[str, str]) -> AgentIdentity:
-    """Build the normalised agent identity from the request headers.
-
-    Raw values are lower-cased, whitelist-filtered and truncated HERE so
-    every downstream reader (audit rows, tool context) sees the same
-    normalised form — no reader re-normalises with its own rules. An
-    empty whitelist means "accept any string" (dev default).
-    """
-    raw = AgentIdentity(
+    """Thin adapter over :func:`app.mcp.context.build_agent_identity`,
+    which owns the normalisation rules shared with the stdio
+    environment-variable path."""
+    return build_agent_identity(
         agent_type=headers.get("x-mcp-agent-type", ""),
         agent_id=headers.get("x-mcp-agent-id", ""),
     )
-    whitelist = set(settings.mcp.agent_type_whitelist) or None
-    return AgentIdentity(
-        agent_type=raw.normalised_type(whitelist),
-        agent_id=raw.truncated_id(settings.mcp.agent_id_max_length),
-    )
+
+
+async def resolve_viewer(token: str) -> Viewer | None:
+    """Resolve a bearer token to the fresh Viewer the Web would build, or None.
+
+    Kind-agnostic on purpose: the token may be a Web session, a static
+    MCP token or an OAuth access token — they all live in ``auth_tokens``
+    and go through the same revocation predicate, so a Web force-logout
+    kills the agent's access too. Roles and permissions are loaded per
+    call, so mid-session changes apply to the next tool call.
+
+    Policy stays with the caller: the HTTP gate answers 403 on
+    ``must_change_password``, the stdio bootstrap refuses to start —
+    this function only resolves. Shared by both transports.
+    """
+    if not token:
+        return None
+    async with SessionLocal() as db:
+        row = await verify_bearer(db, token)
+        if row is None:
+            return None
+        return await load_viewer(db, row.user_id, token_id=row.id)
 
 
 def _bearer_from_headers(headers: dict[str, str]) -> str:
@@ -128,11 +142,7 @@ class MCPGateMiddleware:
             )
             return
 
-        async with SessionLocal() as db:
-            row = await verify_bearer(db, token)
-            viewer = (
-                await load_viewer(db, row.user_id, token_id=row.id) if row is not None else None
-            )
+        viewer = await resolve_viewer(token)
         if viewer is None:
             # Unknown/expired/revoked token, or the user vanished/was
             # deactivated after issuance — all get the same answer.

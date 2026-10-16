@@ -5,7 +5,8 @@ Every tool function registers with exactly one of :func:`public_tool` or
 decorator is the single place where three cross-cutting concerns happen,
 so no tool author can forget one:
 
-- **Timing** — one ``duration_ms`` per call, recorded in the audit row.
+- **Timing** — one ``duration_ms`` per call (wall-clock, including any
+  queueing behind the concurrency cap), recorded in the audit row.
 - **Audit** — exactly one ``mcp.tools.call`` row per call, success or
   failure (see :mod:`app.mcp.audit` for the wrapper and its best-effort
   failure policy). The row carries the truncated arguments plus the
@@ -16,6 +17,11 @@ so no tool author can forget one:
   raises ``ToolError`` and is audited like any other failure: attempted
   calls without permission are exactly the rows an operator wants to
   see.
+- **Concurrency cap** — every tool body executes inside a process-wide
+  semaphore (``settings.mcp.max_concurrent_calls``), so a burst of
+  agent calls cannot exhaust the DB pool or an upstream API. Queueing,
+  not rejection — see :func:`_call_slot`. Denied calls never acquire a
+  slot (the permission check runs first).
 
 Error channel: ``ToolError`` is the SDK's "anticipated failure" —
 ``MCPServer.call_tool`` re-raises it, and the protocol layer turns it
@@ -38,17 +44,47 @@ deliberately prefix-free in both home modules.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
+from weakref import WeakKeyDictionary
 
 from mcp.server.mcpserver.exceptions import ToolError
 
+from app.core.config import settings
 from app.mcp.audit import write_tool_audit
 from app.mcp.context import current_viewer
 
 ToolFn = Callable[..., Awaitable[Any]]
+
+# Per-event-loop semaphores for the concurrency cap. asyncio primitives
+# bind to the loop that first awaits them, and one process can run
+# several loops over its lifetime (the uvicorn loop, TestClient portals,
+# pytest-asyncio per-test loops) — keying by loop keeps them isolated.
+# The cached entry carries the limit it was built with, so a settings
+# change yields a fresh semaphore instead of one pinned to a stale
+# limit (in production the setting only changes at startup anyway).
+_slots: WeakKeyDictionary[asyncio.AbstractEventLoop, tuple[int, asyncio.Semaphore]] = (
+    WeakKeyDictionary()
+)
+
+
+def _call_slot() -> asyncio.Semaphore:
+    """The semaphore enforcing ``settings.mcp.max_concurrent_calls``.
+
+    Queueing, not rejection: a burst beyond the cap waits its turn. The
+    cap protects downstream resources (DB pool, upstream APIs) — it is
+    a backstop, not a rate limiter.
+    """
+    loop = asyncio.get_running_loop()
+    limit = max(1, settings.mcp.max_concurrent_calls)
+    entry = _slots.get(loop)
+    if entry is None or entry[0] != limit:
+        entry = (limit, asyncio.Semaphore(limit))
+        _slots[loop] = entry
+    return entry[1]
 
 
 def _elapsed_ms(start: float) -> int:
@@ -86,7 +122,8 @@ def _audited(fn: ToolFn, codes: tuple[str, ...]) -> ToolFn:
         try:
             if codes:
                 _enforce(codes, tool_name)
-            result = await fn(*args, **kwargs)
+            async with _call_slot():
+                result = await fn(*args, **kwargs)
         except Exception as exc:
             await write_tool_audit(
                 method="tools/call",
