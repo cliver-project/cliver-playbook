@@ -11,6 +11,7 @@ import hashlib
 import secrets
 from urllib.parse import urlencode
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -28,7 +29,7 @@ from app.auth.oauth21 import (
 from app.auth.oidc import (
     build_authorize_url,
     build_provider_registry,
-    discover,
+    endpoints_for,
     exchange_code,
     fetch_userinfo,
     find_linked_user,
@@ -254,9 +255,17 @@ async def update_profile(
 
 @router.get("/oauth/providers")
 async def oauth_providers() -> dict:
-    """Which SSO providers the login page should render buttons for."""
+    """Which SSO providers the login page should render buttons for.
+
+    The label comes from configuration; an unset label falls back to the
+    provider key in title case so the button is never blank.
+    """
     registry = build_provider_registry()
-    return {"providers": [{"key": key, "label": "SSO"} for key in registry]}
+    return {
+        "providers": [
+            {"key": key, "label": config.label or key.title()} for key, config in registry.items()
+        ]
+    }
 
 
 def _redirect_uri(request: Request, provider_key: str) -> str:
@@ -278,7 +287,18 @@ async def oauth_login(provider: str, request: Request) -> RedirectResponse:
 
     state = secrets.token_hex(16)
     verifier, challenge = make_pkce_pair()
-    document = await discover(config.issuer)
+    try:
+        document = await endpoints_for(config)
+    except (httpx.HTTPError, ValueError):
+        # Unreachable or malformed IdP (discovery is the only outbound call
+        # here) is a runtime condition, not a server bug: land on the SPA's
+        # error page like any other login failure instead of a bare 500.
+        # ValueError covers malformed JSON from the IdP.
+        frontend = get_settings().web_base_url.rstrip("/")
+        return RedirectResponse(
+            f"{frontend}/auth/callback#{urlencode({'error': 'idp_error'})}",
+            status_code=status.HTTP_302_FOUND,
+        )
     url = build_authorize_url(
         config,
         document,
@@ -341,17 +361,41 @@ async def oauth_callback(
         await db.commit()
         return _fail("state_mismatch")
 
-    document = await discover(config.issuer)
-    token_response = await exchange_code(
-        config,
-        document,
-        code=code,
-        code_verifier=verifier,
-        redirect_uri=_redirect_uri(request, provider),
-    )
-    access_token = token_response.get("access_token", "")
-    userinfo = await fetch_userinfo(document, access_token)
-    subject = str(userinfo.get("sub", ""))
+    try:
+        document = await endpoints_for(config)
+        token_response = await exchange_code(
+            config,
+            document,
+            code=code,
+            code_verifier=verifier,
+            redirect_uri=_redirect_uri(request, provider),
+        )
+        if not isinstance(token_response, dict):
+            raise TypeError("token response is not a JSON object")
+        access_token = str(token_response.get("access_token", "") or "")
+        userinfo = await fetch_userinfo(document, access_token)
+        if not isinstance(userinfo, dict):
+            raise TypeError("userinfo response is not a JSON object")
+    except (httpx.HTTPError, ValueError, TypeError):
+        # IdP unreachable, error status (raise_for_status -> HTTPStatusError,
+        # an HTTPError subclass), nonsense payload (resp.json() ->
+        # JSONDecodeError, a ValueError subclass) or wrong payload shape
+        # (TypeError above). Runtime condition -> audited SPA error
+        # redirect, never a bare 500.
+        await write_audit(
+            db,
+            event="auth.oauth.callback",
+            ok=False,
+            error="idp_error",
+            request=request,
+        )
+        await db.commit()
+        return _fail("idp_error")
+
+    # The stable provider-side user id lives in a configurable claim: "sub"
+    # for standard OIDC, "id" (numeric, stringified here) for GitHub-style
+    # APIs. `or ""` coerces null claims; [:255] matches the column width.
+    subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
     if not subject:
         return _fail("no_subject")
 
@@ -400,7 +444,9 @@ async def _provision_user(db: AsyncSession, config, provider_key: str, userinfo:
     """Create a local account + identity link for a first-time SSO user."""
     from app.models.entities import OauthIdentity
 
-    subject = str(userinfo.get("sub", ""))
+    # Same claim mapping as the callback's identity lookup — the subject
+    # stored here must byte-match what the next login will look up.
+    subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
     email = str(userinfo.get("email", "") or "")
     display_name = str(
         userinfo.get("name") or userinfo.get("preferred_username") or email or subject[:32]

@@ -77,7 +77,8 @@
       "not_allowed": "该账号无权在此登录。",
       "unknown_provider": "未知的登录提供商。",
       "missing_code": "身份提供商未返回授权码。",
-      "no_subject": "身份提供商未返回用户标识。"
+      "no_subject": "身份提供商未返回用户标识。",
+      "idp_error": "身份提供商暂不可用，请稍后重试。"
     },
     "authorizeTitle": "应用授权",
     "authorizeSubtitle": "登录以授予访问权限",

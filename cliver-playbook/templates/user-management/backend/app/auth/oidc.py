@@ -22,7 +22,11 @@ Design choices:
   same trade the backend-for-frontend pattern usually makes.
 - **Registry-shaped, settings-driven.** The provider registry is built from
   the nested `oidc.providers` settings block; adding an identity provider is
-  a configuration change, never a code change.
+  a configuration change, never a code change. Each provider is either
+  discovery-based (`issuer`) or explicit-endpoint (`authorize_url` /
+  `token_url` / `userinfo_url`, for OAuth2 services with no discovery
+  document); `endpoints_for` normalizes both into one discovery-shaped dict
+  so the flow code is identical for either shape.
 - **Discovery cached 1h** per issuer — the document is static in practice, and
   this keeps the login path at two IdP round-trips (token + userinfo).
 - The HTTP entry points accept an injected `httpx.AsyncClient` — tests drive
@@ -52,7 +56,19 @@ _DISCOVERY_TTL_SECONDS = 3600
 
 @dataclass(frozen=True)
 class ProviderConfig:
-    """One registered external IdP."""
+    """One registered external IdP.
+
+    Two complementary endpoint shapes (the settings model enforces that an
+    enabled provider has exactly one of them):
+    - `issuer` set: the three endpoints come from OIDC discovery;
+    - explicit `authorize_url`/`token_url`/`userinfo_url`: for plain OAuth2
+      services without a discovery document (e.g. GitHub).
+
+    `subject_claim` names the userinfo field carrying the provider-side
+    stable user id: "sub" for standard OIDC, "id" for GitHub-style APIs
+    returning a numeric account id. `label` is the UI button text; empty
+    means the edge falls back to `key.title()`.
+    """
 
     key: str  # URL segment + oauth_identities.provider value
     issuer: str
@@ -61,6 +77,11 @@ class ProviderConfig:
     scopes: str
     auto_provision: bool = True
     default_role: str = "user"
+    label: str = ""
+    subject_claim: str = "sub"
+    authorize_url: str = ""
+    token_url: str = ""
+    userinfo_url: str = ""
 
 
 def build_provider_registry() -> dict[str, ProviderConfig]:
@@ -85,6 +106,11 @@ def build_provider_registry() -> dict[str, ProviderConfig]:
             scopes=provider.scopes,
             auto_provision=provider.auto_provision,
             default_role=provider.default_role,
+            label=provider.label,
+            subject_claim=provider.subject_claim,
+            authorize_url=provider.authorize_url,
+            token_url=provider.token_url,
+            userinfo_url=provider.userinfo_url,
         )
     return registry
 
@@ -184,6 +210,27 @@ async def discover(issuer: str, *, client: httpx.AsyncClient | None = None) -> d
             await client.aclose()
     _discovery_cache[issuer] = (now + _DISCOVERY_TTL_SECONDS, document)
     return document
+
+
+async def endpoints_for(
+    config: ProviderConfig, *, client: httpx.AsyncClient | None = None
+) -> dict[str, Any]:
+    """The provider's three flow endpoints as a discovery-shaped dict.
+
+    Discovery-based providers fetch (and 1h-cache) the issuer's standard
+    document; explicit-endpoint providers get a synthesized document with
+    the same three keys. Everything downstream (build_authorize_url /
+    exchange_code / fetch_userinfo) only reads those keys, so both shapes
+    share one flow implementation. The settings model guarantees an enabled
+    provider has either an issuer or all three explicit URLs.
+    """
+    if config.issuer:
+        return await discover(config.issuer, client=client)
+    return {
+        "authorization_endpoint": config.authorize_url,
+        "token_endpoint": config.token_url,
+        "userinfo_endpoint": config.userinfo_url,
+    }
 
 
 async def exchange_code(

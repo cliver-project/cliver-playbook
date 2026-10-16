@@ -77,7 +77,8 @@
       "not_allowed": "This account is not allowed to sign in here.",
       "unknown_provider": "Unknown sign-in provider.",
       "missing_code": "The identity provider did not return an authorization code.",
-      "no_subject": "The identity provider did not return a user identifier."
+      "no_subject": "The identity provider did not return a user identifier.",
+      "idp_error": "The identity provider is unavailable. Please try again later."
     },
     "authorizeTitle": "Authorize application",
     "authorizeSubtitle": "Sign in to grant access",
