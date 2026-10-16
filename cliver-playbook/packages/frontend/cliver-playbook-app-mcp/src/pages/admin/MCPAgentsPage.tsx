@@ -2,18 +2,18 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { listMcpCalls, type McpCallRow } from "@/api/mcp";
-import { AgentBadge } from "@/components/mcp/AgentBadge";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { listMcpCalls, type McpCallRow } from "cliver-playbook-app-mcp/api/mcp.ts";
+import { AgentBadge } from "cliver-playbook-app-mcp/components/mcp/AgentBadge.tsx";
+import { Badge } from "cliver-playbook-app-basic/components/ui/badge.tsx";
+import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+} from "cliver-playbook-app-basic/components/ui/card.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "cliver-playbook-app-basic/components/ui/table.tsx";
 
 /**
  * Who calls this server's tools — the operator's view of the MCP boundary.

@@ -20,8 +20,11 @@ import type { ProxyOptions, UserConfig } from "vite";
  * because `exports` subpath patterns are matched exactly — see the README.
  */
 
-/** Where the FastAPI backend listens in development. */
-const DEV_BACKEND = "http://127.0.0.1:8000";
+/**
+ * Where the FastAPI backend listens in development. Exported so an app that
+ * proxies an extra path (the MCP endpoint) still names the backend once.
+ */
+export const DEV_BACKEND = "http://127.0.0.1:8000";
 
 export interface BaseViteOptions {
   /** Extra proxy entries, merged over the `/api` default. */

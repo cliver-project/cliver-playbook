@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { apiErrorMessage } from "@/api/client";
+import { apiErrorMessage } from "cliver-playbook-app-basic/api/client.ts";
 import {
   callMcpTool,
   fetchMcpInfo,
@@ -12,30 +12,30 @@ import {
   listMcpTools,
   mcpEndpointUrl,
   type McpToolResult,
-} from "@/api/mcp";
-import { useAuth } from "@/components/auth/AuthContext";
-import { AgentBadge } from "@/components/mcp/AgentBadge";
-import { CopyButton } from "@/components/mcp/CopyButton";
+} from "cliver-playbook-app-mcp/api/mcp.ts";
+import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
+import { AgentBadge } from "cliver-playbook-app-mcp/components/mcp/AgentBadge.tsx";
+import { CopyButton } from "cliver-playbook-app-mcp/components/mcp/CopyButton.tsx";
 import { AlertCircleIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "cliver-playbook-app-basic/components/ui/badge.tsx";
+import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+} from "cliver-playbook-app-basic/components/ui/card.tsx";
+import { Label } from "cliver-playbook-app-basic/components/ui/label.tsx";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
+} from "cliver-playbook-app-basic/components/ui/select.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "cliver-playbook-app-basic/components/ui/table.tsx";
+import { Textarea } from "cliver-playbook-app-basic/components/ui/textarea.tsx";
 
 /**
  * MCP playground: exercise this server's tools over the real wire protocol.

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "cliver-playbook-app-basic/components/ui/badge.tsx";
 
 /**
  * The caller's self-declared agent identity, as recorded in audit rows.

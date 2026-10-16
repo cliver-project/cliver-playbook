@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "mcpPlayground": "MCP playground",
+    "mcpAgents": "MCP agents"
+  },
+  "mcp": {
+    "common": {
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Could not access the clipboard",
+      "unknownAgent": "unknown"
+    },
+    "playground": {
+      "title": "MCP playground",
+      "description": "Call this server's tools over the real MCP wire protocol, with your own session token. Every call here is audited like an agent's.",
+      "endpointTitle": "Endpoint",
+      "endpointDescription": "Point an MCP client at this URL. The JSON-RPC transport (streamable HTTP) is identical for every agent.",
+      "authOn": "Auth required",
+      "authOff": "Auth off",
+      "authOffWarning": "Authentication is disabled: calls run as an anonymous viewer, so permission-gated tools are denied and any process that can reach this URL may call the public ones. Set CLIVER_MCP__AUTH_ENABLED=true to call tools as yourself — and before exposing this server beyond localhost.",
+      "authOnNote": "Requests must carry a bearer token. Your session token works here — the playground sends it automatically.",
+      "cliHint": "Add it to an MCP client (Claude Code shown):",
+      "headersHint": "Agents may identify themselves with the X-MCP-Agent-Type and X-MCP-Agent-Id headers; audits record both.",
+      "toolsTitle": "Try a tool",
+      "toolsDescription": "tools/list and tools/call exactly as an agent sends them. Permission denials come back as tool errors — that is the enforcement working.",
+      "toolsFailed": "Could not list tools",
+      "toolLabel": "Tool",
+      "selectTool": "Select a tool…",
+      "argsLabel": "Arguments (JSON)",
+      "argsInvalid": "Arguments are not valid JSON",
+      "argsObjectRequired": "Arguments must be a JSON object, e.g. {\"message\": \"hi\"}",
+      "call": "Call tool",
+      "calling": "Calling…",
+      "inputSchema": "Input schema",
+      "resultEmpty": "No call yet — pick a tool and call it.",
+      "toolOk": "ok",
+      "toolError": "tool error",
+      "duration": "{{ms}} ms",
+      "structured": "Structured content",
+      "recentTitle": "Recent calls",
+      "recentDescription": "Newest MCP activity, including your calls above.",
+      "recentEmpty": "No MCP calls recorded yet.",
+      "fullAudit": "Open agents view"
+    },
+    "agents": {
+      "title": "MCP agents",
+      "description": "Who calls this server's tools, from which machine, with what outcome. Gate rejections (bad or missing tokens) are included.",
+      "summaryTitle": "Agents seen",
+      "summaryDescription": "Grouped from the newest {{count}} records.",
+      "recentTitle": "Recent activity",
+      "agent": "Agent",
+      "calls": "Calls",
+      "failures": "Failures",
+      "lastSeen": "Last seen",
+      "when": "When",
+      "user": "User",
+      "tool": "Tool",
+      "outcome": "Outcome",
+      "duration": "Duration",
+      "args": "Arguments",
+      "ok": "ok",
+      "failed": "failed",
+      "anonymous": "anonymous",
+      "empty": "No MCP activity recorded yet.",
+      "total": "{{shown}} of {{total}} records",
+      "refresh": "Refresh"
+    }
+  }
+}

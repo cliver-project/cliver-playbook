@@ -2,7 +2,7 @@ import { CopyIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 
 /**
  * Copy-to-clipboard button for the values an operator has to move into

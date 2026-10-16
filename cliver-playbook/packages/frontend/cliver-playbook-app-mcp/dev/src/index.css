@@ -1,0 +1,17 @@
+/*
+ * The app's Tailwind entry.
+ *
+ * The theme and Tailwind itself come from the basic package's stylesheet (which
+ * also declares the basic package's own sources); everything else here is the
+ * content-scanning wiring Tailwind v4 needs in a multi-package app: its
+ * automatic detection is rooted at the app and skips installed packages, so
+ * each additional package's source root is named explicitly.
+ *
+ * The paths must be the packages' real directories. The scanner does not follow
+ * symlinks, so a linked package (`node_modules/cliver-playbook-app-user` under
+ * a workspace or pnpm store) would be silently skipped — and the utilities used
+ * only there would then be missing from the built stylesheet.
+ */
+@import "cliver-playbook-app-basic/styles/index.css";
+@source "../../src";
+@source "../../../cliver-playbook-app-user/src";

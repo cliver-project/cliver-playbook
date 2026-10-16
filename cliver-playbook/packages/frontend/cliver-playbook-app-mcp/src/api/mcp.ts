@@ -1,10 +1,11 @@
 import axios from "axios";
 
-import { api, getStoredToken } from "./client";
-import type { AuditLogRow } from "./auth";
+import { api } from "cliver-playbook-app-basic/api/client.ts";
+import type { AuditLogRow } from "cliver-playbook-app-user/api/auth.ts";
+import { getStoredToken } from "cliver-playbook-app-user/auth/session.ts";
 
 /**
- * MCP-domain API calls (mcp-server template).
+ * MCP-domain API calls (the mcp package).
  *
  * Two very different call paths share this module:
  *

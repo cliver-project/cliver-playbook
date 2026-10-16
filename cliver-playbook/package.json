@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "pnpm --filter cliver-playbook-dev-basic dev",
     "dev:user": "pnpm --filter cliver-playbook-dev-user dev",
+    "dev:mcp": "pnpm --filter cliver-playbook-dev-mcp dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
