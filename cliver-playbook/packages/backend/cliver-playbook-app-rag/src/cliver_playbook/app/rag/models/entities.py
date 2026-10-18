@@ -10,9 +10,11 @@ Three tables by design:
   of (document_id, source_version, ordinal, text), so re-indexing is
   idempotent.
 - ``rag_chunk_embeddings`` — one row per embedded chunk. The embedding
-  column is pgvector's VECTOR(1024) in production (the HNSW index
-  sits on this table); on SQLite the type is Text() for round-trip
-  in unit tests.
+  column is pgvector's ``VECTOR`` (deliberately unconstrained: the
+  embedder is a per-document choice, so the stub's 64-d vectors and
+  BGE-M3's 1024-d vectors share the table; each row records its
+  ``dim``). The ``Vector`` type stringifies on write and parses on
+  read, so the same ORM model round-trips through SQLite unit tests.
 
 The same `metadata_json` JSONB column carries per-chunk stage metadata
 (section_path, language, source offsets) without an ALTER for every
@@ -24,6 +26,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -92,15 +95,14 @@ class ChunkEmbedding(Base):
         ForeignKey("rag_chunks.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    # pgvector's VECTOR(1024) at runtime; the unit-test engine uses
-    # Text() via the dialect fallback below. Importing pgvector here
-    # would force it on every test; instead the migration creates the
-    # real column and tests use the same model against SQLite where
-    # pgvector's Vector type falls back to a Text-adapter at DDL time.
-    # In practice the model's `embedding` is a generic Mapped[Any] so
-    # the actual column type is decided at the engine level; tests get
-    # a Text column, production gets a vector column.
-    embedding: Mapped[Any] = mapped_column(Text)
+    # pgvector's `Vector` without a fixed dimension: the column holds
+    # vectors from whichever embedder the document selected. The
+    # per-row `dim` column records the dimension and lets the HNSW
+    # expression index (see the migration) cover only the production
+    # default dimension. The type serializes to pgvector's text form
+    # on any dialect, so in-memory SQLite tests round-trip.
+    embedding: Mapped[list[float]] = mapped_column(Vector())
+    dim: Mapped[int] = mapped_column(Integer)
     sparse_lexical: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     embedder_version: Mapped[str] = mapped_column(String(64))
 

@@ -79,7 +79,7 @@ def test_chunk_columns(engine) -> None:
 def test_chunk_embedding_columns(engine) -> None:
     insp = __import__("sqlalchemy").inspect(engine)
     cols = {c["name"] for c in insp.get_columns("rag_chunk_embeddings")}
-    assert {"chunk_id", "embedding", "sparse_lexical", "embedder_version"}.issubset(cols)
+    assert {"chunk_id", "embedding", "dim", "sparse_lexical", "embedder_version"}.issubset(cols)
 
 
 def test_chunk_has_fk_to_document(engine) -> None:
@@ -135,7 +135,8 @@ def test_round_trip_document_and_chunks(engine) -> None:
         s.add(
             ChunkEmbedding(
                 chunk_id="c1",
-                embedding="[0.0, 0.0, 0.0, 0.0]",
+                embedding=[0.0, 0.0, 0.0, 0.0],
+                dim=4,
                 embedder_version="stub@1.0",
             )
         )
