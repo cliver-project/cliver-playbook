@@ -28,8 +28,10 @@ class Embedder(Protocol):
 
     Implementations: ``StubEmbedder`` (offline default, deterministic
     hash-based 64-d), ``BgeM3Embedder`` (BGE-M3, 1024-d, CPU-capable
-    via FlagEmbedding). New embedders register themselves at import
-    via ``embedding.registry.register(name, factory)``.
+    via FlagEmbedding), ``BgeBaseZhEmbedder`` (BGE-base-zh-v1.5,
+    768-d, CPU-capable via SentenceTransformers). New embedders
+    register themselves at import via
+    ``embedding.registry.register(name, factory)``.
     """
 
     id: str

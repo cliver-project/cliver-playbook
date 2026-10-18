@@ -98,7 +98,8 @@ oidc:
 # on a fresh clone. Production stages are a deployment choice — override
 # from the environment, e.g.
 #
-#   CLIVER_RAG__EMBEDDER=bge-m3
+#   CLIVER_RAG__EMBEDDER=bge-base-zh-v1.5   # 768-d, ~400 MB, CPU-friendly
+#   CLIVER_RAG__EMBEDDER=bge-m3             # 1024-d, ~2.3 GB, multilingual
 #   CLIVER_RAG__RERANKER=bge-reranker-v2-m3
 #
 # The query embedder must match the model that indexed a document; vectors

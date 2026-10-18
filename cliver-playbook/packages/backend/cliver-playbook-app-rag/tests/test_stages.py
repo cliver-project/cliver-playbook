@@ -13,7 +13,7 @@ async def test_stages_lists_every_registry(client: AsyncClient) -> None:
     body = r.json()
 
     assert {"recursive", "markdown", "code", "pdf"} <= {c["name"] for c in body["chunkers"]}
-    assert {"stub", "bge-m3"} <= {e["name"] for e in body["embedders"]}
+    assert {"stub", "bge-m3", "bge-base-zh-v1.5"} <= {e["name"] for e in body["embedders"]}
     assert {"bm25-only", "pgvector-hybrid"} <= {r_["name"] for r_ in body["retrievers"]}
     assert {"noop", "bge-reranker-v2-m3"} <= {r_["name"] for r_ in body["rerankers"]}
     assert {"stub"} <= {m["name"] for m in body["llms"]}
@@ -25,6 +25,8 @@ async def test_stages_reports_metadata(client: AsyncClient) -> None:
     assert embedders["stub"]["dim"] == 64
     assert embedders["stub"]["model_id"] == "stub@1.0"
     assert embedders["bge-m3"]["dim"] == 1024
+    assert embedders["bge-base-zh-v1.5"]["dim"] == 768
+    assert embedders["bge-base-zh-v1.5"]["model_id"].startswith("BAAI/bge-base-zh-v1.5@")
     chunkers = {c["name"]: c for c in body["chunkers"]}
     assert chunkers["recursive"]["version"]
 

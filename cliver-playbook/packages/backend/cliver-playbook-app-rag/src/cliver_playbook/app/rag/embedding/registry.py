@@ -53,10 +53,11 @@ registry = type(
 
 
 def _register_defaults() -> None:
-    from cliver_playbook.app.rag.embedding import bge_m3, stub
+    from cliver_playbook.app.rag.embedding import bge_base_zh, bge_m3, stub
 
     register("stub", lambda: stub.StubEmbedder())
     register("bge-m3", lambda: bge_m3.BgeM3Embedder())
+    register("bge-base-zh-v1.5", lambda: bge_base_zh.BgeBaseZhEmbedder())
 
 
 _register_defaults()

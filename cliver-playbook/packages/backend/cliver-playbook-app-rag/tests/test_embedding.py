@@ -11,6 +11,7 @@ from cliver_playbook.app.rag.embedding.registry import registry
 def test_registry_has_bge_m3_and_stub() -> None:
     names = registry.names()
     assert "bge-m3" in names
+    assert "bge-base-zh-v1.5" in names
     assert "stub" in names
 
 
@@ -83,6 +84,61 @@ def test_bge_m3_loads_through_the_public_constructor(monkeypatch) -> None:
     import pytest
 
     assert vectors[0] == pytest.approx([0.6, 0.8])
+
+
+def test_bge_base_zh_metadata_and_query_instruction(monkeypatch) -> None:
+    """BGE-base-zh-v1.5 loads lazily and prefixes queries only.
+
+    The real model is not downloaded: a fake ``sentence_transformers``
+    module pins the constructor and encode call shapes. The query
+    instruction is the asymmetry the model card recommends, so it must
+    not leak into document embeddings.
+    """
+    import sys
+    import types
+
+    import numpy as np
+
+    init_calls: list[tuple[tuple, dict]] = []
+    encode_calls: list[tuple[tuple, dict]] = []
+
+    class _FakeModel:
+        def __init__(self, *args, **kwargs):
+            init_calls.append((args, kwargs))
+
+        def encode(self, texts, **kwargs):
+            encode_calls.append((tuple(texts), kwargs))
+            return np.asarray([[3.0, 4.0] for _ in texts])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        types.SimpleNamespace(SentenceTransformer=_FakeModel),
+    )
+
+    from cliver_playbook.app.rag.embedding.bge_base_zh import (
+        QUERY_INSTRUCTION,
+        BgeBaseZhEmbedder,
+    )
+
+    embedder = BgeBaseZhEmbedder()
+    assert embedder.dim == 768
+    assert embedder.max_input_tokens == 512
+    assert embedder.id.startswith("BAAI/bge-base-zh-v1.5@")
+
+    document_vectors = embedder.embed(["政策正文"], mode="document")
+    query_vectors = embedder.embed(["政策如何规定？"], mode="query")
+
+    assert init_calls == [(("BAAI/bge-base-zh-v1.5",), {"device": "cpu"})]
+    assert encode_calls[0][0] == ("政策正文",)
+    assert encode_calls[1][0] == (QUERY_INSTRUCTION + "政策如何规定？",)
+    assert encode_calls[0][1]["normalize_embeddings"] is True
+    assert encode_calls[0][1]["show_progress_bar"] is False
+
+    import pytest
+
+    assert document_vectors[0] == pytest.approx([0.6, 0.8])
+    assert query_vectors[0] == pytest.approx([0.6, 0.8])
 
 
 def test_unknown_embedder_raises() -> None:

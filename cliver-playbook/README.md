@@ -91,9 +91,11 @@ is the lowest-priority layer (ADR-0009).
 
 The checked-in RAG configuration pins the offline stages (`stub` embedder, `noop`
 reranker), so the knowledge-base pages work on a fresh clone without downloading model
-weights. Set `CLIVER_RAG__EMBEDDER=bge-m3` / `CLIVER_RAG__RERANKER=bge-reranker-v2-m3`
-for the production stages. The query embedder must match the one used to index a
-document; the chat page exposes that choice per request (ADR-0018, decision 9).
+weights. Set `CLIVER_RAG__EMBEDDER=bge-base-zh-v1.5` for a compact Chinese embedder
+(768-d, ~400 MB) or `CLIVER_RAG__EMBEDDER=bge-m3` for the larger multilingual model;
+set `CLIVER_RAG__RERANKER=bge-reranker-v2-m3` for the production reranker. The query
+embedder must match the one used to index a document; the chat page exposes that
+choice per request (ADR-0018, decision 9).
 
 ## Architecture decisions
 
