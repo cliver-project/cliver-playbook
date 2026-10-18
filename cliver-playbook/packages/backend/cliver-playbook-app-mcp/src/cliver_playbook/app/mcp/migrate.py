@@ -29,11 +29,14 @@ def run_all_migrations(database_url: str | None = None) -> None:
             resolves it from the process settings (see the packages' env.py).
     """
     from cliver_playbook.app.basic.alembic import run_migrations_online as run_basic_migrations
+    from cliver_playbook.app.rag.alembic import run_migrations_online as run_rag_migrations
     from cliver_playbook.app.user.alembic import run_migrations_online as run_user_migrations
 
-    # The identity package's tables reference this package's, so basic first.
+    # Dependency order: identity tables reference basic's, and the rag
+    # chain creates the vector extension the embedding table needs.
     run_basic_migrations(database_url)
     run_user_migrations(database_url)
+    run_rag_migrations(database_url)
 
 
 def main(argv: list[str] | None = None) -> int:

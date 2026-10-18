@@ -1,12 +1,13 @@
 """Self-contained application wrapper for the ``mcp`` package.
 
 ``create_app`` assembles the full agent-facing stack: the ``basic`` package's
-routers (meta + demo items), the identity package's (auth + admin), this
-package's own two (the ``/mcp`` protocol endpoint and the ``/api/v1/mcp``
-views), and the OAuth 2.1 provider surface the protocol endpoint's 401s point
-agents at. It binds the process runtime with this package's most-derived
-Settings instance, so every package's ``settings`` proxy in the process
-answers from one configuration.
+routers (meta + demo items), the identity package's (auth + admin), the RAG
+package's (documents, search, chat, stage discovery), this package's own two
+(the ``/mcp`` protocol endpoint and the ``/api/v1/mcp`` views), and the OAuth
+2.1 provider surface the protocol endpoint's 401s point agents at. It binds
+the process runtime with this package's most-derived Settings instance, so
+every package's ``settings`` proxy in the process answers from one
+configuration.
 
 No mounted sub-application anywhere: the protocol endpoint is an ordinary route
 in an ordinary router (ADR-0017), so assembly is one ``include_router`` loop
@@ -45,6 +46,7 @@ from cliver_playbook.app.basic.api.routes import ROUTERS as BASIC_ROUTERS
 from cliver_playbook.app.mcp.api.routes import ROUTERS as MCP_ROUTERS
 from cliver_playbook.app.mcp.api.streamable import MCP_PATH, install_streamable_app
 from cliver_playbook.app.mcp.settings import Settings
+from cliver_playbook.app.rag.api.routes import ROUTERS as RAG_ROUTERS
 from cliver_playbook.app.user.api.routes import ROUTERS as USER_ROUTERS
 from cliver_playbook.app.user.auth.oauth21 import RequestMetaMiddleware, mount_oauth_routes
 
@@ -107,7 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = configure_runtime(settings)
     app = FastAPI(title=resolved.app_name, version="0.1.0", lifespan=_lifespan)
 
-    for router in (*BASIC_ROUTERS, *USER_ROUTERS, *MCP_ROUTERS):
+    for router in (*BASIC_ROUTERS, *USER_ROUTERS, *RAG_ROUTERS, *MCP_ROUTERS):
         app.include_router(router)
 
     # OAuth 2.1 provider surface (agent/API clients). Routes land at the

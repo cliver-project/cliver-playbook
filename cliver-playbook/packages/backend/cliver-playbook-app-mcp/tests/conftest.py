@@ -10,9 +10,10 @@ Design (mirrors the playbook conftest contract):
   checkout's app.yaml is not this package's business, and the transport tests
   spawn subprocesses that inherit this environment.
 - Bind the process through ``create_app`` (the real assembly path) and apply
-  both dependency migration chains in order — ``basic`` first, then ``user``,
-  whose foreign keys point at basic's tables. This package owns no tables and
-  no chain, so those two are the whole schema.
+  the dependency migration chains in order — ``basic`` first, then ``user``
+  (foreign keys point at basic's tables), then ``rag`` (its embedding table
+  needs the pgvector extension). This package owns no tables and no chain, so
+  those three are the whole schema.
 - autouse `reset_database`: TRUNCATE every table between tests. Milliseconds
   fast; the engine is disposed first because asyncpg connections are bound to
   the event loop that created them.
@@ -67,6 +68,7 @@ from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.basic.alembic import run_migrations_online as run_basic_migrations
 from cliver_playbook.app.mcp.app import create_app
 from cliver_playbook.app.mcp.settings import Settings
+from cliver_playbook.app.rag.alembic import run_migrations_online as run_rag_migrations
 from cliver_playbook.app.user.alembic import run_migrations_online as run_user_migrations
 
 settings = Settings()
@@ -75,7 +77,8 @@ settings = Settings()
 # instance through the `app` fixture rather than building their own.
 _app = create_app(settings)
 run_basic_migrations()  # dependency chain first...
-run_user_migrations()  # ...then the identity tables this package's tools read
+run_user_migrations()  # ...then the identity tables this package's tools read...
+run_rag_migrations()  # ...then the knowledge-base tables (creates pgvector)
 atexit.register(_drop_temp_database)
 
 

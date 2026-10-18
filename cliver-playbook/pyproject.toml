@@ -7,10 +7,11 @@ requires-python = ">=3.12"
 # package: `uv sync` here installs every backend package in editable mode
 # (see [tool.uv.sources]) so the whole library is importable from a single
 # virtualenv, exactly as a consuming project would install it.
-# Package order mirrors the dependency chain: basic <- user <- mcp.
+# Package order mirrors the dependency chain: basic <- user <- rag <- mcp.
 dependencies = [
     "cliver-playbook-app-basic",
     "cliver-playbook-app-user",
+    "cliver-playbook-app-rag",
     "cliver-playbook-app-mcp",
 ]
 
@@ -20,6 +21,7 @@ package = false
 [tool.uv.sources]
 cliver-playbook-app-basic = { workspace = true }
 cliver-playbook-app-user = { workspace = true }
+cliver-playbook-app-rag = { workspace = true }
 cliver-playbook-app-mcp = { workspace = true }
 
 [tool.uv.workspace]

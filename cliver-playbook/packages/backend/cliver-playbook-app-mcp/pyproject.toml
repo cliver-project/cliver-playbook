@@ -11,6 +11,9 @@ requires-python = ">=3.12"
 # chain without redeclaring the dependencies it already brings (ADR-0015).
 dependencies = [
     "cliver-playbook-app-user",
+    # The composed application serves the knowledge-base surface: upload,
+    # index, search and chat routers plus the rag stage settings block.
+    "cliver-playbook-app-rag",
     # Web framework. The >=0.143 lower bound is load-bearing, not cosmetic:
     # router inclusion rebuilds plain Starlette routes out of an APIRouter by
     # copying `route.endpoint` — the behaviour that lets the protocol endpoint

@@ -1,13 +1,22 @@
 """Application settings for the ``mcp`` package — the agent-facing surface.
 
-Extends ``user.Settings`` (identity, OIDC registry, OAuth 2.1 provider) with
-the single ``mcp`` block: the auth gate flag, the concurrency cap and the
-agent self-identification rules. The full layered resolution documented in
-``basic.settings`` applies unchanged — ``mcp`` keys in ``app.yaml``, env
-overrides spelled ``CLIVER_MCP__<FIELD>``, field defaults last — and a
-composed application's ``create_app`` binds this most-derived instance to the
-process runtime, which every package's ``settings`` proxy then serves
-(ADR-0016).
+Extends the ``rag`` package's Settings (which itself extends ``user``:
+identity, OIDC registry, OAuth 2.1 provider, plus the five RAG stage
+choices) with the single ``mcp`` block: the auth gate flag, the
+concurrency cap and the agent self-identification rules. The full layered
+resolution documented in ``basic.settings`` applies unchanged — ``rag``
+and ``mcp`` keys in ``app.yaml``, env overrides spelled
+``CLIVER_RAG__<FIELD>`` / ``CLIVER_MCP__<FIELD>``, field defaults last —
+and a composed application's ``create_app`` binds this most-derived
+instance to the process runtime, which every package's ``settings`` proxy
+then serves (ADR-0016).
+
+The settings inheritance chain mirrors the composition chain exactly:
+``basic <- user <- rag <- mcp``. The RAG package's routers read
+``settings.rag`` from the runtime-bound instance, so the instance the
+composed application binds must be a subclass that declares that block;
+building a parallel Settings class instead would leave the rag routers
+reading a proxy that cannot answer.
 
 There is deliberately NO ``mount_path`` / ``transport`` field: the protocol
 endpoint lives at the fixed path ``/mcp`` (``api.streamable.MCP_PATH``). The
@@ -23,7 +32,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from cliver_playbook.app.basic.runtime import lazy_settings
-from cliver_playbook.app.user.settings import Settings as UserSettings
+from cliver_playbook.app.rag.settings import Settings as RagSettings
 
 
 class McpSettings(BaseModel):
@@ -67,8 +76,8 @@ class McpSettings(BaseModel):
     # resource. A second knob set would let the two copies disagree.
 
 
-class Settings(UserSettings):
-    """Identity settings plus the ``mcp`` block."""
+class Settings(RagSettings):
+    """Identity + RAG settings plus the ``mcp`` block."""
 
     mcp: McpSettings = Field(default_factory=McpSettings)
 

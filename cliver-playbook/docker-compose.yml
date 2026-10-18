@@ -2,9 +2,15 @@
 # in Docker during development — only this dependency service does. A consuming
 # project copies this file unchanged: the defaults here are the defaults in
 # app.yaml, so `make db-up` is the whole setup.
+#
+# The image is the official pgvector build of the same PostgreSQL major
+# version: the RAG package's migration runs CREATE EXTENSION vector, and stock
+# postgres images do not ship the extension. The pgvector image is a drop-in
+# replacement, so an existing named volume keeps its data when the container
+# is recreated against it.
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: cliver_app_db
     environment:
       POSTGRES_USER: cliver

@@ -631,6 +631,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "cliver-playbook-app-basic" },
     { name = "cliver-playbook-app-mcp" },
+    { name = "cliver-playbook-app-rag" },
     { name = "cliver-playbook-app-user" },
 ]
 
@@ -638,6 +639,7 @@ dependencies = [
 requires-dist = [
     { name = "cliver-playbook-app-basic", editable = "packages/backend/cliver-playbook-app-basic" },
     { name = "cliver-playbook-app-mcp", editable = "packages/backend/cliver-playbook-app-mcp" },
+    { name = "cliver-playbook-app-rag", editable = "packages/backend/cliver-playbook-app-rag" },
     { name = "cliver-playbook-app-user", editable = "packages/backend/cliver-playbook-app-user" },
 ]
 
@@ -699,6 +701,7 @@ name = "cliver-playbook-app-mcp"
 version = "0.1.0"
 source = { editable = "packages/backend/cliver-playbook-app-mcp" }
 dependencies = [
+    { name = "cliver-playbook-app-rag" },
     { name = "cliver-playbook-app-user" },
     { name = "fastapi" },
     { name = "mcp" },
@@ -718,6 +721,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cliver-playbook-app-rag", editable = "packages/backend/cliver-playbook-app-rag" },
     { name = "cliver-playbook-app-user", editable = "packages/backend/cliver-playbook-app-user" },
     { name = "fastapi", specifier = ">=0.143.0" },
     { name = "mcp", specifier = ">=2.2.0,<3" },

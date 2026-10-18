@@ -91,3 +91,14 @@ def run_migrations_online() -> None:
 
         with context.begin_transaction():
             context.run_migrations()
+
+
+# env.py is executed as a script by Alembic, so the module-level dispatch
+# below is what actually enters one of the two functions above. Without it
+# the file defines the functions and exits silently: ``upgrade head`` reports
+# success while creating nothing (the failure mode is invisible until a query
+# hits a missing table), so this dispatch is load-bearing.
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
