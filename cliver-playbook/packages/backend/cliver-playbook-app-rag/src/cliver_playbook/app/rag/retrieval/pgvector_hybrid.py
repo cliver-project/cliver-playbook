@@ -150,6 +150,14 @@ class PgvectorHybridRetriever:
         # WHERE dim = 1024, so the query must spell the expression and
         # the predicate exactly for the planner to consider it.
         if dim == _INDEXED_DIM:
+            # HNSW recall is tuned per transaction. `SET` cannot take a
+            # bind parameter; set_config(..., true) scopes the change to
+            # the current transaction. The setting only matters when the
+            # index is eligible, i.e. in this branch.
+            await db.execute(
+                sql_text("SELECT set_config('hnsw.ef_search', :ef, true)"),
+                {"ef": str(settings.rag.pgvector_ef_search)},
+            )
             distance = "(e.embedding::vector(1024)) <=> CAST(:qvec AS vector(1024))"
             where = "e.dim = 1024"
             params: dict[str, Any] = {"qvec": query_vector, "limit": limit}

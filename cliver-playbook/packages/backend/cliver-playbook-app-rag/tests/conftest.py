@@ -61,10 +61,11 @@ def settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     db_path = tmp_path_factory.mktemp("rag-db") / "test.sqlite"
     return Settings(
         database_url=f"sqlite+aiosqlite:///{db_path}",
-        # The production retriever speaks pgvector SQL; SQLite tests use
-        # the lexical fallback so the HTTP surface stays exercisable
-        # without a Postgres server.
-        rag={"retriever": "bm25-only"},
+        # The production retriever speaks pgvector SQL and the
+        # production reranker downloads weights; SQLite tests pin the
+        # offline-safe stages so the HTTP surface stays exercisable
+        # without Postgres or model downloads.
+        rag={"retriever": "bm25-only", "reranker": "noop"},
         # Disable the .env layer: a developer machine's project .env may
         # carry real deployment values, and tests must not read them.
         _env_file=None,

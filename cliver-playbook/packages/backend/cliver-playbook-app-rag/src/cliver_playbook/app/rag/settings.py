@@ -42,9 +42,13 @@ class RagSettings(BaseModel):
     # ``rerank_top_k`` before the LLM sees the context.
     top_k: int = 20
     rerank_top_k: int = 5
-    # Hits below this fused score are reported as "no relevant context"
-    # in chat (and the LLM is skipped so the stub-or-real generator
-    # never produces a hallucinated answer). Set to 0.0 to disable.
+    # Chat drops hits whose reranker relevance score is below this
+    # floor; if nothing survives, the generator is skipped and the
+    # response is an explicit "no relevant context" refusal, so neither
+    # the stub nor a real model can produce a hallucinated answer. The
+    # floor applies only to rerankers that produce normalized relevance
+    # scores (a real cross-encoder) — retriever scores (RRF sums,
+    # cosine, ts_rank_cd) are on other scales. Set to 0.0 to disable.
     score_floor: float = 0.2
 
     # pgvector HNSW tuning. ``lists`` is the number of coarse

@@ -15,13 +15,11 @@ table is long-lived; the target is an opaque fingerprint instead.
 
 from __future__ import annotations
 
-import hashlib
-
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
-from cliver_playbook.app.rag.audit import write_rag_audit
+from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
 from cliver_playbook.app.rag.retrieval import Query, get_retriever
 from cliver_playbook.app.rag.schemas.search import HitRead, SearchRequest, SearchResponse
 from cliver_playbook.app.rag.settings import settings
@@ -30,11 +28,6 @@ from cliver_playbook.app.user.auth.dependencies import Viewer, require_perm
 router = APIRouter(prefix="/api/v1/rag/search", tags=["rag-search"])
 
 _READ = Security(require_perm("rag:search:read"))
-
-
-def _query_fingerprint(query_text: str) -> str:
-    """Stable short hash of a query, for audit rows without the text."""
-    return hashlib.sha256(query_text.encode("utf-8")).hexdigest()[:12]
 
 
 @router.post("", response_model=SearchResponse)
@@ -62,7 +55,7 @@ async def search(
 
     await write_rag_audit(
         event="search.run",
-        target=_query_fingerprint(request.query),
+        target=fingerprint(request.query),
         ok=True,
         args={"retriever": retriever_name, "mode": request.mode},
         extra={"hit_count": len(hits), "top_k": top_k},

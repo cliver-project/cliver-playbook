@@ -18,10 +18,23 @@ DB hiccup must not break an otherwise-successful upload).
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
 logger = logging.getLogger("cliver_playbook.app.rag.audit")
+
+
+def fingerprint(text: str) -> str:
+    """Stable short digest for an audit target.
+
+    Search queries and chat questions are user content: the audit table
+    is long-lived and broadly readable by admins, so it stores only this
+    opaque fingerprint as ``target``, never the text itself. The same
+    input always maps to the same fingerprint, which is enough to
+    correlate repeated operations.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 async def write_rag_audit(
