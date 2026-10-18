@@ -8,5 +8,18 @@ from cliver_playbook.app.rag.schemas.documents import (
     DocumentList,
     DocumentRead,
 )
+from cliver_playbook.app.rag.schemas.search import (
+    HitRead,
+    SearchRequest,
+    SearchResponse,
+)
 
-__all__ = ["ChunkList", "ChunkRead", "DocumentList", "DocumentRead"]
+__all__ = [
+    "ChunkList",
+    "ChunkRead",
+    "DocumentList",
+    "DocumentRead",
+    "HitRead",
+    "SearchRequest",
+    "SearchResponse",
+]

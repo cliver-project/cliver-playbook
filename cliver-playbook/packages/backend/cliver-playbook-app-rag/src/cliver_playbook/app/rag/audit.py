@@ -57,7 +57,7 @@ async def write_rag_audit(
             detail.update(extra)
         async with open_session() as session:
             await write_audit(
-                session=session,
+                session,
                 event=f"rag.{event}",
                 target=target,
                 ok=ok,

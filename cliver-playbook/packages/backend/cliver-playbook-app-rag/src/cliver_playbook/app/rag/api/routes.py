@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from cliver_playbook.app.rag.api import documents
+from cliver_playbook.app.rag.api import documents, search
 
-# Search and chat routers join this list in their own implementation
-# tasks; the composed application picks them up automatically.
-ROUTERS: list[APIRouter] = [documents.router]
+# The chat router joins this list in its own implementation task; the
+# composed application picks it up automatically.
+ROUTERS: list[APIRouter] = [documents.router, search.router]
