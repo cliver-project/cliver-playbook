@@ -46,11 +46,14 @@ import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.ts
  * server apply its configured default, which keeps the page on the same
  * defaults a scripted client gets. The exceptions are deliberate:
  *
- * - The query embedder is pinned to an embedder the corpus actually used.
- *   Vectors from different models are not comparable, so offering a model
- *   that indexed nothing would guarantee an empty dense leg. The catalog's
- *   `corpus.embedders` is the set recorded on indexed documents; when the
- *   server default is among them it wins, otherwise the first one does.
+ * - The query embedder list shows every registered embedder, matching the
+ *   ingestion page, but only models recorded on indexed documents are
+ *   selectable. Vectors from different models are not comparable, so a
+ *   model that indexed nothing would guarantee an empty dense leg; it stays
+ *   visible with a "no vectors" marker instead of disappearing from the
+ *   dropdown. The catalog's `corpus.embedders` is the set recorded on
+ *   indexed documents; when the server default is among them it wins,
+ *   otherwise the first one does.
  * - The mode list is limited to what the selected retriever declares. The
  *   server rejects unsupported combinations with 422 rather than silently
  *   downgrading; hiding them here avoids offering a request that cannot run.
@@ -151,20 +154,27 @@ export default function RagChatPage() {
     ? mode
     : (availableModes[0] ?? "hybrid");
 
-  // Query embedder: only models that produced indexed vectors. The server
-  // default wins when it is in the corpus; otherwise the first corpus
-  // embedder becomes the effective choice so the dense leg can match.
+  // Query embedder: list the full registry so the dropdown mirrors the
+  // ingestion page, but make only corpus-backed models selectable. A model
+  // that indexed nothing cannot contribute a dense leg, so it is marked
+  // unavailable rather than hidden. The server default wins when it indexed
+  // the corpus; otherwise the first corpus embedder becomes the effective
+  // choice so the dense leg can match.
+  const allEmbedderOptions = catalog.data?.embedders ?? [];
   const corpusEmbedderNames = catalog.data?.corpus.embedders ?? [];
-  const embedderOptions = (catalog.data?.embedders ?? []).filter((option: StageOption) =>
+  const selectableEmbedders = allEmbedderOptions.filter((option: StageOption) =>
     corpusEmbedderNames.includes(option.name),
   );
+  const unavailableEmbedderNames = allEmbedderOptions
+    .map((option: StageOption) => option.name)
+    .filter((name) => !corpusEmbedderNames.includes(name));
   const serverDefaultEmbedder = catalog.data?.defaults.embedder ?? "";
   const autoEmbedder =
-    embedderOptions.length === 0
+    selectableEmbedders.length === 0
       ? undefined
-      : embedderOptions.some((option) => option.name === serverDefaultEmbedder)
+      : selectableEmbedders.some((option) => option.name === serverDefaultEmbedder)
         ? serverDefaultEmbedder
-        : embedderOptions[0].name;
+        : selectableEmbedders[0].name;
   const effectiveEmbedder = embedder ?? autoEmbedder ?? serverDefaultEmbedder;
 
   // The explicit selection wins; otherwise send the corpus-derived choice.
@@ -296,11 +306,13 @@ export default function RagChatPage() {
               id="rag-embedder"
               label={t("rag.chat.embedderLabel")}
               value={effectiveEmbedder}
-              options={embedderOptions}
+              options={allEmbedderOptions}
               onChange={setEmbedder}
               disabled={busy}
+              unavailable={unavailableEmbedderNames}
+              unavailableLabel={t("rag.chat.embedderUnavailable")}
               description={
-                embedderOptions.length === 0
+                corpusEmbedderNames.length === 0
                   ? t("rag.chat.corpusEmpty")
                   : t("rag.chat.embedderHint")
               }

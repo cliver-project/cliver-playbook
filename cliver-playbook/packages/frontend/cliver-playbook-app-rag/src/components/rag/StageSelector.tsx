@@ -28,6 +28,14 @@ export interface StageSelectorProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   description?: string;
+  /** Values kept in the list but not selectable. Callers use this to show
+   * the full registry while marking entries the current context cannot use
+   * (for example an embedder that has not indexed any document), instead of
+   * silently dropping them from the dropdown. */
+  unavailable?: readonly string[];
+  /** Text appended to an unavailable option's label; the caller supplies a
+   * translated string because the reason is context-specific. */
+  unavailableLabel?: string;
 }
 
 export function StageSelector({
@@ -38,8 +46,11 @@ export function StageSelector({
   onChange,
   disabled = false,
   description,
+  unavailable = [],
+  unavailableLabel,
 }: StageSelectorProps) {
   const { t } = useTranslation();
+  const unavailableNames = new Set(unavailable);
 
   return (
     <div className="space-y-1.5">
@@ -49,13 +60,21 @@ export function StageSelector({
           <SelectValue placeholder={t("rag.common.selectStage")} />
         </SelectTrigger>
         <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.name} value={option.name}>
-              {option.name}
-              {option.model_id ? ` · ${option.model_id}` : ""}
-              {option.dim ? ` · ${option.dim}d` : ""}
-            </SelectItem>
-          ))}
+          {options.map((option) => {
+            const isUnavailable = unavailableNames.has(option.name);
+            return (
+              <SelectItem
+                key={option.name}
+                value={option.name}
+                disabled={isUnavailable}
+              >
+                {option.name}
+                {option.model_id ? ` · ${option.model_id}` : ""}
+                {option.dim ? ` · ${option.dim}d` : ""}
+                {isUnavailable && unavailableLabel ? ` · ${unavailableLabel}` : ""}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
       {description ? (
