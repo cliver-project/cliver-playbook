@@ -3,9 +3,11 @@
 Two legs, two engines:
 
 - **Dense** — cosine similarity over ``rag_chunk_embeddings``. The
-  query is embedded with the embedder named by ``settings.rag.embedder``
-  and matched only against rows of the same dimension, because the
-  knowledge base may hold vectors from more than one embedder. When the
+  query is embedded with the per-call embedder override when the request
+  carries one, otherwise with the embedder named by
+  ``settings.rag.embedder``, and matched only against rows of the same
+  dimension, because the knowledge base may hold vectors from more than
+  one embedder. When the
   query dimension is 1024 (the production default), the SQL uses the
   same expression the partial HNSW index is built on, so the index is
   actually eligible; other dimensions fall back to a sequential scan,
@@ -122,7 +124,7 @@ class PgvectorHybridRetriever:
 
         dense: list[Hit] = []
         if query.mode in ("dense", "hybrid"):
-            dense = await self._dense(query.text, candidates, db)
+            dense = await self._dense(query.text, candidates, db, query.embedder)
         sparse: list[Hit] = []
         if query.mode in ("sparse", "hybrid"):
             sparse = await self._sparse(query.text, candidates, db)
@@ -133,14 +135,26 @@ class PgvectorHybridRetriever:
             return sparse[: query.top_k]
         return rrf_fuse(dense, sparse, top_k=query.top_k)
 
-    async def _dense(self, query_text: str, limit: int, db: AsyncSession) -> list[Hit]:
+    async def _dense(
+        self,
+        query_text: str,
+        limit: int,
+        db: AsyncSession,
+        embedder_name: str | None = None,
+    ) -> list[Hit]:
         """Cosine-similarity leg. An empty embedding table skips the
-        embedder entirely, so an empty index never pays a model load."""
+        embedder entirely, so an empty index never pays a model load.
+
+        ``embedder_name`` is the per-call override carried by the query;
+        without it the configured default embeds the query. The vectors
+        and the query must come from the same model, so callers that
+        indexed with a non-default embedder must pass its name here.
+        """
         stored = await db.scalar(sql_text("SELECT count(*) FROM rag_chunk_embeddings"))
         if not stored:
             return []
 
-        embedder = get_embedder(settings.rag.embedder)
+        embedder = get_embedder(embedder_name or settings.rag.embedder)
         vectors = await asyncio.to_thread(embedder.embed, [query_text], mode="query")
         vector = vectors[0]
         dim = len(vector)

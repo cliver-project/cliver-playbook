@@ -82,6 +82,14 @@ async def test_search_unknown_retriever_returns_422(client: AsyncClient) -> None
     assert "unknown retriever" in r.json()["detail"]
 
 
+async def test_search_unknown_embedder_returns_422(client: AsyncClient) -> None:
+    """The query embedder is a per-call choice; an unregistered name is a
+    client error and must be rejected before retrieval starts."""
+    r = await client.post(SEARCH, json={"query": "x", "embedder": "does-not-exist"})
+    assert r.status_code == 422
+    assert "unknown embedder" in r.json()["detail"]
+
+
 async def test_search_rejects_empty_query(client: AsyncClient) -> None:
     r = await client.post(SEARCH, json={"query": ""})
     assert r.status_code == 422

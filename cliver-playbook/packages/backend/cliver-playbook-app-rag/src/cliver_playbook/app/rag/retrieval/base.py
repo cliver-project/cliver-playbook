@@ -38,11 +38,18 @@ class Query(BaseModel):
     ``mode`` selects which leg(s) run: dense (vector similarity), sparse
     (lexical / BM25 / tsquery), or hybrid (both, fused with reciprocal
     rank fusion). ``top_k`` is the final result count.
+
+    ``embedder`` overrides the embedder used to embed the query text.
+    It must name the embedder that produced the stored vectors: vectors
+    from different embedders live in different spaces (and usually differ
+    in dimension), so a query embedded by the wrong model can never
+    match them. When omitted, the configured default is used.
     """
 
     text: str
     top_k: int = 20
     mode: Literal["dense", "sparse", "hybrid"] = "hybrid"
+    embedder: str | None = None
 
 
 class Retriever(Protocol):

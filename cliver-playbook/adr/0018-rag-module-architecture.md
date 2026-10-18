@@ -79,6 +79,15 @@ the identity domain it is supposed to sit on.
    retriever, while the composed package's tests run on real PostgreSQL against
    the migrated pgvector schema — the only place the dense SQL, the tsvector
    leg and the audit write are exercised end to end.
+9. **The query embedder is a per-call override on search and chat.** The
+   embedder is chosen per document at upload time, so the query side must be
+   able to name the same model: vectors from different embedders live in
+   different spaces and usually differ in dimension, and the dense leg matches
+   only rows of the query's dimension. Without the override, a document
+   indexed with a non-default embedder could never be found by the dense leg,
+   and a non-default choice in the UI would silently degrade to lexical-only
+   retrieval. The override is validated against the embedder registry before
+   retrieval starts, and is recorded in the audit row.
 
 ## Why
 

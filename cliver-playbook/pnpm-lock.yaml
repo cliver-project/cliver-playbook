@@ -196,6 +196,101 @@ importers:
       cliver-playbook-app-mcp:
         specifier: workspace:*
         version: link:..
+      cliver-playbook-app-rag:
+        specifier: workspace:*
+        version: link:../../cliver-playbook-app-rag
+      cliver-playbook-app-user:
+        specifier: workspace:*
+        version: link:../../cliver-playbook-app-user
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.3.1(react@19.3.1)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.0
+        version: 4.3.3(vite@8.3.4(@types/node@24.19.2)(jiti@2.7.0))
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.19.2
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.0
+        version: 6.1.2(vite@8.3.4(@types/node@24.19.2)(jiti@2.7.0))
+      oxlint:
+        specifier: ^1.79.0
+        version: 1.88.0
+      tailwindcss:
+        specifier: ^4.3.0
+        version: 4.3.3
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.2.0
+        version: 8.3.4(@types/node@24.19.2)(jiti@2.7.0)
+
+  packages/frontend/cliver-playbook-app-rag:
+    dependencies:
+      '@tanstack/react-query':
+        specifier: ^5.90.0
+        version: 5.104.3(react@19.3.1)
+      axios:
+        specifier: ^1.7.0
+        version: 1.20.0
+      cliver-playbook-app-basic:
+        specifier: workspace:*
+        version: link:../cliver-playbook-app-basic
+      cliver-playbook-app-user:
+        specifier: workspace:*
+        version: link:../cliver-playbook-app-user
+      lucide-react:
+        specifier: ^0.550.0
+        version: 0.550.0(react@19.3.1)
+      react-i18next:
+        specifier: ^16.0.0
+        version: 16.6.6(i18next@25.10.10(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
+      react-router-dom:
+        specifier: ^7.18.0
+        version: 7.18.4(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      sonner:
+        specifier: ^2.0.0
+        version: 2.0.8(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.3.0(@types/react@19.3.0)
+      oxlint:
+        specifier: ^1.79.0
+        version: 1.88.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.3.1(react@19.3.1)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+
+  packages/frontend/cliver-playbook-app-rag/dev:
+    dependencies:
+      cliver-playbook-app-basic:
+        specifier: workspace:*
+        version: link:../../cliver-playbook-app-basic
+      cliver-playbook-app-rag:
+        specifier: workspace:*
+        version: link:..
       cliver-playbook-app-user:
         specifier: workspace:*
         version: link:../../cliver-playbook-app-user

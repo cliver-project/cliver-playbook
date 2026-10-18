@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
 from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
+from cliver_playbook.app.rag.embedding import get_embedder
 from cliver_playbook.app.rag.retrieval import Query, get_retriever
 from cliver_playbook.app.rag.schemas.search import HitRead, SearchRequest, SearchResponse
 from cliver_playbook.app.rag.settings import settings
@@ -48,16 +49,35 @@ async def search(
         raise HTTPException(
             status_code=422, detail=f"unknown retriever: {retriever_name!r}"
         ) from None
+    # Validate the query embedder up front: an unknown name would
+    # otherwise surface as a 500 from inside the dense leg, after a
+    # database round trip.
+    if request.embedder is not None:
+        try:
+            get_embedder(request.embedder)
+        except KeyError:
+            raise HTTPException(
+                status_code=422, detail=f"unknown embedder: {request.embedder!r}"
+            ) from None
 
     top_k = request.top_k if request.top_k is not None else settings.rag.top_k
-    query = Query(text=request.query, top_k=top_k, mode=request.mode)
+    query = Query(
+        text=request.query,
+        top_k=top_k,
+        mode=request.mode,
+        embedder=request.embedder,
+    )
     hits = await retriever.retrieve(query, db=db)
 
     await write_rag_audit(
         event="search.run",
         target=fingerprint(request.query),
         ok=True,
-        args={"retriever": retriever_name, "mode": request.mode},
+        args={
+            "retriever": retriever_name,
+            "mode": request.mode,
+            "embedder": request.embedder or settings.rag.embedder,
+        },
         extra={"hit_count": len(hits), "top_k": top_k},
     )
     return SearchResponse(

@@ -75,7 +75,7 @@ async def test_chat_respects_rerank_top_k(client: AsyncClient) -> None:
 
 
 async def test_chat_unknown_stage_returns_422(client: AsyncClient) -> None:
-    for field in ("retriever", "reranker", "llm"):
+    for field in ("retriever", "embedder", "reranker", "llm"):
         r = await client.post(CHAT, json={"question": "x", field: "does-not-exist"})
         assert r.status_code == 422, (field, r.text)
         assert "unknown" in r.json()["detail"]

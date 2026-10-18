@@ -102,6 +102,40 @@ async def test_search_runs_both_legs_on_postgres(
     assert rows, "the rag audit wrapper failed to write on the migrated schema"
 
 
+async def test_query_embedder_override_drives_the_dense_leg(
+    client: AsyncClient, admin_headers, monkeypatch
+) -> None:
+    """Search must let the caller name the embedder that indexed the rows.
+
+    The upload endpoint accepts any registered embedder per document, so
+    the query side needs the same choice: with a different process
+    default (here a name no registry knows, which would raise inside the
+    dense leg) the explicit override must still win and match the
+    stub-indexed rows.
+    """
+    from cliver_playbook.app.rag.settings import settings as rag_settings
+
+    await _upload_and_index(
+        client,
+        admin_headers,
+        b"The quick brown fox jumps over the lazy dog. " * 20,
+    )
+    monkeypatch.setattr(rag_settings.rag, "embedder", "missing-default")
+
+    response = await client.post(
+        "/api/v1/rag/search",
+        json={
+            "query": "quick brown fox",
+            "mode": "dense",
+            "top_k": 5,
+            "embedder": "stub",
+        },
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["hits"], "the dense leg ignored the per-call embedder override"
+
+
 async def test_chat_answers_from_retrieved_context(client: AsyncClient, admin_headers) -> None:
     await _upload_and_index(
         client,

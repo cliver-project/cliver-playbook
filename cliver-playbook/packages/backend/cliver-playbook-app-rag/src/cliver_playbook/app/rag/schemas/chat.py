@@ -14,6 +14,10 @@ class ChatRequest(BaseModel):
     bounds the context the generator sees. Every stage name defaults to
     the configured value, and overriding one for a single call is how
     the web UI compares stage combinations without a restart.
+
+    ``embedder`` names the model used to embed the question for the
+    dense leg. It must match the embedder that indexed the target
+    documents; when omitted the configured default is used.
     """
 
     question: str = Field(min_length=1)
@@ -21,6 +25,7 @@ class ChatRequest(BaseModel):
     top_k: int | None = Field(default=None, ge=1)
     rerank_top_k: int | None = Field(default=None, ge=1)
     retriever: str | None = None
+    embedder: str | None = None
     reranker: str | None = None
     llm: str | None = None
 

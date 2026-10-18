@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
 from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
+from cliver_playbook.app.rag.embedding import get_embedder
 from cliver_playbook.app.rag.llm import get_llm
 from cliver_playbook.app.rag.reranking import get_reranker
 from cliver_playbook.app.rag.retrieval import Query, get_retriever
@@ -82,6 +83,13 @@ async def chat(
         raise HTTPException(
             status_code=422, detail=f"unknown retriever: {retriever_name!r}"
         ) from None
+    if request.embedder is not None:
+        try:
+            get_embedder(request.embedder)
+        except KeyError:
+            raise HTTPException(
+                status_code=422, detail=f"unknown embedder: {request.embedder!r}"
+            ) from None
     try:
         reranker = get_reranker(reranker_name)
     except KeyError:
@@ -99,7 +107,12 @@ async def chat(
     )
 
     hits = await retriever.retrieve(
-        Query(text=request.question, top_k=top_k, mode=request.mode),
+        Query(
+            text=request.question,
+            top_k=top_k,
+            mode=request.mode,
+            embedder=request.embedder,
+        ),
         db=db,
     )
     if hits:
@@ -124,7 +137,12 @@ async def chat(
         event="chat.run",
         target=fingerprint(request.question),
         ok=not no_hits,
-        args={"retriever": retriever_name, "reranker": reranker_name, "llm": llm_name},
+        args={
+            "retriever": retriever_name,
+            "embedder": request.embedder or settings.rag.embedder,
+            "reranker": reranker_name,
+            "llm": llm_name,
+        },
         extra={
             "hit_count": len(hits),
             "model_id": llm.model_id,

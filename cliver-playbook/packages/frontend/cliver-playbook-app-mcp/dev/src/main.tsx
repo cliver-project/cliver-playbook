@@ -7,6 +7,7 @@ import { createI18n } from "cliver-playbook-app-basic";
 import "./index.css";
 import { installAuthClient, userTranslations } from "cliver-playbook-app-user";
 import { mcpTranslations } from "cliver-playbook-app-mcp";
+import { ragTranslations } from "cliver-playbook-app-rag";
 
 import App from "./App";
 
@@ -15,7 +16,7 @@ import App from "./App";
 // initialised before the first component renders. A composed app passes every
 // additional package's translations here.
 installAuthClient();
-createI18n(userTranslations, mcpTranslations);
+createI18n(userTranslations, mcpTranslations, ragTranslations);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

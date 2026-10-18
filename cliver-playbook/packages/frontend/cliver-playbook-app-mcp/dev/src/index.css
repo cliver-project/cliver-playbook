@@ -15,3 +15,4 @@
 @import "cliver-playbook-app-basic/styles/index.css";
 @source "../../src";
 @source "../../../cliver-playbook-app-user/src";
+@source "../../../cliver-playbook-app-rag/src";
