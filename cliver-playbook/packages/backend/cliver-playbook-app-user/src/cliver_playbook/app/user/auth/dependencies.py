@@ -125,6 +125,34 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     return viewer
 
 
+def require_any_perm(*codes: str):
+    """FastAPI dependency factory: the caller must hold at least one code.
+
+    For read surfaces shared by several audiences (for example a stage
+    catalog that both ingestion and chat pages need), a single code would
+    either over-grant or force callers to hold a permission their own
+    endpoints never use. Every code is validated against the live catalog
+    exactly like ``require_perm``.
+    """
+    for code in codes:
+        if code not in permission_codes():
+            raise RuntimeError(
+                f"require_any_perm({code!r}): not in the permission catalog — add it to "
+                "auth/permissions.py (this package) or register it from the owning "
+                "package before this route module imports"
+            )
+
+    async def _checker(viewer: Viewer = Depends(get_current_user)) -> Viewer:
+        if not any(viewer.has(code) for code in codes):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Missing permission: {' or '.join(codes)}",
+            )
+        return viewer
+
+    return _checker
+
+
 def require_perm(code: str):
     """FastAPI dependency factory: the caller must hold `code`.
 

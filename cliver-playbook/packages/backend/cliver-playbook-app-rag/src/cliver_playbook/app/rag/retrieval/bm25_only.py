@@ -21,7 +21,7 @@ from rank_bm25 import BM25L
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cliver_playbook.app.rag.models.entities import Chunk
+from cliver_playbook.app.rag.models.entities import Chunk, Document
 from cliver_playbook.app.rag.retrieval.base import Hit, Query
 
 _WORD = re.compile(r"[a-z0-9]+")
@@ -36,13 +36,34 @@ class Bm25OnlyRetriever:
     """Lexical-only retrieval computed over the chunk table."""
 
     name = "bm25-only"
+    # There is no dense leg here, so a ``dense`` request is rejected by
+    # the API instead of quietly returning lexical hits. A ``hybrid``
+    # request degrades to the lexical leg and reports ``sparse``.
+    modes = frozenset({"sparse", "hybrid"})
+
+    def effective_mode(self, mode: str) -> str:
+        return "sparse" if mode == "hybrid" else mode
 
     async def retrieve(self, query: Query, *, db: AsyncSession) -> list[Hit]:
         query_tokens = _tokenize(query.text)
         if not query_tokens:
             return []
 
-        rows = (await db.execute(select(Chunk).order_by(Chunk.ordinal))).scalars().all()
+        # Only indexed documents are searchable: a pending upload has
+        # chunks (for the preview) and a failed one may still have
+        # chunks, but neither is part of the knowledge base yet.
+        rows = (
+            (
+                await db.execute(
+                    select(Chunk)
+                    .join(Document, Document.id == Chunk.document_id)
+                    .where(Document.status == "indexed")
+                    .order_by(Chunk.ordinal)
+                )
+            )
+            .scalars()
+            .all()
+        )
         if not rows:
             return []
 

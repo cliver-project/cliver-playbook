@@ -21,13 +21,18 @@ def test_settings_inherits_user_settings() -> None:
 
 def test_rag_settings_defaults() -> None:
     r = RagSettings()
+    # The shipped defaults are the offline-safe set: a fresh install
+    # must work with no model download and no API key. Production
+    # stages (bge-m3, bge-reranker-v2-m3) are explicit opt-ins in
+    # app.yaml or env.
     assert r.chunker == "recursive"
-    assert r.embedder == "bge-m3"
+    assert r.embedder == "stub"
     assert r.retriever == "pgvector-hybrid"
-    assert r.reranker == "bge-reranker-v2-m3"
+    assert r.reranker == "noop"
     assert r.llm == "stub"
     assert r.top_k == 20
     assert r.score_floor == 0.2
+    assert r.max_upload_bytes == 20 * 1024 * 1024
 
 
 def test_routers_is_a_list() -> None:

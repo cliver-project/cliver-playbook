@@ -14,10 +14,11 @@ import {
  * One stage dropdown, fed by the server's stage catalog.
  *
  * The option list is never hardcoded: it is whatever the server's registries
- * currently contain, so a newly registered implementation shows up here with
- * no frontend change. `model_id` and `dim` are appended where the stage
- * exposes them, which is what lets a user tell `stub` (64-d) from a production
- * embedder (1024-d) before uploading.
+ * currently contain (optionally filtered by the caller), so a newly registered
+ * implementation shows up here with no frontend change. `model_id` and `dim`
+ * are appended where the stage exposes them, which is what lets a user tell
+ * `stub` (64-d) from a production embedder (1024-d) before uploading, and an
+ * adapter name (`bge-m3`) from the weights it loads (`BAAI/bge-m3`).
  */
 export interface StageSelectorProps {
   id: string;
@@ -51,6 +52,7 @@ export function StageSelector({
           {options.map((option) => (
             <SelectItem key={option.name} value={option.name}>
               {option.name}
+              {option.model_id ? ` · ${option.model_id}` : ""}
               {option.dim ? ` · ${option.dim}d` : ""}
             </SelectItem>
           ))}

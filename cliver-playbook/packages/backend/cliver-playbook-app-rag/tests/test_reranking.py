@@ -67,3 +67,38 @@ def test_noop_does_not_claim_relevance_scores() -> None:
     # The chat endpoint applies score_floor only on a scale that means
     # something; noop passes the retriever's scores through untouched.
     assert get_reranker("noop").produces_relevance_scores is False
+
+
+def test_bge_reranker_loads_through_the_public_constructor(monkeypatch) -> None:
+    """Pin the FlagEmbedding call shape without downloading weights.
+
+    ``FlagReranker`` takes the model path plus ``use_fp16``; the scores
+    are normalized to [0, 1], which is the scale ``score_floor`` is
+    defined on.
+    """
+    import sys
+    import types
+
+    calls: list[tuple[tuple, dict]] = []
+
+    class _FakeReranker:
+        def __init__(self, *args, **kwargs):
+            calls.append((args, kwargs))
+
+        def compute_score(self, pairs, *, normalize):
+            assert normalize is True
+            return [0.2 + 0.1 * index for index in range(len(pairs))]
+
+    monkeypatch.setitem(
+        sys.modules, "FlagEmbedding", types.SimpleNamespace(FlagReranker=_FakeReranker)
+    )
+
+    from cliver_playbook.app.rag.reranking.bge import BgeRerankerV2M3
+
+    reranker = BgeRerankerV2M3()
+    out = reranker.rerank("q", _hits([0.9, 0.8, 0.7]))
+
+    assert calls and calls[0][0] == ("BAAI/bge-reranker-v2-m3",)
+    assert calls[0][1] == {"use_fp16": False}
+    # Cross-encoder scores win over the retriever's order.
+    assert [hit.chunk_id for hit in out] == ["c", "b", "a"]

@@ -42,6 +42,39 @@ async def test_stages_reports_the_configured_defaults(client: AsyncClient) -> No
     }
 
 
+async def test_stages_reports_retriever_modes(client: AsyncClient) -> None:
+    """The UI filters modes by capability instead of offering a 422.
+
+    Only retrievers declare modes; the other stages carry ``null`` so a
+    client can tell "not applicable" from an empty capability set.
+    """
+    body = (await client.get(STAGES)).json()
+    retrievers = {r["name"]: r for r in body["retrievers"]}
+    assert retrievers["bm25-only"]["modes"] == ["hybrid", "sparse"]
+    assert set(retrievers["pgvector-hybrid"]["modes"]) == {"dense", "sparse", "hybrid"}
+    assert body["chunkers"][0]["modes"] is None
+    assert body["embedders"][0]["modes"] is None
+
+
+async def test_stages_reports_corpus_embedders(client: AsyncClient) -> None:
+    """The chat page must offer query embedders that actually indexed rows."""
+    assert (await client.get(STAGES)).json()["corpus"]["embedders"] == []
+
+    import io
+
+    files = {"file": ("corpus.txt", io.BytesIO(b"Hello. " * 50), "text/plain")}
+    data = {"chunker": "recursive", "embedder": "stub", "chunk_size": "64", "chunk_overlap": "0"}
+    uploaded = await client.post("/api/v1/rag/documents/upload", files=files, data=data)
+    assert uploaded.status_code == 201, uploaded.text
+    document_id = uploaded.json()["document_id"]
+    # Pending documents do not count: their vectors do not exist yet.
+    assert (await client.get(STAGES)).json()["corpus"]["embedders"] == []
+
+    indexed = await client.post(f"/api/v1/rag/documents/{document_id}/index")
+    assert indexed.status_code == 200, indexed.text
+    assert (await client.get(STAGES)).json()["corpus"]["embedders"] == ["stub"]
+
+
 async def test_stages_requires_permission(raw_client: AsyncClient) -> None:
     r = await raw_client.get(STAGES)
     assert r.status_code == 401

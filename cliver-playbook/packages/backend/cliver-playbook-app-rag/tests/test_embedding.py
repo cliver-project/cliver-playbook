@@ -47,6 +47,44 @@ def test_bge_m3_embedder_metadata() -> None:
     assert e.id.startswith("BAAI/bge-m3@") or e.id.startswith("bge-m3@")
 
 
+def test_bge_m3_loads_through_the_public_constructor(monkeypatch) -> None:
+    """FlagEmbedding 1.4.x has no ``BGEM3FlagModel.from_finetuned``.
+
+    The loader must call the public constructor with the model path; a
+    classmethod that does not exist would only fail at the first real
+    use (after a download decision), so this test pins the call shape
+    with a fake module instead of downloading weights.
+    """
+    import sys
+    import types
+
+    calls: list[tuple[tuple, dict]] = []
+
+    class _FakeModel:
+        def __init__(self, *args, **kwargs):
+            calls.append((args, kwargs))
+
+        def encode(self, texts, **kwargs):
+            return {"dense_vecs": [[3.0, 4.0] for _ in texts]}
+
+    monkeypatch.setitem(
+        sys.modules, "FlagEmbedding", types.SimpleNamespace(BGEM3FlagModel=_FakeModel)
+    )
+
+    from cliver_playbook.app.rag.embedding.bge_m3 import BgeM3Embedder
+
+    embedder = BgeM3Embedder()
+    vectors = embedder.embed(["hello"], mode="document")
+
+    assert calls and calls[0][0] == ("BAAI/bge-m3",)
+    assert calls[0][1] == {"use_fp16": False, "devices": "cpu"}
+    # The returned vector is L2-normalized (3-4-5 triangle → 0.6/0.8);
+    # the model runs in float32, so compare with a tolerance.
+    import pytest
+
+    assert vectors[0] == pytest.approx([0.6, 0.8])
+
+
 def test_unknown_embedder_raises() -> None:
     import pytest
 

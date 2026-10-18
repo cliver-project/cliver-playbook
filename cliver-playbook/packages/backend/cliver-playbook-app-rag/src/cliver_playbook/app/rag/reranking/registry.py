@@ -7,6 +7,10 @@ from collections.abc import Callable
 from cliver_playbook.app.rag.reranking.base import Reranker
 
 _factory: dict[str, Callable[[], Reranker]] = {}
+# One shared instance per name (see the embedder registry): a model-backed
+# reranker's lazy-load lock and loaded weights live on the instance, so
+# constructing one per call would reload the model every time.
+_instances: dict[str, Reranker] = {}
 
 
 def register(name: str, factory: Callable[[], Reranker]) -> None:
@@ -16,10 +20,17 @@ def register(name: str, factory: Callable[[], Reranker]) -> None:
 
 
 def get(name: str) -> Reranker:
+    """Return the shared instance registered under ``name``."""
+    instance = _instances.get(name)
+    if instance is not None:
+        return instance
     try:
-        return _factory[name]()
+        factory = _factory[name]
     except KeyError as exc:
         raise KeyError(f"unknown reranker: {name!r}") from exc
+    instance = factory()
+    _instances[name] = instance
+    return instance
 
 
 get_reranker = get

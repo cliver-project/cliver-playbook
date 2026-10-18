@@ -17,6 +17,10 @@ class StageOption(BaseModel):
     model_id: str | None = None
     version: str | None = None
     dim: int | None = None
+    # Retrieval modes the implementation can honour (retrievers only).
+    # The UI hides modes a retriever cannot run instead of offering a
+    # combination the server would reject.
+    modes: list[str] | None = None
 
 
 class StageDefaults(BaseModel):
@@ -29,6 +33,18 @@ class StageDefaults(BaseModel):
     llm: str
 
 
+class CorpusStats(BaseModel):
+    """What the indexed corpus was actually produced with.
+
+    The query embedder must match the embedder that produced the stored
+    vectors, so the chat page needs the corpus's embedders, not just the
+    registered ones: offering a model that never indexed anything
+    guarantees an empty dense leg.
+    """
+
+    embedders: list[str]
+
+
 class StageCatalog(BaseModel):
     """Every registered implementation, grouped by stage, plus defaults."""
 
@@ -38,3 +54,4 @@ class StageCatalog(BaseModel):
     rerankers: list[StageOption]
     llms: list[StageOption]
     defaults: StageDefaults
+    corpus: CorpusStats

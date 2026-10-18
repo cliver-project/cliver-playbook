@@ -19,11 +19,18 @@ import { api } from "cliver-playbook-app-basic/api/client.ts";
 // Stage discovery
 // ---------------------------------------------------------------------------
 
+/** Retrieval legs a request may ask for. */
+export type RetrievalMode = "dense" | "sparse" | "hybrid";
+
 export interface StageOption {
   name: string;
   model_id: string | null;
   version: string | null;
   dim: number | null;
+  /** Modes the implementation can honour (retrievers only). The chat page
+   * hides the modes the selected retriever does not declare instead of
+   * offering a combination the server would reject with 422. */
+  modes: RetrievalMode[] | null;
 }
 
 export interface StageDefaults {
@@ -34,6 +41,17 @@ export interface StageDefaults {
   llm: string;
 }
 
+/** What the indexed corpus was actually produced with.
+ *
+ * `embedders` is the set recorded on `indexed` documents. The query
+ * embedder must match the one that produced the stored vectors, so the
+ * chat page limits its choice to these names rather than to every
+ * registered embedder — picking a model that never indexed anything
+ * guarantees an empty dense leg. */
+export interface CorpusStats {
+  embedders: string[];
+}
+
 export interface StageCatalog {
   chunkers: StageOption[];
   embedders: StageOption[];
@@ -41,6 +59,7 @@ export interface StageCatalog {
   rerankers: StageOption[];
   llms: StageOption[];
   defaults: StageDefaults;
+  corpus: CorpusStats;
 }
 
 /** Every registered implementation per stage plus the configured defaults.
@@ -116,7 +135,18 @@ export interface IndexResponse {
   status: string;
   chunk_count: number;
   dim: number;
-  embedder_version?: string;
+  /** The embedder recorded on the document after indexing. */
+  embedder: string;
+  /** The implementation version of that embedder (`stub@1.0`), which is
+   * also the identity retrieval filters embedding rows by. */
+  embedder_version: string;
+}
+
+export interface IndexOptions {
+  /** Override the embedder recorded at upload time. Omit to use it. */
+  embedder?: string;
+  /** Re-embed even when the document is already indexed with this model. */
+  force?: boolean;
 }
 
 export interface UploadOptions {
@@ -145,10 +175,34 @@ export async function uploadDocument(options: UploadOptions): Promise<UploadResp
   return data;
 }
 
-/** Embed a pending document's chunks and make it searchable. Idempotent. */
-export async function indexDocument(documentId: string): Promise<IndexResponse> {
+/**
+ * Embed a document's chunks and make it searchable.
+ *
+ * Idempotent when the document is already indexed with the same embedder;
+ * an `embedder` override (or `force`) re-embeds and replaces the stored
+ * vectors. The backend takes both as query parameters.
+ */
+export async function indexDocument(
+  documentId: string,
+  options: IndexOptions = {},
+): Promise<IndexResponse> {
   const { data } = await api.post<IndexResponse>(
     `/rag/documents/${encodeURIComponent(documentId)}/index`,
+    undefined,
+    { params: { embedder: options.embedder, force: options.force || undefined } },
+  );
+  return data;
+}
+
+export interface DeleteResponse {
+  document_id: string;
+  deleted: boolean;
+}
+
+/** Remove a document together with its chunks and embeddings (permanent). */
+export async function deleteDocument(documentId: string): Promise<DeleteResponse> {
+  const { data } = await api.delete<DeleteResponse>(
+    `/rag/documents/${encodeURIComponent(documentId)}`,
   );
   return data;
 }
@@ -176,8 +230,6 @@ export async function listDocumentChunks(documentId: string): Promise<ChunkList>
 // Search and chat
 // ---------------------------------------------------------------------------
 
-export type RetrievalMode = "dense" | "sparse" | "hybrid";
-
 export interface SearchRequest {
   query: string;
   top_k?: number;
@@ -200,6 +252,11 @@ export interface SearchHit {
 
 export interface SearchResponse {
   retriever: string;
+  /** The mode the request asked for. */
+  requested_mode: string;
+  /** The mode that actually ran. A retriever that cannot honour the
+   * requested combination reports its effective mode here rather than
+   * echoing the request. */
   mode: string;
   hits: SearchHit[];
 }
@@ -231,6 +288,8 @@ export interface ChatResponse {
   hits_used: number;
   no_hits: boolean;
   retriever: string;
+  requested_mode: string;
+  mode: string;
   reranker: string;
   llm: string;
 }

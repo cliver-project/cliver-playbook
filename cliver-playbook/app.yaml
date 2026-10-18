@@ -123,3 +123,7 @@ rag:
   rerank_top_k: 5
   score_floor: 0.2
   pgvector_ef_search: 40
+
+  # Upload size cap. The endpoint rejects larger files before parsing
+  # them, so a hostile upload cannot exhaust memory or the chunker.
+  max_upload_bytes: 20971520

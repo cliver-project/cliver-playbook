@@ -7,6 +7,10 @@ from collections.abc import Callable
 from cliver_playbook.app.rag.retrieval.base import Retriever
 
 _factory: dict[str, Callable[[], Retriever]] = {}
+# Retrievers are stateless today, but sharing one instance per name keeps
+# the registry contract uniform across stages and leaves room for an
+# implementation with its own read cache.
+_instances: dict[str, Retriever] = {}
 
 
 def register(name: str, factory: Callable[[], Retriever]) -> None:
@@ -16,10 +20,17 @@ def register(name: str, factory: Callable[[], Retriever]) -> None:
 
 
 def get(name: str) -> Retriever:
+    """Return the shared instance registered under ``name``."""
+    instance = _instances.get(name)
+    if instance is not None:
+        return instance
     try:
-        return _factory[name]()
+        factory = _factory[name]
     except KeyError as exc:
         raise KeyError(f"unknown retriever: {name!r}") from exc
+    instance = factory()
+    _instances[name] = instance
+    return instance
 
 
 get_retriever = get

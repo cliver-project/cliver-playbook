@@ -3,7 +3,10 @@
 Extends ``user.Settings`` (identity, OIDC registry, OAuth 2.1 provider)
 with the single ``rag`` block: which chunker / embedder / retriever /
 reranker / LLM the composed app uses by name, the chunk-size defaults,
-the search top-k, and the score floor. The full layered resolution
+the search top-k, and the score floor. A name in this block is not
+validated at startup — the registries live in modules that import this
+one — so an unknown name surfaces as a 422 from the endpoint that uses
+the stage, and ``GET /api/v1/rag/stages`` always reports the live set. The full layered resolution
 documented in ``basic.settings`` applies unchanged — ``rag`` keys in
 ``app.yaml``, env overrides spelled ``CLIVER_RAG__<FIELD>``, field
 defaults last — and a composed application's ``create_app`` binds this
@@ -23,25 +26,28 @@ class RagSettings(BaseModel):
     """RAG block (see ``app.yaml``'s ``rag:`` section for the narrative)."""
 
     # The five RAG stages, named. Every name resolves through a registry
-    # in its own module; the default names below are all offline-capable
-    # (no API key, no external service).
+    # in its own module. The field defaults are the offline-safe set: the
+    # stub embedder and noop reranker download nothing, and the stub LLM
+    # needs no API key, so a package used without an app.yaml still works
+    # on a fresh machine. Production stages (``bge-m3``,
+    # ``bge-reranker-v2-m3``) are an explicit override.
     chunker: str = "recursive"  # recursive | markdown | code | pdf
-    embedder: str = "bge-m3"  # bge-m3 | stub | openai
+    embedder: str = "stub"  # stub | bge-m3
     retriever: str = "pgvector-hybrid"  # pgvector-hybrid | bm25-only
-    reranker: str = "bge-reranker-v2-m3"  # bge-reranker-v2-m3 | noop
-    llm: str = "stub"  # stub | openai
+    reranker: str = "noop"  # noop | bge-reranker-v2-m3
+    llm: str = "stub"  # stub
 
     # Recursive chunker defaults. Markdown/code/pdf chunkers each have
     # their own internal size logic but consult these for "the chunk is
     # too long" overflow.
-    chunk_size: int = 512
-    chunk_overlap: int = 64
+    chunk_size: int = Field(default=512, ge=1)
+    chunk_overlap: int = Field(default=64, ge=0)
 
     # Search / chat. ``top_k`` is the size of the retriever's result
     # list before the reranker; the reranker then drops it to
     # ``rerank_top_k`` before the LLM sees the context.
-    top_k: int = 20
-    rerank_top_k: int = 5
+    top_k: int = Field(default=20, ge=1)
+    rerank_top_k: int = Field(default=5, ge=1)
     # Chat drops hits whose reranker relevance score is below this
     # floor; if nothing survives, the generator is skipped and the
     # response is an explicit "no relevant context" refusal, so neither
@@ -49,12 +55,19 @@ class RagSettings(BaseModel):
     # floor applies only to rerankers that produce normalized relevance
     # scores (a real cross-encoder) — retriever scores (RRF sums,
     # cosine, ts_rank_cd) are on other scales. Set to 0.0 to disable.
-    score_floor: float = 0.2
+    score_floor: float = Field(default=0.2, ge=0.0, le=1.0)
 
-    # pgvector HNSW tuning. ``lists`` is the number of coarse
-    # clusters; the actual query-time ``ef_search`` is the SQL session
-    # setting on the retriever, not a Settings field.
-    pgvector_ef_search: int = 40
+    # pgvector HNSW search breadth: the number of candidates the index
+    # explores per query. The retriever raises it to at least the query
+    # LIMIT, because HNSW returns at most ef_search rows.
+    pgvector_ef_search: int = Field(default=40, ge=1)
+
+    # Upload cap. The endpoint reads at most one byte past this bound
+    # and rejects anything larger before parsing, so a hostile or
+    # accidental huge file cannot exhaust memory or the chunker. The
+    # default (20 MiB) comfortably covers text documents and keeps
+    # PDFs in a sane range for an in-process parser.
+    max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
 
 
 class Settings(UserSettings):

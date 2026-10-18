@@ -14,9 +14,22 @@ and document ids hash the source name plus the file content, so
 re-uploading the same file targets the same document row and re-indexing
 never duplicates rows.
 
-Auth: both endpoints require ``rag:documents:write``. The permission
-check runs before the handler, so an unauthenticated caller never
-reaches the file parser.
+Failure semantics: rejecting a re-upload never destroys the previous
+version. Only a document that did not exist before gets a ``failed``
+row; an existing (possibly indexed and searchable) document is left
+untouched, and the failure is recorded in the audit log instead.
+
+Indexing accepts an embedder override so the user can change the model
+after reviewing the chunk preview. Re-indexing an already-indexed
+document with a different embedder (or with ``force=true``) replaces
+the stored vectors; the embeddings' ``embedder_version`` and the
+document's ``embedder_id`` always describe the same model, which is
+what makes the query-time embedder filter sound.
+
+Auth: every endpoint requires ``rag:documents:write`` except the read
+routes, which require ``rag:documents:read``. The permission check runs
+before the handler, so an unauthenticated caller never reaches the file
+parser.
 """
 
 from __future__ import annotations
@@ -28,12 +41,13 @@ import mimetypes
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Security, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Security, UploadFile
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
-from cliver_playbook.app.rag.audit import write_rag_audit
+from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
 from cliver_playbook.app.rag.chunking import Document as SourceDocument
 from cliver_playbook.app.rag.chunking import get_chunker
 from cliver_playbook.app.rag.chunking.pdf import EmptyDocumentError
@@ -63,6 +77,13 @@ _READ = Security(require_perm("rag:documents:read"))
 # How many chunks the upload response carries. The full set is in the
 # database behind GET /{id}/chunks; the preview is for the UI only.
 _PREVIEW_LIMIT = 50
+
+# Column widths. Validating at the boundary keeps a client-supplied
+# title or filename from failing inside the database with a driver
+# error (which would surface as an opaque 500).
+_MAX_TITLE = 512
+_MAX_SOURCE_URI = 1024
+_MAX_MIME = 128
 
 
 def _document_id_for(source_uri: str, content: bytes) -> str:
@@ -103,6 +124,16 @@ def _validate_sizes(chunk_size: int, chunk_overlap: int) -> None:
         )
 
 
+def _validate_text_fields(filename: str, title: str, mime_type: str) -> None:
+    """Reject values wider than the columns they are stored in."""
+    if len(filename) > _MAX_SOURCE_URI:
+        raise HTTPException(status_code=422, detail="filename is too long")
+    if len(title) > _MAX_TITLE:
+        raise HTTPException(status_code=422, detail="title is too long")
+    if len(mime_type) > _MAX_MIME:
+        raise HTTPException(status_code=422, detail="mime type is too long")
+
+
 async def _delete_chunks(db: AsyncSession, document_id: str) -> None:
     """Remove a document's chunks and embeddings (children first).
 
@@ -136,15 +167,17 @@ async def _persist_failed_upload(
     """Record a rejected upload as a ``failed`` document row.
 
     The row is what the web UI lists, so a user can see that a scan was
-    rejected and why. Old chunks from a previous version are dropped:
-    the document no longer describes the current content.
+    rejected and why. Only a genuinely new document gets a row: when
+    the id already exists, the previous version (chunks, embeddings and
+    ``indexed`` status) is preserved intact — a bad re-upload must not
+    silently remove a document that is still searchable. The failure is
+    never lost, because the endpoint audits it either way.
     """
     doc = await db.get(Document, document_id)
-    if doc is None:
-        doc = Document(id=document_id)
-        db.add(doc)
-    else:
-        await _delete_chunks(db, document_id)
+    if doc is not None:
+        return
+    doc = Document(id=document_id)
+    db.add(doc)
     doc.title = title
     doc.source_uri = source_uri
     doc.mime_type = mime_type
@@ -159,6 +192,7 @@ async def _persist_failed_upload(
 
 @router.post("/upload", status_code=201)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     chunker: str | None = Form(None),
     embedder: str | None = Form(None),
@@ -166,7 +200,7 @@ async def upload_document(
     chunk_overlap: int | None = Form(None),
     title: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
-    _viewer: Viewer = _WRITE,
+    viewer: Viewer = _WRITE,
 ) -> dict[str, Any]:
     """Chunk an uploaded file and persist the chunks for preview.
 
@@ -175,13 +209,33 @@ async def upload_document(
     ``chunk_overlap``, ``title``. Returns the document id plus up to
     ``_PREVIEW_LIMIT`` chunks so the UI can render the preview.
     """
-    content = await file.read()
+    filename = _clean_filename(file.filename)
+    # Read one byte past the cap: anything at or below it is a valid
+    # upload, and anything above is rejected without buffering the
+    # whole body. The bound exists so a hostile or accidental huge file
+    # cannot exhaust memory or feed an unbounded blob to the parser.
+    max_bytes = settings.rag.max_upload_bytes
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        await write_rag_audit(
+            event="document.upload",
+            target=fingerprint(filename),
+            ok=False,
+            extra={"error": "file_too_large", "max_upload_bytes": max_bytes},
+            viewer=viewer,
+            request=request,
+        )
+        raise HTTPException(
+            status_code=413,
+            detail=f"file too large: the limit is {max_bytes} bytes",
+        )
     if not content:
         raise HTTPException(status_code=422, detail="empty file: the upload contains 0 bytes")
 
-    filename = _clean_filename(file.filename)
     source_uri = filename
     mime_type = _resolve_mime(file.content_type, filename)
+    title_value = title or filename
+    _validate_text_fields(filename, title_value, mime_type)
 
     chunker_name = chunker or settings.rag.chunker
     embedder_name = embedder or settings.rag.embedder
@@ -226,7 +280,7 @@ async def upload_document(
         await _persist_failed_upload(
             db,
             document_id=document_id,
-            title=title or filename,
+            title=title_value,
             source_uri=source_uri,
             mime_type=mime_type,
             chunker_name=chunker_name,
@@ -240,6 +294,8 @@ async def upload_document(
             ok=False,
             args={"chunker": chunker_name, "embedder": embedder_name},
             extra={"error": "empty_after_parse"},
+            viewer=viewer,
+            request=request,
         )
         raise HTTPException(status_code=422, detail=str(exc)) from None
     # A parser failure is user-visible (422 + a failed row), not a crash;
@@ -249,7 +305,7 @@ async def upload_document(
         await _persist_failed_upload(
             db,
             document_id=document_id,
-            title=title or filename,
+            title=title_value,
             source_uri=source_uri,
             mime_type=mime_type,
             chunker_name=chunker_name,
@@ -263,6 +319,8 @@ async def upload_document(
             ok=False,
             args={"chunker": chunker_name, "embedder": embedder_name},
             extra={"error": "chunking_failed"},
+            viewer=viewer,
+            request=request,
         )
         raise HTTPException(status_code=422, detail="chunking failed") from None
 
@@ -273,7 +331,7 @@ async def upload_document(
         existing = Document(id=document_id)
         db.add(existing)
 
-    existing.title = title or filename
+    existing.title = title_value
     existing.source_uri = source_uri
     existing.mime_type = mime_type
     existing.chunker_id = chunker_name
@@ -300,14 +358,36 @@ async def upload_document(
         for ordinal, chunk in enumerate(chunks)
     ]
     db.add_all(chunk_rows)
-    await db.commit()
+    # The document id is derived from (name, content), so two requests
+    # for the same file can race on the primary key. One of them wins;
+    # the other gets a stable 409 instead of a driver-level 500.
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.warning("concurrent upload for document_id=%s", document_id)
+        await write_rag_audit(
+            event="document.upload",
+            target=document_id,
+            ok=False,
+            args={"chunker": chunker_name, "embedder": embedder_name},
+            extra={"error": "concurrent_upload"},
+            viewer=viewer,
+            request=request,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="a concurrent upload of the same document is in progress; retry",
+        ) from None
 
     await write_rag_audit(
         event="document.upload",
         target=document_id,
         ok=True,
         args={"chunker": chunker_name, "embedder": embedder_name},
-        extra={"chunk_count": len(chunks)},
+        extra={"chunk_count": len(chunks), "version": version},
+        viewer=viewer,
+        request=request,
     )
 
     preview = [
@@ -336,37 +416,52 @@ async def upload_document(
 @router.post("/{document_id}/index", status_code=200)
 async def index_document(
     document_id: str,
+    request: Request,
+    embedder: str | None = None,
+    force: bool = False,
     db: AsyncSession = Depends(get_db),
-    _viewer: Viewer = _WRITE,
+    viewer: Viewer = _WRITE,
 ) -> dict[str, Any]:
-    """Embed a pending document's chunks and mark it searchable.
+    """Embed a document's chunks and mark it searchable.
 
-    Idempotent: a document already marked ``indexed`` returns its
-    current counters without re-embedding. Any previous embedding rows
-    are replaced, so retrying a failed index starts clean.
+    ``embedder`` overrides the model recorded at upload time, which is
+    how the UI lets the user change the embedder after reviewing the
+    chunk preview. Re-indexing an already-indexed document is
+    idempotent when the embedder is unchanged; a different embedder (or
+    ``force=true``) re-embeds and replaces the stored vectors. Any
+    previous embedding rows are always replaced, so a retried index
+    starts clean.
     """
     doc = await db.get(Document, document_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="document not found")
 
-    if doc.status == "indexed":
+    target_embedder_name = embedder or doc.embedder_id
+    try:
+        embedder_impl = get_embedder(target_embedder_name)
+    except KeyError:
+        # An override is pure client input: rejecting it must not
+        # corrupt the document. Only the document's own recorded name
+        # being unknown is a persistent data problem worth flagging.
+        if embedder is None:
+            doc.status = "failed"
+            doc.failure_reason = "unknown_embedder"
+            await db.commit()
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown embedder: {target_embedder_name!r}",
+        ) from None
+
+    already_indexed = doc.status == "indexed" and target_embedder_name == doc.embedder_id
+    if already_indexed and not force:
         return {
             "document_id": doc.id,
             "status": doc.status,
             "chunk_count": doc.chunk_count,
             "dim": doc.dim,
+            "embedder": doc.embedder_id,
+            "embedder_version": embedder_impl.id,
         }
-
-    try:
-        embedder_impl = get_embedder(doc.embedder_id)
-    except KeyError:
-        doc.status = "failed"
-        doc.failure_reason = "unknown_embedder"
-        await db.commit()
-        raise HTTPException(
-            status_code=422,
-            detail=f"unknown embedder: {doc.embedder_id!r}",
-        ) from None
 
     rows = (
         (
@@ -403,8 +498,10 @@ async def index_document(
             event="document.index",
             target=document_id,
             ok=False,
-            args={"embedder": doc.embedder_id},
+            args={"embedder": target_embedder_name},
             extra={"error": "embedding_failed"},
+            viewer=viewer,
+            request=request,
         )
         raise HTTPException(
             status_code=500, detail="indexing failed: the embedder errored"
@@ -425,23 +522,51 @@ async def index_document(
             for row, vector in zip(rows, vectors, strict=True)
         ]
     )
+    # The document row and the embedding rows must agree on the model:
+    # retrieval filters by ``embedder_version``, and the catalog reads
+    # ``embedder_id`` to tell the chat page which query embedder to use.
+    doc.embedder_id = target_embedder_name
     doc.status = "indexed"
     doc.dim = embedder_impl.dim
     doc.failure_reason = None
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.warning("concurrent index for document_id=%s", document_id)
+        await write_rag_audit(
+            event="document.index",
+            target=document_id,
+            ok=False,
+            args={"embedder": target_embedder_name},
+            extra={"error": "concurrent_index"},
+            viewer=viewer,
+            request=request,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="a concurrent index of this document is in progress; retry",
+        ) from None
 
     await write_rag_audit(
         event="document.index",
         target=document_id,
         ok=True,
-        args={"embedder": doc.embedder_id},
+        args={
+            "embedder": target_embedder_name,
+            "requested_embedder": embedder,
+            "forced": force,
+        },
         extra={"chunk_count": len(rows), "embedder_version": embedder_impl.id},
+        viewer=viewer,
+        request=request,
     )
     return {
         "document_id": doc.id,
         "status": doc.status,
         "chunk_count": len(rows),
         "dim": doc.dim,
+        "embedder": doc.embedder_id,
         "embedder_version": embedder_impl.id,
     }
 
@@ -493,6 +618,41 @@ async def get_document_chunks(
             for row in rows
         ]
     )
+
+
+@router.delete("/{document_id}", status_code=200)
+async def delete_document(
+    document_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    viewer: Viewer = _WRITE,
+) -> dict[str, Any]:
+    """Remove a document together with its chunks and embeddings.
+
+    Deletion is permanent and immediate: the next retrieval stops
+    seeing the document (any in-flight query still holding a result
+    list is unaffected). The audit row is the only remaining record,
+    so it keeps the document's stage choices.
+    """
+    doc = await db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    # Explicit child-first deletion behaves identically on Postgres
+    # (where the foreign keys would cascade anyway) and on the SQLite
+    # test engine (which does not enforce foreign keys by default).
+    await _delete_chunks(db, document_id)
+    await db.delete(doc)
+    await db.commit()
+
+    await write_rag_audit(
+        event="document.delete",
+        target=document_id,
+        ok=True,
+        args={"chunker": doc.chunker_id, "embedder": doc.embedder_id},
+        viewer=viewer,
+        request=request,
+    )
+    return {"document_id": document_id, "deleted": True}
 
 
 async def _delete_chunks_embeddings(db: AsyncSession, document_id: str) -> None:

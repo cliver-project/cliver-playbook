@@ -20,7 +20,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from fastapi import Request
+
+    from cliver_playbook.app.user.auth.dependencies import Viewer
 
 logger = logging.getLogger("cliver_playbook.app.rag.audit")
 
@@ -44,6 +49,8 @@ async def write_rag_audit(
     ok: bool,
     args: dict[str, Any] | None = None,
     extra: dict[str, Any] | None = None,
+    viewer: Viewer | None = None,
+    request: Request | None = None,
 ) -> None:
     """Write one audit row for a RAG operation. Best-effort; never raises.
 
@@ -60,6 +67,14 @@ async def write_rag_audit(
         extra: optional dict merged into ``detail`` alongside ``args``
             (for caller-specific fields like ``hits_used`` or
             ``no_hits``).
+        viewer: the authenticated caller. Identity rows without a user
+            cannot be attributed, so handlers pass the resolved viewer
+            rather than leaving the audit row anonymous.
+        request: the incoming request, so ``write_audit`` can derive the
+            client IP and user agent. The identity package's
+            ``RequestMetaMiddleware`` publishes them in a ContextVar for
+            SDK-driven OAuth routes; ``write_audit`` does not read that
+            ContextVar, so the Request object must be passed explicitly.
     """
     try:
         from cliver_playbook.app.basic.db.session import open_session
@@ -72,9 +87,12 @@ async def write_rag_audit(
             await write_audit(
                 session,
                 event=f"rag.{event}",
+                user_id=viewer.user_id if viewer is not None else None,
+                username=viewer.username if viewer is not None else "",
                 target=target,
                 ok=ok,
                 detail=detail,
+                request=request,
             )
             await session.commit()
     except Exception as exc:  # noqa: BLE001

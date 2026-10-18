@@ -47,7 +47,7 @@ grep the output CSS for a utility that only the RAG pages use.
 | --- | --- | --- |
 | `/rag/documents` | `rag:documents:read` | Upload, choose chunker/embedder, preview chunks, index, list documents |
 | `/rag/chat` | `rag:chat:read` | Ask a grounded question, inspect citations, or run retrieval only; the query embedder is selectable per call |
-| `/admin/rag` | `rag:admin:read` | Whole-corpus view with lifecycle state and failure details |
+| `/admin/rag` | `rag:documents:read` | Whole-corpus view with lifecycle state and failure details (same shared corpus, operator detail) |
 
 Stage dropdowns are populated from `GET /api/v1/rag/stages`, so the server's
 registries are the only list of available chunkers, embedders, retrievers,

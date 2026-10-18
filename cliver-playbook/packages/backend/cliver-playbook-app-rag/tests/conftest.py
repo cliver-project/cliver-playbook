@@ -49,7 +49,6 @@ _TEST_USER = Viewer(
             "rag:documents:write",
             "rag:search:read",
             "rag:chat:read",
-            "rag:admin:read",
         }
     ),
 )

@@ -63,5 +63,18 @@ class Retriever(Protocol):
     """
 
     name: str
+    # Retrieval modes this implementation can honour. A request for a
+    # mode outside the set is a client error (422), not a silent
+    # fallback: the UI compares modes, so it must know which leg ran.
+    modes: frozenset[str]
+
+    def effective_mode(self, mode: str) -> str:
+        """The mode the implementation actually runs for ``mode``.
+
+        Usually ``mode`` itself. A lexical-only retriever reports
+        ``sparse`` for a ``hybrid`` request because no dense leg exists,
+        which keeps the response and the audit row truthful.
+        """
+        ...
 
     async def retrieve(self, query: Query, *, db: AsyncSession) -> list[Hit]: ...

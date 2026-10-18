@@ -148,3 +148,69 @@ the identity domain it is supposed to sit on.
   user's request. The composed PostgreSQL test asserts the row actually lands,
   because SQLite unit tests have no audit table and would hide that class of
   bug.
+
+## Amendments after independent review (2026-10-18)
+
+The implementation was reviewed independently on the backend and the frontend.
+The decisions below clarify or harden the original text without replacing any
+of it; this section is appended, and the earlier sections stay as written.
+
+1. **The permission set stays at four codes; there is no admin read code.**
+   `/admin/rag` is gated by `rag:documents:read` and reads the same shared
+   corpus as `/rag/documents`. v1 has no per-user ownership, so an
+   `rag:admin:read` would gate nothing the server enforces differently. The
+   operator page differs by detail and audience, not by authority.
+2. **Mode support is a declared retriever capability, not a request hint.**
+   Each retriever exposes `modes`; the stage catalog forwards it, search and
+   chat reject an unsupported mode with 422 and a list of supported values, and
+   the response reports both `requested_mode` and the `mode` that actually ran.
+   A lexical-only retriever may accept `hybrid` and report `sparse`; the UI
+   renders the effective mode and flags the fallback. This prevents lexical
+   results from being labelled as a dense/hybrid run.
+3. **The stage catalog also reports corpus facts.** `corpus.embedders` lists
+   the embedders recorded on `indexed` documents. The chat page offers only
+   those models as query embedders (the server default wins when present,
+   otherwise the first corpus embedder), because a registered model that never
+   indexed anything guarantees an empty dense leg. When the corpus is empty the
+   choice is left to the server default and the UI says so.
+4. **Indexing accepts an embedder override and keeps identity consistent.**
+   The user may change the embedder after reviewing the preview; the index
+   endpoint validates the override, replaces all embedding rows, and updates
+   the document's `embedder_id` so `rag_documents.embedder_id` and
+   `rag_chunk_embeddings.embedder_version` always describe the same model. A
+   bad override is rejected without corrupting the document; re-indexing with
+   the same embedder is idempotent unless `force=true`.
+5. **Upload failures never destroy a live document.** A rejected re-upload
+   (parse failure, chunker failure) only creates a `failed` row when the
+   document did not previously exist. An existing indexed document keeps its
+   chunks and status; the audit row records the rejected attempt. Concurrent
+   uploads/indexes of the same content-hash id map an `IntegrityError` to a
+   stable 409 instead of a driver-level 500.
+6. **The ingestion surface is bounded.** Uploads read at most
+   `rag.max_upload_bytes + 1` bytes and reject an oversized file with 413
+   before parsing. Title, filename and MIME type are length-checked against
+   their columns at the request boundary. Chunk size and overlap are validated
+   before the splitter runs.
+7. **Documents can be deleted.** `DELETE /rag/documents/{id}` removes the
+   document, its chunks and its embeddings, and audits the stage choices. This
+   is the other half of a manageable shared corpus; without it a bad upload
+   would be permanent.
+8. **Audit rows carry the caller and both outcomes.** RAG audit calls pass the
+   `Viewer` and the `Request`, so rows record `user_id`, `username`, IP and
+   user agent. Retrieval and pipeline failures are audited with `ok=False`;
+   a grounded refusal is `ok=True` with `no_hits` in the detail, because
+   finding nothing is a completed request. The audit wrapper remains
+   best-effort: an audit write failure never fails the user's request.
+9. **Model-backed registries memoize instances.** The BGE embedder and
+   reranker keep their lazy-load lock and loaded weights on the instance;
+   returning a fresh wrapper per lookup would reload weights per request. The
+   stateless retriever and LLM share the contract so the seam is uniform.
+   Chunkers stay pure functions and are intentionally outside it.
+10. **The UI follows the server's truth.** Stage dropdowns show `model_id` and
+    dimension; the query mode list is filtered by the selected retriever;
+    results display the question that produced them, the effective mode, and
+    localized failure reasons; uploading/indexing/deleting are hidden without
+    `rag:documents:write` and search-only is hidden without
+    `rag:search:read`; timestamps follow the UI language. Failures invalidate
+    the document/catalog queries so a server-side `failed` row is visible even
+    when the toast is missed.

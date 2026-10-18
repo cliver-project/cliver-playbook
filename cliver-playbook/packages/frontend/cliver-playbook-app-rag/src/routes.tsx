@@ -37,9 +37,13 @@ export const ragRoutes: RouteObject[] = [
     ),
   },
   {
+    // The shared knowledge base has no per-user ownership, so there is no
+    // separate admin read code: every document read is a documents read.
+    // The operator view is distinguished by the layout/purpose, not by a
+    // permission the server would not enforce differently.
     path: "admin/rag",
     element: (
-      <RequirePerm code="rag:admin:read">
+      <RequirePerm code="rag:documents:read">
         <RagAdminPage />
       </RequirePerm>
     ),

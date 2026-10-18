@@ -7,6 +7,10 @@ from collections.abc import Callable
 from cliver_playbook.app.rag.embedding.base import Embedder
 
 _factory: dict[str, Callable[[], Embedder]] = {}
+# One shared instance per name. A fresh wrapper per call would throw away
+# the implementation's lazy-load cache and its load lock, so a model-backed
+# embedder would reload its weights on every request.
+_instances: dict[str, Embedder] = {}
 
 
 def register(name: str, factory: Callable[[], Embedder]) -> None:
@@ -16,10 +20,22 @@ def register(name: str, factory: Callable[[], Embedder]) -> None:
 
 
 def get(name: str) -> Embedder:
+    """Return the shared instance registered under ``name``.
+
+    Construction is deferred to the first lookup and memoized. Callers
+    must not mutate the returned object; the shipped implementations keep
+    their only mutable state behind an internal lock.
+    """
+    instance = _instances.get(name)
+    if instance is not None:
+        return instance
     try:
-        return _factory[name]()
+        factory = _factory[name]
     except KeyError as exc:
         raise KeyError(f"unknown embedder: {name!r}") from exc
+    instance = factory()
+    _instances[name] = instance
+    return instance
 
 
 get_embedder = get

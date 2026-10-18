@@ -36,11 +36,14 @@ def test_unknown_retriever_raises() -> None:
         get_retriever("does-not-exist")
 
 
-def test_registry_returns_fresh_instances() -> None:
+def test_registry_memoizes_instances() -> None:
+    # Registry factories may build expensive state (a lazy model handle,
+    # a lock); a fresh instance per call would throw that state away on
+    # every request, so the registry caches one instance per name.
     first = get_retriever("bm25-only")
     second = get_retriever("bm25-only")
     assert isinstance(first, Bm25OnlyRetriever)
-    assert first is not second
+    assert first is second
 
 
 def test_rrf_fusion_prefers_chunks_found_by_both_legs() -> None:
@@ -72,6 +75,9 @@ async def _seed_two_chunks() -> None:
                 chunker_id="recursive",
                 embedder_id="stub",
                 dim=64,
+                # Retrieval only sees indexed documents; a default
+                # (pending) row would make every hit assertion fail.
+                status="indexed",
             )
         )
         db.add_all(

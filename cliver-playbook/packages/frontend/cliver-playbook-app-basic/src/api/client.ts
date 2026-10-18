@@ -38,12 +38,40 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/** Extract a human-readable message from an axios error payload. */
+/**
+ * Extract a human-readable message from an error.
+ *
+ * The server's error contract is FastAPI's `{"detail": ...}`: a string for
+ * deliberate HTTPException boundaries (`"unknown embedder: 'x'"`) and an
+ * array of validation items for request-model failures. Preferring the
+ * server text over axios's generic "Request failed with status code 422"
+ * is what makes a 4xx actionable in the UI; the status-code fallback only
+ * runs when the response carried no usable detail. Plain (non-axios)
+ * errors keep their own message instead of being stringified to
+ * `"Error: ..."`.
+ */
 export function apiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const detail = error.response?.data?.detail;
+    const detail: unknown = error.response?.data?.detail;
     if (typeof detail === "string" && detail) return detail;
+    if (Array.isArray(detail)) {
+      // FastAPI validation errors: [{ msg, loc, ... }, ...]. `loc` is
+      // included because "field required" alone does not say which field.
+      const messages = detail
+        .map((item) => {
+          if (!item || typeof item !== "object") return String(item);
+          const record = item as { msg?: unknown; loc?: unknown };
+          const message = typeof record.msg === "string" ? record.msg : "";
+          const location = Array.isArray(record.loc)
+            ? record.loc.filter((part) => part !== "body").join(".")
+            : "";
+          return message && location ? `${location}: ${message}` : message;
+        })
+        .filter(Boolean);
+      if (messages.length > 0) return messages.join("; ");
+    }
     return error.message;
   }
+  if (error instanceof Error) return error.message;
   return String(error);
 }

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { AlertCircleIcon, RefreshCwIcon } from "lucide-react";
 
 import { apiErrorMessage } from "cliver-playbook-app-basic/api/client.ts";
-import { Badge } from "cliver-playbook-app-basic/components/ui/badge.tsx";
 import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 import {
   Card,
@@ -20,42 +19,30 @@ import {
   TableRow,
 } from "cliver-playbook-app-basic/components/ui/table.tsx";
 import { listDocuments, type DocumentRow } from "cliver-playbook-app-rag/api/rag.ts";
+import {
+  DocumentFailureReason,
+  DocumentStatusBadge,
+  formatDocumentTimestamp,
+} from "cliver-playbook-app-rag/components/rag/documentStatus.tsx";
 
 /**
- * Administrator's view of the shared knowledge base.
+ * Operator's view of the shared knowledge base.
  *
- * The RAG pages are permission-gated, but the documents themselves are shared:
- * this view is the whole corpus with the lifecycle fields an operator needs
- * when something goes wrong — the stages each row was produced with, counts,
- * versions, timestamps and the failure reason. It reads the same document
- * listing as the upload page; the route-level `rag:admin:read` gate is what
- * distinguishes the audience, while the server still enforces every call.
+ * The documents are shared, and there is no per-user ownership in v1: this
+ * view reads the same listing (and the same `rag:documents:read` permission)
+ * as the upload page. What distinguishes it is the audience and the detail —
+ * the whole corpus with the lifecycle fields an operator needs when something
+ * goes wrong: the stages each row was produced with, counts, versions,
+ * timestamps and the failure reason. The server enforces every call; the
+ * route gate only avoids rendering a page the viewer cannot read.
  */
-
-const STATUS_VARIANT: Record<string, "secondary" | "outline" | "destructive"> = {
-  indexed: "secondary",
-  pending: "outline",
-  failed: "destructive",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  indexed: "rag.documents.statusIndexed",
-  pending: "rag.documents.statusPending",
-  failed: "rag.documents.statusFailed",
-};
-
-function formatTimestamp(value: string | null): string {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
-}
 
 function countStatus(rows: DocumentRow[], status: string): number {
   return rows.filter((row) => row.status === status).length;
 }
 
 export default function RagAdminPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const documents = useQuery({ queryKey: ["rag-documents"], queryFn: listDocuments });
   const rows = documents.data?.items ?? [];
@@ -131,6 +118,8 @@ export default function RagAdminPage() {
               <AlertCircleIcon className="size-4" />
               {t("rag.admin.loadFailed")} ({apiErrorMessage(documents.error)})
             </p>
+          ) : documents.isLoading ? (
+            <p className="text-muted-foreground text-sm">{t("rag.documents.loading")}</p>
           ) : rows.length === 0 ? (
             <p className="text-muted-foreground text-sm">{t("rag.admin.empty")}</p>
           ) : (
@@ -152,13 +141,11 @@ export default function RagAdminPage() {
                       <div className="font-medium">{row.title}</div>
                       <div className="text-muted-foreground font-mono text-xs">{row.id}</div>
                       {row.failure_reason ? (
-                        <div className="text-destructive text-xs">{row.failure_reason}</div>
+                        <DocumentFailureReason reason={row.failure_reason} />
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={STATUS_VARIANT[row.status] ?? "outline"}>
-                        {STATUS_LABEL[row.status] ? t(STATUS_LABEL[row.status]) : row.status}
-                      </Badge>
+                      <DocumentStatusBadge status={row.status} />
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       {row.chunker_id} / {row.embedder_id} · {row.dim}d
@@ -166,7 +153,7 @@ export default function RagAdminPage() {
                     <TableCell className="text-right">{row.chunk_count}</TableCell>
                     <TableCell className="text-right">{row.version}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {formatTimestamp(row.updated_at)}
+                      {formatDocumentTimestamp(row.updated_at, i18n.language)}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -27,12 +27,23 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from sqlalchemy.engine import make_url
 
 ADMIN_DSN = os.environ.get(
     "CLIVER_TEST_DATABASE_URL", "postgresql://cliver:cliver@127.0.0.1:5432/postgres"
 )
 TEST_DB_NAME = f"cliver_mcp_test_{os.getpid()}"
-TEST_DSN = f"postgresql://cliver:cliver@127.0.0.1:5432/{TEST_DB_NAME}"
+# Derive the temp database's DSN from the admin DSN instead of
+# hardcoding host/credentials: CI and local runs may point
+# CLIVER_TEST_DATABASE_URL at a different server, and the tests must
+# follow that override rather than silently falling back to localhost.
+# The driver name is normalized to plain ``postgresql`` because the
+# application (asyncpg) derives its own driver from the URL scheme.
+TEST_DSN = (
+    make_url(ADMIN_DSN)
+    .set(drivername="postgresql", database=TEST_DB_NAME)
+    .render_as_string(hide_password=False)
+)
 
 
 def _create_temp_database() -> None:

@@ -18,13 +18,20 @@ Grounding rules:
   relevance scores (a real cross-encoder). A reranker that passes the
   retriever's scores through (noop) has no relevance scale, so a floor
   in relevance units would be meaningless and is skipped.
+
+Like search, the endpoint validates the retriever's declared modes,
+reports the mode that actually ran, and audits both outcomes with the
+caller's identity. A request that completes without context is a
+successful refusal (``ok=True`` with ``no_hits`` in the detail): the
+pipeline did its job, it just found nothing to ground an answer in.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
@@ -37,6 +44,8 @@ from cliver_playbook.app.rag.retrieval.base import Hit
 from cliver_playbook.app.rag.schemas.chat import ChatRequest, ChatResponse, Citation
 from cliver_playbook.app.rag.settings import settings
 from cliver_playbook.app.user.auth.dependencies import Viewer, require_perm
+
+logger = logging.getLogger("cliver_playbook.app.rag.api.chat")
 
 router = APIRouter(prefix="/api/v1/rag/chat", tags=["rag-chat"])
 
@@ -66,14 +75,15 @@ def _build_prompt(question: str, hits: list[Hit]) -> str:
 
 @router.post("", response_model=ChatResponse)
 async def chat(
-    request: ChatRequest,
+    payload: ChatRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _viewer: Viewer = _READ,
+    viewer: Viewer = _READ,
 ) -> ChatResponse:
-    """Answer ``request.question`` from the knowledge base, with citations."""
-    retriever_name = request.retriever or settings.rag.retriever
-    reranker_name = request.reranker or settings.rag.reranker
-    llm_name = request.llm or settings.rag.llm
+    """Answer ``payload.question`` from the knowledge base, with citations."""
+    retriever_name = payload.retriever or settings.rag.retriever
+    reranker_name = payload.reranker or settings.rag.reranker
+    llm_name = payload.llm or settings.rag.llm
 
     # Resolve every stage before doing any work: an unknown name is a
     # client error and should not cost a retrieval round trip.
@@ -83,12 +93,20 @@ async def chat(
         raise HTTPException(
             status_code=422, detail=f"unknown retriever: {retriever_name!r}"
         ) from None
-    if request.embedder is not None:
+    if payload.mode not in retriever.modes:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"retriever {retriever_name!r} does not support mode "
+                f"{payload.mode!r}; supported: {', '.join(sorted(retriever.modes))}"
+            ),
+        )
+    if payload.embedder is not None:
         try:
-            get_embedder(request.embedder)
+            get_embedder(payload.embedder)
         except KeyError:
             raise HTTPException(
-                status_code=422, detail=f"unknown embedder: {request.embedder!r}"
+                status_code=422, detail=f"unknown embedder: {payload.embedder!r}"
             ) from None
     try:
         reranker = get_reranker(reranker_name)
@@ -101,54 +119,79 @@ async def chat(
     except KeyError:
         raise HTTPException(status_code=422, detail=f"unknown llm: {llm_name!r}") from None
 
-    top_k = request.top_k if request.top_k is not None else settings.rag.top_k
+    top_k = payload.top_k if payload.top_k is not None else settings.rag.top_k
     rerank_top_k = (
-        request.rerank_top_k if request.rerank_top_k is not None else settings.rag.rerank_top_k
+        payload.rerank_top_k if payload.rerank_top_k is not None else settings.rag.rerank_top_k
     )
+    effective_mode = retriever.effective_mode(payload.mode)
+    audit_args = {
+        "retriever": retriever_name,
+        "mode": payload.mode,
+        "effective_mode": effective_mode,
+        "embedder": payload.embedder or settings.rag.embedder,
+        "reranker": reranker_name,
+        "llm": llm_name,
+    }
 
-    hits = await retriever.retrieve(
-        Query(
-            text=request.question,
-            top_k=top_k,
-            mode=request.mode,
-            embedder=request.embedder,
-        ),
-        db=db,
-    )
-    if hits:
-        # Cross-encoder inference is CPU/model work; keep it off the loop.
-        hits = await asyncio.to_thread(reranker.rerank, request.question, hits, top_k=rerank_top_k)
-        floor = settings.rag.score_floor
-        if reranker.produces_relevance_scores and floor > 0:
-            hits = [hit for hit in hits if hit.score >= floor]
-
-    no_hits = not hits
-    if no_hits:
-        answer = _NO_CONTEXT_ANSWER
-    else:
-        answer = await asyncio.to_thread(
-            llm.generate,
-            system=_SYSTEM_PROMPT,
-            prompt=_build_prompt(request.question, hits),
-            max_tokens=_MAX_TOKENS,
+    try:
+        hits = await retriever.retrieve(
+            Query(
+                text=payload.question,
+                top_k=top_k,
+                mode=payload.mode,
+                embedder=payload.embedder,
+            ),
+            db=db,
         )
+        if hits:
+            # Cross-encoder inference is CPU/model work; keep it off the loop.
+            hits = await asyncio.to_thread(
+                reranker.rerank, payload.question, hits, top_k=rerank_top_k
+            )
+            floor = settings.rag.score_floor
+            if reranker.produces_relevance_scores and floor > 0:
+                hits = [hit for hit in hits if hit.score >= floor]
+
+        no_hits = not hits
+        if no_hits:
+            answer = _NO_CONTEXT_ANSWER
+        else:
+            answer = await asyncio.to_thread(
+                llm.generate,
+                system=_SYSTEM_PROMPT,
+                prompt=_build_prompt(payload.question, hits),
+                max_tokens=_MAX_TOKENS,
+            )
+    # Retrieval, reranking and generation all fail in third-party ways;
+    # the client gets one stable server-error contract and the audit row
+    # carries the stage-agnostic failure tag.
+    except Exception:
+        logger.exception("chat pipeline failed (retriever=%s)", retriever_name)
+        await write_rag_audit(
+            event="chat.run",
+            target=fingerprint(payload.question),
+            ok=False,
+            args=audit_args,
+            extra={"error": "pipeline_failed"},
+            viewer=viewer,
+            request=request,
+        )
+        raise HTTPException(status_code=500, detail="chat failed") from None
 
     await write_rag_audit(
         event="chat.run",
-        target=fingerprint(request.question),
-        ok=not no_hits,
-        args={
-            "retriever": retriever_name,
-            "embedder": request.embedder or settings.rag.embedder,
-            "reranker": reranker_name,
-            "llm": llm_name,
-        },
+        target=fingerprint(payload.question),
+        # A grounded refusal is a completed request, not a failure: the
+        # pipeline ran and correctly found nothing to cite.
+        ok=True,
+        args=audit_args,
         extra={
             "hit_count": len(hits),
             "model_id": llm.model_id,
             "no_hits": no_hits,
-            **({"error": "no_hits"} if no_hits else {}),
         },
+        viewer=viewer,
+        request=request,
     )
 
     return ChatResponse(
@@ -167,6 +210,8 @@ async def chat(
         hits_used=len(hits),
         no_hits=no_hits,
         retriever=retriever_name,
+        requested_mode=payload.mode,
+        mode=effective_mode,
         reranker=reranker_name,
         llm=llm_name,
     )

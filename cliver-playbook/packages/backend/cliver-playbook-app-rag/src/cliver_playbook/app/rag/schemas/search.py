@@ -41,8 +41,15 @@ class HitRead(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    """The ranked result list plus the stage that produced it."""
+    """The ranked result list plus the stage that produced it.
+
+    ``mode`` is what actually ran, which can differ from
+    ``requested_mode`` for a retriever that degrades (a lexical-only
+    retriever reports ``sparse`` for a ``hybrid`` request). The UI
+    displays the effective mode so the comparison is never mislabelled.
+    """
 
     retriever: str
+    requested_mode: str
     mode: str
     hits: list[HitRead]

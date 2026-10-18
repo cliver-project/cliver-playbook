@@ -5,19 +5,25 @@ Two legs, two engines:
 - **Dense** — cosine similarity over ``rag_chunk_embeddings``. The
   query is embedded with the per-call embedder override when the request
   carries one, otherwise with the embedder named by
-  ``settings.rag.embedder``, and matched only against rows of the same
-  dimension, because the knowledge base may hold vectors from more than
-  one embedder. When the
-  query dimension is 1024 (the production default), the SQL uses the
-  same expression the partial HNSW index is built on, so the index is
-  actually eligible; other dimensions fall back to a sequential scan,
-  which is fine at development scale and is the price of a mixed-dim
-  column. The query embedding runs in a worker thread — model
-  inference must not block the event loop.
+  ``settings.rag.embedder``. Rows are filtered by the embedder's
+  identity as well as its dimension: vectors from different models live
+  in different spaces even at the same width, so a mixed corpus must
+  only compare comparable rows. When the query dimension is 1024 (the
+  production default), the SQL uses the same expression the partial
+  HNSW index is built on, so the index is actually eligible; other
+  dimensions fall back to a sequential scan, which is fine at
+  development scale and is the price of a mixed-dim column. The query
+  embedding runs in a worker thread — model inference must not block
+  the event loop.
 - **Sparse** — Postgres ``to_tsvector`` / ``plainto_tsquery`` with
   ``ts_rank_cd``. No stored tsvector column yet: the expression is
   computed per query. A future migration can add a generated column and
   a GIN index without changing this interface.
+
+Both legs join ``rag_documents`` and keep only ``status = 'indexed'``
+rows. Upload stores chunks before embedding (for the preview), and a
+failed document may retain rows, so the status predicate is what keeps
+the "nothing is searchable until you index" contract true.
 
 Fusion is reciprocal rank fusion (k=60). Scores on each leg live on
 different scales (cosine similarity vs ``ts_rank_cd``), so fusing ranks
@@ -113,6 +119,10 @@ class PgvectorHybridRetriever:
     """Dense + sparse retrieval over Postgres, fused with RRF."""
 
     name = "pgvector-hybrid"
+    modes = frozenset({"dense", "sparse", "hybrid"})
+
+    def effective_mode(self, mode: str) -> str:
+        return mode
 
     async def retrieve(self, query: Query, *, db: AsyncSession) -> list[Hit]:
         if not query.text.strip() or query.top_k <= 0:
@@ -164,28 +174,40 @@ class PgvectorHybridRetriever:
         # WHERE dim = 1024, so the query must spell the expression and
         # the predicate exactly for the planner to consider it.
         if dim == _INDEXED_DIM:
-            # HNSW recall is tuned per transaction. `SET` cannot take a
-            # bind parameter; set_config(..., true) scopes the change to
-            # the current transaction. The setting only matters when the
-            # index is eligible, i.e. in this branch.
+            # HNSW recalls at most ef_search rows, so the breadth must be
+            # at least the LIMIT or a large top_k silently truncates.
+            # `SET` cannot take a bind parameter; set_config(..., true)
+            # scopes the change to the current transaction. The setting
+            # only matters when the index is eligible, i.e. this branch.
+            ef_search = max(settings.rag.pgvector_ef_search, limit)
             await db.execute(
                 sql_text("SELECT set_config('hnsw.ef_search', :ef, true)"),
-                {"ef": str(settings.rag.pgvector_ef_search)},
+                {"ef": str(ef_search)},
             )
             distance = "(e.embedding::vector(1024)) <=> CAST(:qvec AS vector(1024))"
-            where = "e.dim = 1024"
-            params: dict[str, Any] = {"qvec": query_vector, "limit": limit}
+            where = "e.dim = 1024 AND e.embedder_version = :embedder_version"
+            params: dict[str, Any] = {
+                "qvec": query_vector,
+                "limit": limit,
+                "embedder_version": embedder.id,
+            }
         else:
             distance = "e.embedding <=> CAST(:qvec AS vector)"
-            where = "e.dim = :dim"
-            params = {"qvec": query_vector, "dim": dim, "limit": limit}
+            where = "e.dim = :dim AND e.embedder_version = :embedder_version"
+            params = {
+                "qvec": query_vector,
+                "dim": dim,
+                "limit": limit,
+                "embedder_version": embedder.id,
+            }
 
         statement = sql_text(
             "SELECT e.chunk_id, c.document_id, c.ordinal, c.text, c.metadata, "
             f"1 - ({distance}) AS score "
             "FROM rag_chunk_embeddings AS e "
             "JOIN rag_chunks AS c ON c.id = e.chunk_id "
-            f"WHERE {where} "
+            "JOIN rag_documents AS d ON d.id = c.document_id "
+            f"WHERE d.status = 'indexed' AND {where} "
             f"ORDER BY {distance} "
             "LIMIT :limit"
         )
@@ -199,7 +221,9 @@ class PgvectorHybridRetriever:
             "ts_rank_cd(to_tsvector('english', c.text), "
             "plainto_tsquery('english', :q)) AS score "
             "FROM rag_chunks AS c "
-            "WHERE to_tsvector('english', c.text) @@ plainto_tsquery('english', :q) "
+            "JOIN rag_documents AS d ON d.id = c.document_id "
+            "WHERE d.status = 'indexed' "
+            "AND to_tsvector('english', c.text) @@ plainto_tsquery('english', :q) "
             "ORDER BY score DESC "
             "LIMIT :limit"
         )

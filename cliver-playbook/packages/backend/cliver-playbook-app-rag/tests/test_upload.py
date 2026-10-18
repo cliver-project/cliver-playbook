@@ -92,3 +92,49 @@ async def test_upload_requires_bearer_token(raw_client: AsyncClient) -> None:
     data = {"chunker": "recursive", "embedder": "stub"}
     r = await raw_client.post(UPLOAD, files=files, data=data)
     assert r.status_code == 401
+
+
+async def test_upload_rejects_a_file_over_the_size_cap(client: AsyncClient, monkeypatch) -> None:
+    from cliver_playbook.app.rag.settings import settings as rag_settings
+
+    monkeypatch.setattr(rag_settings.rag, "max_upload_bytes", 16)
+    files = {"file": ("big.txt", io.BytesIO(b"x" * 64), "text/plain")}
+    data = {"chunker": "recursive", "embedder": "stub"}
+
+    r = await client.post(UPLOAD, files=files, data=data)
+
+    assert r.status_code == 413
+    assert "limit is 16 bytes" in r.json()["detail"]
+
+
+async def test_failed_reupload_preserves_the_indexed_document(
+    client: AsyncClient,
+) -> None:
+    """A rejected re-upload must not destroy a document that is live.
+
+    Upload and index the file normally, then re-upload the same name and
+    content through a chunker that rejects it. The document id is a
+    content hash, so both requests target the same row; the failed
+    attempt must leave the indexed version (chunks included) intact.
+    """
+    content = b"The indexed version stays searchable. " * 20
+    files = {"file": ("keep.txt", io.BytesIO(content), "text/plain")}
+    data = {"chunker": "recursive", "embedder": "stub", "chunk_size": "64", "chunk_overlap": "0"}
+    uploaded = await client.post(UPLOAD, files=files, data=data)
+    assert uploaded.status_code == 201, uploaded.text
+    document_id = uploaded.json()["document_id"]
+    indexed = await client.post(f"/api/v1/rag/documents/{document_id}/index")
+    assert indexed.status_code == 200, indexed.text
+
+    retry = {"file": ("keep.txt", io.BytesIO(content), "application/pdf")}
+    with patch("cliver_playbook.app.rag.chunking.pdf._partition", return_value=[]):
+        rejected = await client.post(
+            UPLOAD, files=retry, data={"chunker": "pdf", "embedder": "stub"}
+        )
+    assert rejected.status_code == 422
+
+    doc = (await client.get(f"/api/v1/rag/documents/{document_id}")).json()
+    assert doc["status"] == "indexed"
+    assert doc["failure_reason"] is None
+    chunks = (await client.get(f"/api/v1/rag/documents/{document_id}/chunks")).json()["items"]
+    assert chunks

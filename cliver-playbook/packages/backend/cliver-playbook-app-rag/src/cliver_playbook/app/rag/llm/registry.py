@@ -7,6 +7,8 @@ from collections.abc import Callable
 from cliver_playbook.app.rag.llm.base import LLM
 
 _factory: dict[str, Callable[[], LLM]] = {}
+# One shared instance per name, uniform with the other stage registries.
+_instances: dict[str, LLM] = {}
 
 
 def register(name: str, factory: Callable[[], LLM]) -> None:
@@ -16,10 +18,17 @@ def register(name: str, factory: Callable[[], LLM]) -> None:
 
 
 def get(name: str) -> LLM:
+    """Return the shared instance registered under ``name``."""
+    instance = _instances.get(name)
+    if instance is not None:
+        return instance
     try:
-        return _factory[name]()
+        factory = _factory[name]
     except KeyError as exc:
         raise KeyError(f"unknown llm: {name!r}") from exc
+    instance = factory()
+    _instances[name] = instance
+    return instance
 
 
 get_llm = get

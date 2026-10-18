@@ -81,6 +81,33 @@ async def test_chat_unknown_stage_returns_422(client: AsyncClient) -> None:
         assert "unknown" in r.json()["detail"]
 
 
+async def test_chat_rejects_a_mode_the_retriever_cannot_run(client: AsyncClient) -> None:
+    r = await client.post(CHAT, json={"question": "x", "mode": "dense"})
+    assert r.status_code == 422
+    assert "does not support mode" in r.json()["detail"]
+
+
+async def test_chat_reports_the_effective_mode(client: AsyncClient) -> None:
+    r = await client.post(CHAT, json={"question": "anything", "mode": "hybrid"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["requested_mode"] == "hybrid"
+    assert body["mode"] == "sparse"
+
+
+async def test_chat_pipeline_failure_is_a_stable_500(client: AsyncClient, monkeypatch) -> None:
+    from cliver_playbook.app.rag.retrieval.bm25_only import Bm25OnlyRetriever
+
+    async def _boom(self, query, *, db):
+        raise RuntimeError("retrieval exploded")
+
+    monkeypatch.setattr(Bm25OnlyRetriever, "retrieve", _boom)
+
+    r = await client.post(CHAT, json={"question": "anything"})
+    assert r.status_code == 500
+    assert r.json()["detail"] == "chat failed"
+
+
 async def test_chat_requires_permission(raw_client: AsyncClient) -> None:
     r = await raw_client.post(CHAT, json={"question": "anything"})
     assert r.status_code == 401

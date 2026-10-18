@@ -49,5 +49,9 @@ class ChatResponse(BaseModel):
     hits_used: int
     no_hits: bool
     retriever: str
+    # ``mode`` is what actually ran; see SearchResponse for why it can
+    # differ from the requested mode.
+    requested_mode: str
+    mode: str
     reranker: str
     llm: str

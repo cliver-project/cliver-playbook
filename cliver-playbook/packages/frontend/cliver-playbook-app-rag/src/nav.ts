@@ -12,5 +12,5 @@ import type { AuthedNavItem } from "cliver-playbook-app-user/layout/AuthAppLayou
 export const ragNavItems: AuthedNavItem[] = [
   { to: "/rag/documents", labelKey: "nav.ragDocuments", perm: "rag:documents:read" },
   { to: "/rag/chat", labelKey: "nav.ragChat", perm: "rag:chat:read" },
-  { to: "/admin/rag", labelKey: "nav.ragAdmin", perm: "rag:admin:read" },
+  { to: "/admin/rag", labelKey: "nav.ragAdmin", perm: "rag:documents:read" },
 ];

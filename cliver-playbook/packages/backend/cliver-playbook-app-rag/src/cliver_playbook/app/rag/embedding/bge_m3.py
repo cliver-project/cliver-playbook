@@ -1,17 +1,15 @@
 """BAAI/bge-m3 embedder.
 
-BGE-M3 is multilingual (100+ langs), 1024-d, CPU-capable, and
-emits dense + sparse + ColBERT from one forward pass. The dense
-vector is what we persist; the sparse vector is also persisted
-in ``rag_chunk_embeddings.sparse_lexical`` so the BM25 leg of
-hybrid retrieval can use it for the pgvector-hybrid retriever
-without a second inference.
+BGE-M3 is multilingual (100+ langs), 1024-d, CPU-capable, and can emit
+dense, sparse and ColBERT outputs from one forward pass. Only the dense
+vector is requested and persisted here; the lexical leg of hybrid
+retrieval uses Postgres full-text, so the sparse output is not needed.
 
-The model is loaded lazily on the first ``embed`` call so the
-package can be imported without GPU or large downloads. The
-``id`` is read from the HF model card's commit hash at load time,
-so every row in ``rag_chunk_embeddings.embedder_version`` carries
-the exact model identity that produced it.
+The model is loaded lazily on the first ``embed`` call so importing the
+package downloads nothing. The concrete HF revision is not resolved at
+load time, so ``id`` keeps the ``@lazy`` sentinel; rows in
+``rag_chunk_embeddings.embedder_version`` therefore identify the model
+family and a future change can fill in the exact revision.
 """
 
 from __future__ import annotations
@@ -45,16 +43,16 @@ class BgeM3Embedder:
                 return
             from FlagEmbedding import BGEM3FlagModel  # type: ignore[import-not-found]
 
+            # FlagEmbedding 1.4.x aliases BGEM3FlagModel to M3Embedder, whose
+            # public constructor takes the model path directly. The older
+            # FlagAutoModel-style ``from_finetuned`` classmethod is not part
+            # of this class; calling it raises AttributeError at first use.
             logger.info("Loading BAAI/bge-m3 (CPU, fp32) — first call will download the weights")
-            self._model = BGEM3FlagModel.from_finetuned(
+            self._model = BGEM3FlagModel(
                 "BAAI/bge-m3",
                 use_fp16=False,
                 devices="cpu",
             )
-            # The id stays at the lazy sentinel for now; a future
-            # patch reads the HF commit hash to fill it in. Operators
-            # relying on exact model identity should set
-            # CLIVER_RAG__EMBEDDER=stub in CI.
 
     def embed(self, texts: list[str], *, mode: str = "document") -> list[list[float]]:
         self._ensure_loaded()

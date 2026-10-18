@@ -60,7 +60,50 @@ async def test_search_mode_is_echoed_and_respected(client: AsyncClient) -> None:
 
     r = await client.post(SEARCH, json={"query": "quick", "mode": "sparse"})
     assert r.status_code == 200, r.text
-    assert r.json()["mode"] == "sparse"
+    body = r.json()
+    assert body["mode"] == "sparse"
+    assert body["requested_mode"] == "sparse"
+
+
+async def test_search_reports_the_effective_mode_after_degradation(
+    client: AsyncClient,
+) -> None:
+    """bm25-only has no dense leg: a hybrid request runs sparse and says so.
+
+    Echoing the requested mode would let the UI compare a "hybrid" run
+    that was in fact lexical-only, which is exactly the mislabelling the
+    stage comparison exists to avoid.
+    """
+    await _upload_and_index(client, b"The quick brown fox.")
+
+    r = await client.post(SEARCH, json={"query": "quick", "mode": "hybrid"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["requested_mode"] == "hybrid"
+    assert body["mode"] == "sparse"
+
+
+async def test_search_rejects_a_mode_the_retriever_cannot_run(
+    client: AsyncClient,
+) -> None:
+    # bm25-only declares no dense capability; a dense request must be a
+    # client error rather than a silent fallback to lexical hits.
+    r = await client.post(SEARCH, json={"query": "quick", "mode": "dense"})
+    assert r.status_code == 422
+    assert "does not support mode" in r.json()["detail"]
+
+
+async def test_search_retrieval_failure_is_a_stable_500(client: AsyncClient, monkeypatch) -> None:
+    from cliver_playbook.app.rag.retrieval.bm25_only import Bm25OnlyRetriever
+
+    async def _boom(self, query, *, db):
+        raise RuntimeError("storage exploded")
+
+    monkeypatch.setattr(Bm25OnlyRetriever, "retrieve", _boom)
+
+    r = await client.post(SEARCH, json={"query": "anything"})
+    assert r.status_code == 500
+    assert r.json()["detail"] == "retrieval failed"
 
 
 async def test_search_top_k_limits_hits(client: AsyncClient) -> None:
