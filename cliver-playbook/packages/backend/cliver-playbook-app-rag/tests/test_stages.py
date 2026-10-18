@@ -31,10 +31,11 @@ async def test_stages_reports_metadata(client: AsyncClient) -> None:
 
 async def test_stages_reports_the_configured_defaults(client: AsyncClient) -> None:
     body = (await client.get(STAGES)).json()
-    # The test settings pin the offline-safe stages.
+    # The test fixture pins every offline-safe stage explicitly, so this
+    # assertion is independent of the checked-in app.yaml.
     assert body["defaults"] == {
         "chunker": "recursive",
-        "embedder": "bge-m3",
+        "embedder": "stub",
         "retriever": "bm25-only",
         "reranker": "noop",
         "llm": "stub",

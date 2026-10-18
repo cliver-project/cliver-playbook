@@ -86,3 +86,40 @@ oidc:
       scopes: read:user user:email
       auto_provision: true
       default_role: user
+
+# --- RAG pipeline (knowledge base, cliver-playbook-app-rag) -----------------
+#
+# Every stage name resolves through its own registry; the web UI reads the
+# live set from GET /api/v1/rag/stages and may override any of them per
+# request. The values here are the process defaults.
+#
+# The dev reference pins the offline implementations: the stub embedder and
+# the noop reranker need no model download, so the knowledge-base pages work
+# on a fresh clone. Production stages are a deployment choice — override
+# from the environment, e.g.
+#
+#   CLIVER_RAG__EMBEDDER=bge-m3
+#   CLIVER_RAG__RERANKER=bge-reranker-v2-m3
+#
+# The query embedder must match the model that indexed a document; vectors
+# from different embedders are not comparable. The chat page exposes that
+# choice per request.
+rag:
+  chunker: recursive
+  embedder: stub
+  retriever: pgvector-hybrid
+  reranker: noop
+  llm: stub
+
+  # Recursive chunker sizing used when an upload does not override it.
+  chunk_size: 512
+  chunk_overlap: 64
+
+  # Retriever candidate count, then the reranker's context size for the
+  # generator. score_floor applies only to rerankers that emit normalized
+  # relevance scores; the noop reranker passes retriever scores through, so
+  # the floor is skipped for it.
+  top_k: 20
+  rerank_top_k: 5
+  score_floor: 0.2
+  pgvector_ef_search: 40

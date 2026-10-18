@@ -30,11 +30,13 @@ transpiles them, so there is no `dist` and no build step per package.
 | --- | --- |
 | `packages/frontend/cliver-playbook-app-basic` | The visual shell: theme provider and tokens, i18n bootstrap, the axios client, the UI primitive set, the CRUD/table pattern, the layout, the home/items pages, and the shared tooling (vite/tsconfig/index.html) an app extends. |
 | `packages/frontend/cliver-playbook-app-user` | Sign-in and the password gate, the session provider and client policy, the profile page, the RBAC admin pages, the standalone OAuth pages. |
+| `packages/frontend/cliver-playbook-app-rag` | The knowledge-base pages: upload with per-stage choices and chunk preview, indexing, documents list, grounded chat with citations, and the corpus admin view. |
 | `packages/frontend/cliver-playbook-app-mcp` | The tool playground and the agent activity view. |
 
 Each frontend package has a `dev/` shell — a real app that consumes the packages by
-name. The `cliver-playbook-app-mcp` shell is the full composition (basic + user + mcp)
-and doubles as the reference for what a finished project's wiring looks like.
+name. The `cliver-playbook-app-mcp` shell is the full composition (basic + user + rag +
+mcp) and doubles as the reference for what a finished project's wiring looks like;
+`cliver-playbook-app-rag` has its own smaller shell for working on the RAG pages alone.
 
 ## Consuming the library
 
@@ -57,12 +59,13 @@ for router in [*basic.ROUTERS, *user.ROUTERS, *rag.ROUTERS, *mcp.ROUTERS]:
 
 ```tsx
 const routes: RouteObject[] = [
-  { element: <AuthAppLayout extraNavItems={mcpNavItems} />,
-    children: [...basicRoutes, ...userRoutes, ...mcpRoutes] },
+  { element: <AuthAppLayout extraNavItems={[...ragNavItems, ...mcpNavItems]} />,
+    children: [...basicRoutes, ...userRoutes, ...ragRoutes, ...mcpRoutes] },
   ...userStandaloneRoutes,
+  ...ragStandaloneRoutes,
   { path: "*", element: <Navigate to="/" replace /> },
 ];
-createI18n(userTranslations, mcpTranslations);
+createI18n(userTranslations, ragTranslations, mcpTranslations);
 ```
 
 The Claude Code skills that automate the assembly (choose packages → copy or install →
@@ -81,8 +84,16 @@ make check          # ruff + every package's tests + the frontend typecheck/lint
 ```
 
 `make mcp-stdio` / `make mcp-http` run the MCP surface as a separate process for a
-local CLI agent or a sidecar listener. `.env.example` documents every override;
-`app.yaml` (checked in, never carries secrets) is the lowest-priority layer (ADR-0009).
+local CLI agent or a sidecar listener. The frontend shells can also be started
+individually with `pnpm dev`, `pnpm dev:user`, `pnpm dev:rag` or `pnpm dev:mcp`.
+`.env.example` documents every override; `app.yaml` (checked in, never carries secrets)
+is the lowest-priority layer (ADR-0009).
+
+The checked-in RAG configuration pins the offline stages (`stub` embedder, `noop`
+reranker), so the knowledge-base pages work on a fresh clone without downloading model
+weights. Set `CLIVER_RAG__EMBEDDER=bge-m3` / `CLIVER_RAG__RERANKER=bge-reranker-v2-m3`
+for the production stages. The query embedder must match the one used to index a
+document; the chat page exposes that choice per request (ADR-0018, decision 9).
 
 ## Architecture decisions
 

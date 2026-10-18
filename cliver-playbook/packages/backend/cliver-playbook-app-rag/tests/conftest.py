@@ -65,7 +65,7 @@ def settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         # production reranker downloads weights; SQLite tests pin the
         # offline-safe stages so the HTTP surface stays exercisable
         # without Postgres or model downloads.
-        rag={"retriever": "bm25-only", "reranker": "noop"},
+        rag={"embedder": "stub", "retriever": "bm25-only", "reranker": "noop"},
         # Disable the .env layer: a developer machine's project .env may
         # carry real deployment values, and tests must not read them.
         _env_file=None,
