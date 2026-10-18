@@ -40,6 +40,13 @@ from cliver_playbook.app.rag.chunking.pdf import EmptyDocumentError
 from cliver_playbook.app.rag.embedding import get_embedder
 from cliver_playbook.app.rag.models.entities import Chunk as ChunkRow
 from cliver_playbook.app.rag.models.entities import ChunkEmbedding, Document
+from cliver_playbook.app.rag.schemas.documents import (
+    ChunkList,
+    ChunkRead,
+    DocumentList,
+    DocumentRead,
+)
+from cliver_playbook.app.rag.services import documents as document_service
 from cliver_playbook.app.rag.settings import settings
 from cliver_playbook.app.user.auth.dependencies import Viewer, require_perm
 
@@ -51,6 +58,7 @@ router = APIRouter(prefix="/api/v1/rag/documents", tags=["rag-documents"])
 # permission catalog when the dependency factory is called, so an import
 # with a typo fails loudly instead of 403-ing every request at runtime.
 _WRITE = Security(require_perm("rag:documents:write"))
+_READ = Security(require_perm("rag:documents:read"))
 
 # How many chunks the upload response carries. The full set is in the
 # database behind GET /{id}/chunks; the preview is for the UI only.
@@ -436,6 +444,55 @@ async def index_document(
         "dim": doc.dim,
         "embedder_version": embedder_impl.id,
     }
+
+
+@router.get("", response_model=DocumentList)
+async def list_documents(
+    db: AsyncSession = Depends(get_db),
+    _viewer: Viewer = _READ,
+) -> DocumentList:
+    """Every document in the shared knowledge base, newest first."""
+    rows = await document_service.list_documents(db)
+    return DocumentList(items=[DocumentRead.model_validate(row) for row in rows])
+
+
+@router.get("/{document_id}", response_model=DocumentRead)
+async def get_document(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    _viewer: Viewer = _READ,
+) -> DocumentRead:
+    """One document's metadata (status, stage choices, counters)."""
+    doc = await document_service.get_document(db, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    return DocumentRead.model_validate(doc)
+
+
+@router.get("/{document_id}/chunks", response_model=ChunkList)
+async def get_document_chunks(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    _viewer: Viewer = _READ,
+) -> ChunkList:
+    """A document's chunks in ordinal order, with their metadata."""
+    doc = await document_service.get_document(db, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    rows = await document_service.list_chunks(db, document_id)
+    return ChunkList(
+        items=[
+            ChunkRead(
+                id=row.id,
+                ordinal=row.ordinal,
+                text=row.text,
+                token_count=row.token_count,
+                metadata=row.metadata_json or {},
+                parent_id=row.parent_id,
+            )
+            for row in rows
+        ]
+    )
 
 
 async def _delete_chunks_embeddings(db: AsyncSession, document_id: str) -> None:
