@@ -35,6 +35,14 @@ import {
 } from "cliver-playbook-app-rag/api/rag.ts";
 import { ChunkPreview } from "cliver-playbook-app-rag/components/rag/ChunkPreview.tsx";
 import {
+  ChunkerOptionsForm,
+  buildChunkerOptions,
+  chunkerOptionsInvalid,
+  initialOptionDrafts,
+  type OptionDraft,
+  type OptionDrafts,
+} from "cliver-playbook-app-rag/components/rag/ChunkerOptionsForm.tsx";
+import {
   DocumentFailureReason,
   DocumentStatusBadge,
   formatDocumentTimestamp,
@@ -75,6 +83,21 @@ function parseWholeNumber(raw: string): number | undefined {
   return Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
+// Choosing a file implies a sensible chunker. The user can still override
+// the selection afterwards; this only removes the most common mismatch
+// (a Word file sent to the plain-text splitter).
+const CHUNKER_BY_EXTENSION: Record<string, string> = {
+  docx: "docx",
+  html: "html",
+  htm: "html",
+};
+
+function inferChunker(filename: string, available: readonly string[]): string | null {
+  const extension = filename.split(".").pop()?.toLowerCase() ?? "";
+  const candidate = CHUNKER_BY_EXTENSION[extension];
+  return candidate && available.includes(candidate) ? candidate : null;
+}
+
 export default function RagDocumentsPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -94,11 +117,30 @@ export default function RagDocumentsPage() {
   const [chunkOverlap, setChunkOverlap] = useState("");
   const [preview, setPreview] = useState<UploadResponse | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentRow | null>(null);
+  // Chunker option drafts are kept per chunker name, so switching between
+  // chunkers preserves what the user already configured.
+  const [optionDrafts, setOptionDrafts] = useState<Record<string, OptionDrafts>>({});
 
   // Fall back to the server's defaults until the user overrides a stage, so
   // the form is usable before the catalog query resolves.
   const effectiveChunker = chunker ?? catalog.data?.defaults.chunker ?? "";
   const effectiveEmbedder = embedder ?? catalog.data?.defaults.embedder ?? "";
+
+  const selectedChunker = (catalog.data?.chunkers ?? []).find(
+    (option) => option.name === effectiveChunker,
+  );
+  const optionFields = selectedChunker?.config_schema ?? [];
+  const currentOptionDrafts =
+    optionDrafts[effectiveChunker] ?? initialOptionDrafts(optionFields);
+  const invalidOptionNames = chunkerOptionsInvalid(optionFields, currentOptionDrafts);
+  const optionsInvalid = invalidOptionNames.length > 0;
+
+  const updateOptionDraft = (name: string, value: OptionDraft) => {
+    setOptionDrafts((current) => {
+      const drafts = current[effectiveChunker] ?? initialOptionDrafts(optionFields);
+      return { ...current, [effectiveChunker]: { ...drafts, [name]: value } };
+    });
+  };
 
   // Whole numbers only. A fractional value would otherwise be silently
   // dropped (falling back to the server default) or rejected as a 422 whose
@@ -126,12 +168,20 @@ export default function RagDocumentsPage() {
     mutationFn: () => {
       if (!file) throw new Error(t("rag.documents.fileRequired"));
       if (sizesInvalid) throw new Error(t("rag.documents.invalidInteger", { min: 1 }));
+      if (optionsInvalid) throw new Error(t("rag.chunkers.invalidOptions"));
       return uploadDocument({
         file,
         chunker: effectiveChunker || undefined,
         embedder: effectiveEmbedder || undefined,
         chunkSize: chunkSizeValue,
         chunkOverlap: chunkOverlapValue,
+        // Send the resolved defaults too: the persisted configuration then
+        // describes exactly what produced the chunks. Chunkers without
+        // options omit the field entirely.
+        chunkerOptions:
+          optionFields.length > 0
+            ? buildChunkerOptions(optionFields, currentOptionDrafts)
+            : undefined,
       });
     },
     onSuccess: (data) => {
@@ -227,7 +277,16 @@ export default function RagDocumentsPage() {
                 key={fileInputKey}
                 id="rag-file"
                 type="file"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  const selected = event.target.files?.[0] ?? null;
+                  setFile(selected);
+                  if (!selected) return;
+                  const inferred = inferChunker(
+                    selected.name,
+                    (catalog.data?.chunkers ?? []).map((option) => option.name),
+                  );
+                  if (inferred) setChunker(inferred);
+                }}
                 disabled={upload.isPending}
               />
               <p className="text-muted-foreground text-xs">{t("rag.documents.fileHint")}</p>
@@ -258,61 +317,70 @@ export default function RagDocumentsPage() {
               <summary className="cursor-pointer text-sm font-medium">
                 {t("rag.documents.advanced")}
               </summary>
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="rag-chunk-size">{t("rag.documents.chunkSizeLabel")}</Label>
-                  <Input
-                    id="rag-chunk-size"
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={chunkSize}
-                    onChange={(event) => setChunkSize(event.target.value)}
-                    placeholder={t("rag.documents.chunkSizePlaceholder")}
-                  />
-                  {chunkSizeInvalid ? (
-                    <p className="text-destructive text-xs">
-                      {t("rag.documents.invalidInteger", { min: 1 })}
-                    </p>
-                  ) : (
-                    <p className="text-muted-foreground text-xs">
-                      {t("rag.documents.chunkSizeHint")}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="rag-chunk-overlap">
-                    {t("rag.documents.chunkOverlapLabel")}
-                  </Label>
-                  <Input
-                    id="rag-chunk-overlap"
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={chunkOverlap}
-                    onChange={(event) => setChunkOverlap(event.target.value)}
-                    placeholder={t("rag.documents.chunkOverlapPlaceholder")}
-                  />
-                  {chunkOverlapInvalid ? (
-                    <p className="text-destructive text-xs">
-                      {t("rag.documents.invalidInteger", { min: 0 })}
-                    </p>
-                  ) : overlapNotSmaller ? (
-                    <p className="text-destructive text-xs">
-                      {t("rag.documents.overlapTooLarge")}
-                    </p>
-                  ) : (
-                    <p className="text-muted-foreground text-xs">
-                      {t("rag.documents.chunkOverlapHint")}
-                    </p>
-                  )}
+              <div className="mt-3 space-y-4">
+                <ChunkerOptionsForm
+                  fields={optionFields}
+                  drafts={currentOptionDrafts}
+                  onChange={updateOptionDraft}
+                  disabled={upload.isPending}
+                  invalid={invalidOptionNames}
+                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rag-chunk-size">{t("rag.documents.chunkSizeLabel")}</Label>
+                    <Input
+                      id="rag-chunk-size"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={chunkSize}
+                      onChange={(event) => setChunkSize(event.target.value)}
+                      placeholder={t("rag.documents.chunkSizePlaceholder")}
+                    />
+                    {chunkSizeInvalid ? (
+                      <p className="text-destructive text-xs">
+                        {t("rag.documents.invalidInteger", { min: 1 })}
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground text-xs">
+                        {t("rag.documents.chunkSizeHint")}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rag-chunk-overlap">
+                      {t("rag.documents.chunkOverlapLabel")}
+                    </Label>
+                    <Input
+                      id="rag-chunk-overlap"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={chunkOverlap}
+                      onChange={(event) => setChunkOverlap(event.target.value)}
+                      placeholder={t("rag.documents.chunkOverlapPlaceholder")}
+                    />
+                    {chunkOverlapInvalid ? (
+                      <p className="text-destructive text-xs">
+                        {t("rag.documents.invalidInteger", { min: 0 })}
+                      </p>
+                    ) : overlapNotSmaller ? (
+                      <p className="text-destructive text-xs">
+                        {t("rag.documents.overlapTooLarge")}
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground text-xs">
+                        {t("rag.documents.chunkOverlapHint")}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </details>
 
             <Button
               onClick={() => upload.mutate()}
-              disabled={!file || upload.isPending || sizesInvalid}
+              disabled={!file || upload.isPending || sizesInvalid || optionsInvalid}
               className="w-full md:w-auto"
             >
               {upload.isPending ? t("rag.documents.previewing") : t("rag.documents.preview")}

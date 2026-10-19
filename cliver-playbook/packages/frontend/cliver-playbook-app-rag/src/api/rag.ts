@@ -22,6 +22,22 @@ import { api } from "cliver-playbook-app-basic/api/client.ts";
 /** Retrieval legs a request may ask for. */
 export type RetrievalMode = "dense" | "sparse" | "hybrid";
 
+/** One flat, browser-configurable option of a stage implementation.
+ *
+ * The server derives this descriptor from the implementation's Pydantic
+ * options model; the upload page renders one form control per `type` and
+ * never hardcodes chunker-specific fields. */
+export interface StageOptionField {
+  name: string;
+  label: string;
+  type: "boolean" | "integer" | "string" | "enum";
+  default: boolean | number | string | null;
+  enum: string[] | null;
+  minimum: number | null;
+  maximum: number | null;
+  description: string;
+}
+
 export interface StageOption {
   name: string;
   model_id: string | null;
@@ -31,6 +47,10 @@ export interface StageOption {
    * hides the modes the selected retriever does not declare instead of
    * offering a combination the server would reject with 422. */
   modes: RetrievalMode[] | null;
+  /** Output-shaping options (chunkers only). An empty array means the
+   * stage is configurable but has no options; `null` means it does not
+   * accept options at all. */
+  config_schema: StageOptionField[] | null;
 }
 
 export interface StageDefaults {
@@ -77,12 +97,25 @@ export async function fetchStageCatalog(): Promise<StageCatalog> {
 // Documents
 // ---------------------------------------------------------------------------
 
+/** The effective chunker configuration that produced a document's chunks.
+ *
+ * `version` is the chunker implementation version, not the document
+ * version. Older rows may carry an empty object; the server fills the
+ * defaults on the next upload. */
+export interface ChunkerConfig {
+  version: string | null;
+  chunk_size: number | null;
+  chunk_overlap: number | null;
+  options: Record<string, unknown>;
+}
+
 export interface DocumentRow {
   id: string;
   title: string;
   source_uri: string | null;
   mime_type: string;
   chunker_id: string;
+  chunker_config: ChunkerConfig;
   embedder_id: string;
   dim: number;
   version: number;
@@ -122,6 +155,7 @@ export interface UploadResponse {
   title: string;
   status: string;
   chunker: string;
+  chunker_config: ChunkerConfig;
   embedder: string;
   dim: number;
   version: number;
@@ -155,6 +189,9 @@ export interface UploadOptions {
   embedder?: string;
   chunkSize?: number;
   chunkOverlap?: number;
+  /** Validated chunker-specific options, sent as JSON in the
+   * `chunker_options` form field. Omit for chunkers with no options. */
+  chunkerOptions?: Record<string, unknown>;
   title?: string;
 }
 
@@ -169,6 +206,9 @@ export async function uploadDocument(options: UploadOptions): Promise<UploadResp
   if (options.chunkSize !== undefined) form.append("chunk_size", String(options.chunkSize));
   if (options.chunkOverlap !== undefined) {
     form.append("chunk_overlap", String(options.chunkOverlap));
+  }
+  if (options.chunkerOptions !== undefined) {
+    form.append("chunker_options", JSON.stringify(options.chunkerOptions));
   }
   if (options.title) form.append("title", options.title);
   const { data } = await api.post<UploadResponse>("/rag/documents/upload", form);

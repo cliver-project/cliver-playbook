@@ -19,6 +19,39 @@
       "version": "Version",
       "actions": "Actions"
     },
+    "chunkers": {
+      "title": "Chunker options",
+      "hint": "These options apply to this upload. Re-uploading the same file replaces its chunks and configuration.",
+      "emptyIsDefault": "Server default",
+      "invalidOption": "{{field}} is not a valid value.",
+      "invalidOptions": "Fix the chunker options before uploading.",
+      "options": {
+        "headingBased": "Heading-based sections",
+        "headingBasedDescription": "Group blocks into heading-delimited sections.",
+        "maxHeadingLevel": "Deepest heading level",
+        "maxHeadingLevelDescription": "Headings deeper than this level are treated as body text.",
+        "includeTables": "Include tables",
+        "includeTablesDescription": "Include table content in the emitted chunks.",
+        "tableFormat": "Table format",
+        "tableFormatDescription": "How tables are rendered into chunk text.",
+        "includeHeadingPath": "Prefix heading path",
+        "includeHeadingPathDescription": "Prefix each chunk with its heading path.",
+        "dropToc": "Drop table of contents",
+        "dropTocDescription": "Skip paragraphs styled as a table of contents.",
+        "contentSelector": "Content selector",
+        "contentSelectorDescription": "CSS selector for the content root. Empty means the whole body.",
+        "removeSelectors": "Remove selectors",
+        "removeSelectorsDescription": "Comma-separated CSS selectors removed after the content root is chosen.",
+        "removeBoilerplate": "Remove page chrome",
+        "removeBoilerplateDescription": "Remove navigation, headers, footers, sidebars, and forms.",
+        "includeLinks": "Keep link targets",
+        "includeLinksDescription": "Render inline links as [text](href)."
+      },
+      "values": {
+        "markdown": "Markdown",
+        "html": "HTML"
+      }
+    },
     "documents": {
       "title": "Knowledge base",
       "description": "Upload a document, choose how it is chunked and embedded, inspect the chunks, then index it. Indexed documents become searchable and can be used to answer questions.",
@@ -26,7 +59,7 @@
       "uploadDescription": "Chunking runs first and returns a preview. Nothing is searchable until you index the document.",
       "catalogFailed": "Could not load the available stages",
       "fileLabel": "File",
-      "fileHint": "Text, Markdown, code and PDF are supported by the built-in chunkers.",
+      "fileHint": "The built-in chunkers support text, Markdown, code, PDF, Word (.docx) and HTML. Legacy .doc files must be saved as .docx first.",
       "fileRequired": "Choose a file first",
       "chunkerLabel": "Chunker",
       "chunkerHint": "How the document is split. Choose after looking at the file's structure.",

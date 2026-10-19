@@ -19,6 +19,39 @@
       "version": "版本",
       "actions": "操作"
     },
+    "chunkers": {
+      "title": "分块选项",
+      "hint": "这些选项仅用于本次上传。重新上传同一文件会替换其分块与配置。",
+      "emptyIsDefault": "服务端默认值",
+      "invalidOption": "{{field}} 的取值无效。",
+      "invalidOptions": "请先修正分块选项再上传。",
+      "options": {
+        "headingBased": "按标题分节",
+        "headingBasedDescription": "按标题把内容分成小节。",
+        "maxHeadingLevel": "最深标题级别",
+        "maxHeadingLevelDescription": "深于该级别的标题将作为正文处理。",
+        "includeTables": "包含表格",
+        "includeTablesDescription": "把表格内容写入分块。",
+        "tableFormat": "表格格式",
+        "tableFormatDescription": "表格以何种格式写入分块文本。",
+        "includeHeadingPath": "添加标题路径",
+        "includeHeadingPathDescription": "在每个分块前加上其标题路径。",
+        "dropToc": "跳过目录",
+        "dropTocDescription": "跳过目录样式的段落。",
+        "contentSelector": "内容选择器",
+        "contentSelectorDescription": "定位正文根节点的 CSS 选择器。留空表示整个 body。",
+        "removeSelectors": "移除选择器",
+        "removeSelectorsDescription": "选定正文根节点后要移除的 CSS 选择器，以逗号分隔。",
+        "removeBoilerplate": "移除页面框架",
+        "removeBoilerplateDescription": "移除导航、页眉、页脚、侧栏和表单。",
+        "includeLinks": "保留链接地址",
+        "includeLinksDescription": "把行内链接渲染为 [文本](href)。"
+      },
+      "values": {
+        "markdown": "Markdown",
+        "html": "HTML"
+      }
+    },
     "documents": {
       "title": "知识库",
       "description": "上传文档、选择分块与向量化方式、查看分块结果，然后建立索引。已索引的文档可被检索，并用于回答问题。",
@@ -26,7 +59,7 @@
       "uploadDescription": "先执行分块并返回预览；在建立索引之前，文档不会进入检索。",
       "catalogFailed": "无法获取可用阶段",
       "fileLabel": "文件",
-      "fileHint": "内置分块器支持文本、Markdown、代码与 PDF。",
+      "fileHint": "内置分块器支持文本、Markdown、代码、PDF、Word（.docx）与 HTML。旧版 .doc 文件请先另存为 .docx。",
       "fileRequired": "请先选择文件",
       "chunkerLabel": "分块器",
       "chunkerHint": "决定文档如何切分。建议先了解文件结构再选择。",
