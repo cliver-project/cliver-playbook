@@ -30,6 +30,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from cliver_playbook.app.basic import runtime
+from cliver_playbook.app.basic.models.entities import AppSetting
+from cliver_playbook.app.basic.runtime_settings import settings_sections
 from cliver_playbook.app.rag.app import create_app
 from cliver_playbook.app.rag.models import Base
 from cliver_playbook.app.rag.settings import Settings
@@ -49,6 +51,11 @@ _TEST_USER = Viewer(
             "rag:documents:write",
             "rag:search:read",
             "rag:chat:read",
+            # The runtime-settings surface is registered by the identity
+            # package; the RAG suite exercises the RAG-owned section through
+            # the same admin API a composed app serves.
+            "settings:read",
+            "settings:manage",
         }
     ),
 )
@@ -77,12 +84,23 @@ async def app(settings: Settings) -> AsyncIterator[FastAPI]:
     application = create_app(settings)
     async with runtime.engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # ``AppSetting`` belongs to the basic package's metadata, not the RAG
+        # Base; create its table explicitly so the settings API works on the
+        # SQLite fixture without running the basic migration chain.
+        await conn.run_sync(AppSetting.__table__.create, checkfirst=True)
         # Child rows first; SQLite does not enforce ON DELETE CASCADE
         # unless the pragma is enabled, and explicit deletes keep the
         # fixture independent of connection settings.
         await conn.execute(text("DELETE FROM rag_chunk_embeddings"))
         await conn.execute(text("DELETE FROM rag_chunks"))
         await conn.execute(text("DELETE FROM rag_documents"))
+        await conn.execute(text("DELETE FROM app_settings"))
+    # Restore the startup configuration: a previous test may have exercised
+    # the settings API, and the Settings instance is session-scoped.
+    baseline = runtime.baseline_settings()
+    if baseline is not None:
+        for section in settings_sections():
+            section.apply(settings, section.read(baseline))
     yield application
     await runtime.dispose()
 

@@ -47,7 +47,7 @@ have side effects; see ADR-0015 and ADR-0016).
 # runs a parent package's __init__ before any of its submodules, so this
 # is the one place that guarantees the registration happens first (the
 # same pattern the mcp package uses for its mcp:* codes).
-from cliver_playbook.app.rag import permissions  # noqa: F401
+from cliver_playbook.app.rag import permissions, settings_section  # noqa: F401
 from cliver_playbook.app.rag.api.routes import ROUTERS
 from cliver_playbook.app.rag.settings import Settings, get_settings, settings
 

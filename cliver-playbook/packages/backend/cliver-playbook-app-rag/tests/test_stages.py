@@ -15,10 +15,12 @@ async def test_stages_lists_every_registry(client: AsyncClient) -> None:
     assert {"recursive", "markdown", "code", "pdf", "docx", "html"} <= {
         c["name"] for c in body["chunkers"]
     }
-    assert {"stub", "bge-m3", "bge-base-zh-v1.5"} <= {e["name"] for e in body["embedders"]}
+    assert {"stub", "bge-m3", "bge-base-zh-v1.5", "cliver-core"} <= {
+        e["name"] for e in body["embedders"]
+    }
     assert {"bm25-only", "pgvector-hybrid"} <= {r_["name"] for r_ in body["retrievers"]}
-    assert {"noop", "bge-reranker-v2-m3"} <= {r_["name"] for r_ in body["rerankers"]}
-    assert {"stub"} <= {m["name"] for m in body["llms"]}
+    assert {"noop", "bge-reranker-v2-m3", "cliver-core"} <= {r_["name"] for r_ in body["rerankers"]}
+    assert {"stub", "cliver-core"} <= {m["name"] for m in body["llms"]}
 
 
 async def test_stages_reports_metadata(client: AsyncClient) -> None:
@@ -29,6 +31,9 @@ async def test_stages_reports_metadata(client: AsyncClient) -> None:
     assert embedders["bge-m3"]["dim"] == 1024
     assert embedders["bge-base-zh-v1.5"]["dim"] == 768
     assert embedders["bge-base-zh-v1.5"]["model_id"].startswith("BAAI/bge-base-zh-v1.5@")
+    # Remote stage: identity follows its runtime binding, unset by default.
+    assert embedders["cliver-core"]["dim"] == 1024
+    assert embedders["cliver-core"]["model_id"] == "cliver-core@unconfigured"
     chunkers = {c["name"]: c for c in body["chunkers"]}
     assert chunkers["recursive"]["version"]
 

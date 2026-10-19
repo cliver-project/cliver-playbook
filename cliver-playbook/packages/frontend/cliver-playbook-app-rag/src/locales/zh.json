@@ -164,5 +164,159 @@
       "loadFailed": "无法加载文档",
       "empty": "还没有上传过文档。"
     }
+  },
+  "settingsSections": {
+    "rag": {
+      "title": "RAG 流水线",
+      "description": "各阶段的选择、分块默认值、检索与重排预算、上传限制，以及 cliver-core 的对话、嵌入与重排模型绑定。",
+      "fields": {
+        "chunker": {
+          "label": "默认分块器",
+          "description": "上传时未显式选择分块器时使用。"
+        },
+        "embedder": {
+          "label": "默认嵌入模型",
+          "description": "向量与生成它的嵌入模型绑定。"
+        },
+        "retriever": {
+          "label": "默认检索器",
+          "description": "纯词法检索或 pgvector 混合检索。"
+        },
+        "reranker": {
+          "label": "默认重排器",
+          "description": "对搜索与问答命中结果做交叉编码器重排。"
+        },
+        "llm": {
+          "label": "答案生成器",
+          "description": "stub 离线可用；cliver-core 调用真实模型。"
+        },
+        "chunk_size": {
+          "label": "默认分块大小",
+          "description": "每个分块的字符数，上传时可覆盖。"
+        },
+        "chunk_overlap": {
+          "label": "默认分块重叠",
+          "description": "相邻分块之间重复的字符数，必须小于分块大小。"
+        },
+        "top_k": {
+          "label": "检索深度",
+          "description": "重排前检索器返回的命中数。"
+        },
+        "rerank_top_k": {
+          "label": "上下文条数",
+          "description": "重排后保留并交给生成器的命中数。"
+        },
+        "score_floor": {
+          "label": "相关性下限",
+          "description": "丢弃归一化分数低于该值的重排结果；0 表示不设下限。"
+        },
+        "pgvector_ef_search": {
+          "label": "pgvector 检索广度",
+          "description": "每次查询探索的 HNSW 候选数（至少提升到检索上限）。"
+        },
+        "max_upload_bytes": {
+          "label": "最大上传大小（字节）",
+          "description": "超过该大小的上传会在解析前被拒绝。"
+        },
+        "cliver_llm": {
+          "model": {
+            "label": "cliver-core LLM 模型",
+            "description": "传给 cliver-core 的对话模型标识。"
+          },
+          "api_key": {
+            "label": "cliver-core LLM API 密钥",
+            "description": "只写：随设置保存，永不回传；环境变量优先。"
+          },
+          "base_url": {
+            "label": "cliver-core LLM 接口地址",
+            "description": "兼容 OpenAI 或 Anthropic 的接口地址；留空则使用提供方默认地址。"
+          },
+          "protocol": {
+            "label": "cliver-core LLM 协议",
+            "description": "必须与接口的通信协议一致。"
+          },
+          "provider_name": {
+            "label": "cliver-core LLM 提供方名称",
+            "description": "可选：由提供方品牌提供默认接口地址（当 base_url 为空时）。"
+          },
+          "params": {
+            "label": "cliver-core LLM 请求参数",
+            "description": "默认请求参数，例如 temperature 或 top_p。"
+          }
+        },
+        "cliver_embed": {
+          "model": {
+            "label": "cliver-core 嵌入模型",
+            "description": "传给 cliver-core 的嵌入模型标识。"
+          },
+          "api_key": {
+            "label": "cliver-core 嵌入 API 密钥",
+            "description": "只写：随设置保存，永不回传；环境变量优先。"
+          },
+          "base_url": {
+            "label": "cliver-core 嵌入接口地址",
+            "description": "兼容 OpenAI 的嵌入接口地址；留空则使用提供方默认地址。"
+          },
+          "path": {
+            "label": "cliver-core 嵌入接口路径",
+            "description": "接口路径覆盖；留空使用标准值（/embeddings）。"
+          },
+          "provider_name": {
+            "label": "cliver-core 嵌入提供方名称",
+            "description": "可选：由提供方品牌提供默认接口地址（当 base_url 为空时）。"
+          },
+          "dim": {
+            "label": "嵌入向量维度",
+            "description": "模型返回的向量维度；维度不一致的向量会被拒绝。切换模型时请同步修改。"
+          },
+          "params": {
+            "label": "cliver-core 嵌入请求参数",
+            "description": "默认请求参数，例如 API 支持时的 dimensions。"
+          }
+        },
+        "cliver_rerank": {
+          "model": {
+            "label": "cliver-core 重排模型",
+            "description": "传给 cliver-core 的重排模型标识。"
+          },
+          "api_key": {
+            "label": "cliver-core 重排 API 密钥",
+            "description": "只写：随设置保存，永不回传；环境变量优先。"
+          },
+          "base_url": {
+            "label": "cliver-core 重排接口地址",
+            "description": "兼容 Cohere/Jina/GLM 的重排接口地址；留空则使用提供方默认地址。"
+          },
+          "path": {
+            "label": "cliver-core 重排接口路径",
+            "description": "接口路径覆盖；留空使用标准值（/rerank）。"
+          },
+          "provider_name": {
+            "label": "cliver-core 重排提供方名称",
+            "description": "可选：由提供方品牌提供默认接口地址（当 base_url 为空时）。"
+          },
+          "params": {
+            "label": "cliver-core 重排请求参数",
+            "description": "转发到重排接口的默认请求参数。"
+          }
+        }
+      },
+      "groups": {
+        "cliver-core": {
+          "title": "cliver-core 模型接入",
+          "subgroups": {
+            "llm": {
+              "title": "LLM 对话模型"
+            },
+            "embed": {
+              "title": "Embedding 向量模型"
+            },
+            "rerank": {
+              "title": "Rerank 重排模型"
+            }
+          }
+        }
+      }
+    }
   }
 }

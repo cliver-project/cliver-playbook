@@ -29,7 +29,7 @@ def _hits(scores: list[float]) -> list[Hit]:
 
 
 def test_registry_lists_bge_and_noop() -> None:
-    assert {"bge-reranker-v2-m3", "noop"} <= registry.names()
+    assert {"bge-reranker-v2-m3", "noop", "cliver-core"} <= registry.names()
 
 
 def test_unknown_reranker_raises() -> None:

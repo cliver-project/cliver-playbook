@@ -21,7 +21,7 @@ class LLM(Protocol):
     """The generator seam.
 
     Implementations: ``StubLLM`` (echoes the grounded prompt, no model)
-    and, in a future patch, hosted or local generators. New
+    and ``CliverCoreLLM`` (real completions through cliver-core). New
     implementations register themselves at import via
     ``llm.registry.register(name, factory)``.
     """

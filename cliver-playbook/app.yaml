@@ -1,9 +1,14 @@
 # Application configuration — the lowest-priority settings layer.
 #
 # Precedence (highest first):
-#   environment variables (CLIVER_*)  >  .env file  >  this file  >  field
+#   environment variables (CLIVER_*)  >  .env file  >  runtime overrides saved
+#   from Admin -> Settings (the app_settings table)  >  this file  >  field
 #   defaults in packages/backend/cliver-playbook-app-basic/src/cliver_playbook/
 #   app/basic/settings.py
+#
+# Runtime overrides (ADR-0021) are module-owned and applied at startup. A field
+# explicitly set here can still be changed from the UI; a field set by the
+# environment or .env is read-only there, because that layer wins at restart.
 #
 # The application root is discovered by walking up from the current working
 # directory until a directory containing app.yaml or .env is found — run any
@@ -100,7 +105,9 @@ oidc:
 #
 #   CLIVER_RAG__EMBEDDER=bge-base-zh-v1.5   # 768-d, ~400 MB, CPU-friendly
 #   CLIVER_RAG__EMBEDDER=bge-m3             # 1024-d, ~2.3 GB, multilingual
+#   CLIVER_RAG__EMBEDDER=cliver-core        # remote, bound below
 #   CLIVER_RAG__RERANKER=bge-reranker-v2-m3
+#   CLIVER_RAG__RERANKER=cliver-core        # remote, bound below
 #
 # The query embedder must match the model that indexed a document; vectors
 # from different embedders are not comparable. The chat page exposes that
@@ -110,7 +117,43 @@ rag:
   embedder: stub
   retriever: pgvector-hybrid
   reranker: noop
-  llm: stub
+  llm: stub  # stub | cliver-core
+
+  # cliver-core purpose bindings. cliver-core is the single place model
+  # transports live (ADR-0020/0022): the `cliver-core` LLM, embedder, and
+  # reranker stages each read their own binding. The empty defaults keep
+  # those stages browsable in the catalog but unusable until a model and an
+  # endpoint are supplied; a call without them fails with a configuration
+  # error. The endpoint comes from base_url or from a provider_name whose
+  # brand default applies. API keys belong in the environment, the gitignored
+  # .env, or the write-only fields under Admin → Settings → RAG — never in
+  # this checked-in file. Chat alone chooses a protocol (openai/anthropic):
+  # embeddings and rerank are one-shot OpenAI-shaped POSTs with no
+  # Anthropic-protocol counterpart, so they have no protocol setting. `path`
+  # overrides the purpose endpoint (default /embeddings and /rerank); `dim`
+  # must match the embedding model's output size.
+  cliver_llm:
+    model: ""
+    api_key: ""
+    base_url: ""
+    protocol: openai
+    provider_name: null
+    params: {}
+  cliver_embed:
+    model: ""
+    api_key: ""
+    base_url: ""
+    provider_name: null
+    path: null
+    dim: 1024
+    params: {}
+  cliver_rerank:
+    model: ""
+    api_key: ""
+    base_url: ""
+    provider_name: null
+    path: null
+    params: {}
 
   # Default chunk sizing for every built-in chunker, used when an upload does
   # not override it. The effective size, overlap and chunker options are

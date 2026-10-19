@@ -51,9 +51,21 @@ grep the output CSS for a utility that only the RAG pages use.
 
 Stage dropdowns are populated from `GET /api/v1/rag/stages`, so the server's
 registries are the only list of available chunkers, embedders, retrievers,
-rerankers and LLMs. The UI never hardcodes them.
+rerankers and LLMs. The UI never hardcodes them. `cliver-core` appears as a
+selectable embedder, reranker and LLM; its three purpose bindings (model,
+endpoint, credential, options; the chat binding alone also selects a
+protocol) live in one `cliver-core` group on the admin settings page, folded
+into one collapsible subsection per purpose, and each stage reads the binding
+for its own purpose.
 
 Chunkers declare output options; the upload page renders one control per
 `config_schema` field, so adding a server-side option needs no frontend change.
 Selecting `.docx` or `.html`/`.htm` auto-selects its chunker (overridable);
 resolved options travel as `chunker_options` and persist as `chunker_config`.
+
+The backend's RAG settings section is described in English; this package's
+locale files carry the Chinese copy under `settingsSections.rag` (title,
+description, per-field label/description, `groups.cliver-core.title`, and a
+`groups.cliver-core.subgroups.<llm|embed|rerank>.title` heading for each
+purpose). Missing entries fall back to the server string — see the user
+frontend README for the shared convention.

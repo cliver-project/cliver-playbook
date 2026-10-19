@@ -48,10 +48,11 @@ registry = type(
 
 
 def _register_defaults() -> None:
-    from cliver_playbook.app.rag.reranking import bge, noop
+    from cliver_playbook.app.rag.reranking import bge, cliver, noop
 
     register("bge-reranker-v2-m3", lambda: bge.BgeRerankerV2M3())
     register("noop", lambda: noop.NoopReranker())
+    register("cliver-core", lambda: cliver.CliverCoreReranker())
 
 
 _register_defaults()

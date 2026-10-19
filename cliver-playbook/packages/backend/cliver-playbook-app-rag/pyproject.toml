@@ -48,10 +48,13 @@ dependencies = [
     "unstructured[pdf]>=0.16.0",
     # pgvector's SQLAlchemy Vector type for the rag_chunk_embeddings table.
     "pgvector>=0.3.0",
-    # Optional hosted embedder (kept optional at the implementation
-    # level: the StubEmbedder is the offline default; the OpenAI
-    # embedder only matters when the operator sets CLIVER_RAG__OPENAI_API_KEY).
-    "openai>=1.40.0",
+    # Unified LLM transport. cliver-core owns provider selection, the
+    # OpenAI/Anthropic protocols, tool calling and the agentic loop; the
+    # RAG generator stage only builds a ModelBinding and reads the final
+    # message. Pinned exactly because it is an alpha release. The [mcp]
+    # extra is deliberately absent: RAG chat advertises no tools. Add it
+    # only when the generator itself needs MCP tools.
+    "cliver-core==0.3.0a1",
     "numpy>=1.26.0",
     "httpx>=0.27.0",
 ]

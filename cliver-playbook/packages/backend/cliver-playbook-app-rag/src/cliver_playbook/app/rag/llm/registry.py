@@ -46,9 +46,10 @@ registry = type(
 
 
 def _register_defaults() -> None:
-    from cliver_playbook.app.rag.llm import stub
+    from cliver_playbook.app.rag.llm import cliver, stub
 
     register("stub", lambda: stub.StubLLM())
+    register("cliver-core", lambda: cliver.CliverCoreLLM())
 
 
 _register_defaults()

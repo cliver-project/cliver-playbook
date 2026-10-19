@@ -1,8 +1,9 @@
-"""LLM protocol + the offline stub generator.
+"""LLM protocol and its implementations.
 
-The generator is the fifth RAG stage. ``get_llm(name)`` currently
-returns ``stub``; hosted or local generators register themselves here
-without touching the chat endpoint.
+The generator is the fifth RAG stage. ``stub`` is the offline default;
+``cliver-core`` performs real model calls through the cliver-core agent
+core. New implementations register themselves here without touching the
+chat endpoint.
 """
 
 from __future__ import annotations

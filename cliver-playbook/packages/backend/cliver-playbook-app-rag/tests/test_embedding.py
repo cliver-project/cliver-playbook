@@ -13,6 +13,7 @@ def test_registry_has_bge_m3_and_stub() -> None:
     assert "bge-m3" in names
     assert "bge-base-zh-v1.5" in names
     assert "stub" in names
+    assert "cliver-core" in names
 
 
 def test_stub_embedder_is_deterministic_unit_norm() -> None:
