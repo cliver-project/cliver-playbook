@@ -14,6 +14,14 @@ and document ids hash the source name plus the file content, so
 re-uploading the same file targets the same document row and re-indexing
 never duplicates rows.
 
+A chunker may expose format-specific, output-shaping options (Word
+heading handling, table rendering, HTML boilerplate removal, ...). The
+upload accepts them as a JSON object in ``chunker_options``, validates
+them against the selected chunker's ``options_model``, and stores the
+resolved configuration on the document together with the chunker
+version and size budget. The configuration is therefore always
+inspectable and travels with the chunks it produced.
+
 Failure semantics: rejecting a re-upload never destroys the previous
 version. Only a document that did not exist before gets a ``failed``
 row; an existing (possibly indexed and searchable) document is left
@@ -36,12 +44,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import mimetypes
 import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Security, UploadFile
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +60,11 @@ from cliver_playbook.app.basic.db.session import get_db
 from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
 from cliver_playbook.app.rag.chunking import Document as SourceDocument
 from cliver_playbook.app.rag.chunking import get_chunker
-from cliver_playbook.app.rag.chunking.pdf import EmptyDocumentError
+from cliver_playbook.app.rag.chunking.base import (
+    ChunkerInputError,
+    ChunkerOptionError,
+    EmptyDocumentError,
+)
 from cliver_playbook.app.rag.embedding import get_embedder
 from cliver_playbook.app.rag.models.entities import Chunk as ChunkRow
 from cliver_playbook.app.rag.models.entities import ChunkEmbedding, Document
@@ -84,6 +98,11 @@ _PREVIEW_LIMIT = 50
 _MAX_TITLE = 512
 _MAX_SOURCE_URI = 1024
 _MAX_MIME = 128
+
+# Bound on the JSON chunker-options form field. Options are flat primitive
+# settings, so a few kilobytes is generous; the cap keeps a hostile value
+# from turning into a large audit row or an unbounded Pydantic error list.
+_MAX_CHUNKER_OPTIONS = 4096
 
 
 def _document_id_for(source_uri: str, content: bytes) -> str:
@@ -134,6 +153,59 @@ def _validate_text_fields(filename: str, title: str, mime_type: str) -> None:
         raise HTTPException(status_code=422, detail="mime type is too long")
 
 
+def _parse_chunker_options(raw: str | None, chunker_impl: Any) -> BaseModel | None:
+    """Validate the JSON ``chunker_options`` form field.
+
+    Returns the resolved options object with defaults applied, so the
+    caller can pass exactly what it persists to the chunker. A chunker
+    written against an older contract may not declare ``options_model``;
+    such chunkers keep working when the field is absent and are rejected
+    only when the client actually sends options.
+
+    Validation errors use FastAPI's structured detail shape
+    (``{"loc": [...], "msg": ..., "type": ...}``) so the web client can
+    render the offending field name instead of an opaque 422.
+    """
+    options_model = getattr(chunker_impl, "options_model", None)
+    if raw is None or not raw.strip():
+        return options_model() if options_model is not None else None
+    if options_model is None:
+        raise HTTPException(
+            status_code=422,
+            detail="this chunker does not accept options",
+        )
+    if len(raw.encode("utf-8")) > _MAX_CHUNKER_OPTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"chunker_options must be at most {_MAX_CHUNKER_OPTIONS} bytes",
+        )
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"chunker_options must be valid JSON: {exc.msg}",
+        ) from None
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="chunker_options must be a JSON object")
+    try:
+        return options_model.model_validate(payload)
+    except ValidationError as exc:
+        detail = [
+            {
+                "loc": [
+                    "body",
+                    "chunker_options",
+                    *(str(part) for part in error["loc"]),
+                ],
+                "msg": error["msg"],
+                "type": error["type"],
+            }
+            for error in exc.errors()
+        ]
+        raise HTTPException(status_code=422, detail=detail) from None
+
+
 async def _delete_chunks(db: AsyncSession, document_id: str) -> None:
     """Remove a document's chunks and embeddings (children first).
 
@@ -160,6 +232,7 @@ async def _persist_failed_upload(
     source_uri: str,
     mime_type: str,
     chunker_name: str,
+    chunker_config: dict[str, Any],
     embedder_name: str,
     dim: int,
     reason: str,
@@ -182,6 +255,7 @@ async def _persist_failed_upload(
     doc.source_uri = source_uri
     doc.mime_type = mime_type
     doc.chunker_id = chunker_name
+    doc.chunker_config = chunker_config
     doc.embedder_id = embedder_name
     doc.dim = dim
     doc.status = "failed"
@@ -198,6 +272,7 @@ async def upload_document(
     embedder: str | None = Form(None),
     chunk_size: int | None = Form(None),
     chunk_overlap: int | None = Form(None),
+    chunker_options: str | None = Form(None),
     title: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
     viewer: Viewer = _WRITE,
@@ -206,8 +281,15 @@ async def upload_document(
 
     Form fields (all optional; omissions fall back to the layered RAG
     settings): ``chunker``, ``embedder``, ``chunk_size``,
-    ``chunk_overlap``, ``title``. Returns the document id plus up to
+    ``chunk_overlap``, ``chunker_options``, ``title``. Returns the
+    document id, the effective chunker configuration and up to
     ``_PREVIEW_LIMIT`` chunks so the UI can render the preview.
+
+    ``chunker_options`` is a JSON object validated against the selected
+    chunker's ``options_model``. The resolved object (including defaults)
+    is persisted in ``Document.chunker_config`` together with the size
+    budget and chunker version, so the configuration behind the current
+    chunks is always inspectable.
     """
     filename = _clean_filename(file.filename)
     # Read one byte past the cap: anything at or below it is a valid
@@ -258,6 +340,35 @@ async def upload_document(
     existing = await db.get(Document, document_id)
     version = existing.version + 1 if existing is not None else 1
 
+    try:
+        options = _parse_chunker_options(chunker_options, chunker_impl)
+    except HTTPException:
+        # Invalid options are a client mistake, not a property of the
+        # file: reject them without creating a failed document row. The
+        # audit still records the attempt.
+        await write_rag_audit(
+            event="document.upload",
+            target=document_id,
+            ok=False,
+            args={"chunker": chunker_name, "embedder": embedder_name},
+            extra={"error": "invalid_chunker_options"},
+            viewer=viewer,
+            request=request,
+        )
+        raise
+
+    chunker_config = {
+        "version": getattr(chunker_impl, "version", None),
+        "chunk_size": size,
+        "chunk_overlap": overlap,
+        "options": options.model_dump(mode="json") if options is not None else {},
+    }
+    split_kwargs: dict[str, Any] = {"chunk_size": size, "chunk_overlap": overlap}
+    if options is not None:
+        # Chunkers written before the options contract do not accept the
+        # keyword at all; omitting it keeps them usable.
+        split_kwargs["options"] = options
+
     source_doc = SourceDocument(
         id=document_id,
         source_version=f"v{version}",
@@ -271,8 +382,7 @@ async def upload_document(
         chunks = await asyncio.to_thread(
             chunker_impl.split,
             source_doc,
-            chunk_size=size,
-            chunk_overlap=overlap,
+            **split_kwargs,
         )
         if not chunks:
             raise EmptyDocumentError("the chunker produced no chunks")
@@ -284,6 +394,7 @@ async def upload_document(
             source_uri=source_uri,
             mime_type=mime_type,
             chunker_name=chunker_name,
+            chunker_config=chunker_config,
             embedder_name=embedder_name,
             dim=embedder_impl.dim,
             reason="empty_after_parse",
@@ -294,6 +405,46 @@ async def upload_document(
             ok=False,
             args={"chunker": chunker_name, "embedder": embedder_name},
             extra={"error": "empty_after_parse"},
+            viewer=viewer,
+            request=request,
+        )
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except ChunkerOptionError as exc:
+        # The file may be fine; an option such as a CSS selector was not.
+        # No failed row: the live document (if any) stays untouched and
+        # the client can correct the option and retry.
+        await write_rag_audit(
+            event="document.upload",
+            target=document_id,
+            ok=False,
+            args={"chunker": chunker_name, "embedder": embedder_name},
+            extra={"error": "invalid_chunker_options", "detail": str(exc)},
+            viewer=viewer,
+            request=request,
+        )
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except ChunkerInputError as exc:
+        # The parser recognized the format but the input is unusable
+        # (for example a legacy .doc). Record the rejection on a new row
+        # and return the parser's specific, actionable message.
+        await _persist_failed_upload(
+            db,
+            document_id=document_id,
+            title=title_value,
+            source_uri=source_uri,
+            mime_type=mime_type,
+            chunker_name=chunker_name,
+            chunker_config=chunker_config,
+            embedder_name=embedder_name,
+            dim=embedder_impl.dim,
+            reason="chunking_failed",
+        )
+        await write_rag_audit(
+            event="document.upload",
+            target=document_id,
+            ok=False,
+            args={"chunker": chunker_name, "embedder": embedder_name},
+            extra={"error": "invalid_chunker_input", "detail": str(exc)},
             viewer=viewer,
             request=request,
         )
@@ -309,6 +460,7 @@ async def upload_document(
             source_uri=source_uri,
             mime_type=mime_type,
             chunker_name=chunker_name,
+            chunker_config=chunker_config,
             embedder_name=embedder_name,
             dim=embedder_impl.dim,
             reason="chunking_failed",
@@ -335,6 +487,7 @@ async def upload_document(
     existing.source_uri = source_uri
     existing.mime_type = mime_type
     existing.chunker_id = chunker_name
+    existing.chunker_config = chunker_config
     existing.embedder_id = embedder_name
     existing.dim = embedder_impl.dim
     existing.version = version
@@ -385,7 +538,11 @@ async def upload_document(
         target=document_id,
         ok=True,
         args={"chunker": chunker_name, "embedder": embedder_name},
-        extra={"chunk_count": len(chunks), "version": version},
+        extra={
+            "chunk_count": len(chunks),
+            "version": version,
+            "chunker_config": chunker_config,
+        },
         viewer=viewer,
         request=request,
     )
@@ -404,6 +561,7 @@ async def upload_document(
         "title": existing.title,
         "status": existing.status,
         "chunker": chunker_name,
+        "chunker_config": chunker_config,
         "embedder": embedder_name,
         "dim": embedder_impl.dim,
         "version": version,
