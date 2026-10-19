@@ -9,8 +9,8 @@ from cliver_playbook.app.rag.chunking import Document, get_chunker
 from cliver_playbook.app.rag.chunking.registry import registry
 
 
-def test_registry_has_four_chunkers() -> None:
-    assert set(registry.names()) == {"recursive", "markdown", "code", "pdf"}
+def test_registry_has_default_chunkers() -> None:
+    assert set(registry.names()) == {"recursive", "markdown", "code", "pdf", "docx"}
 
 
 def test_recursive_chunker_idempotent() -> None:

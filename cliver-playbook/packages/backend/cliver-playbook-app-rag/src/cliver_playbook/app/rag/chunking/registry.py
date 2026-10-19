@@ -50,12 +50,13 @@ registry = type(
 # single import. The chunker modules register themselves; this
 # module's bottom triggers that import.
 def _register_defaults() -> None:
-    from . import code, markdown, pdf, recursive
+    from . import code, docx, markdown, pdf, recursive
 
     register("recursive", lambda: recursive.RecursiveChunker())
     register("markdown", lambda: markdown.MarkdownChunker())
     register("code", lambda: code.CodeChunker())
     register("pdf", lambda: pdf.PdfChunker())
+    register("docx", lambda: docx.DocxChunker())
 
 
 _register_defaults()
