@@ -31,15 +31,16 @@ class RagSettings(BaseModel):
     # needs no API key, so a package used without an app.yaml still works
     # on a fresh machine. Production stages (``bge-m3``,
     # ``bge-reranker-v2-m3``) are an explicit override.
-    chunker: str = "recursive"  # recursive | markdown | code | pdf
+    chunker: str = "recursive"  # recursive | markdown | code | pdf | docx | html
     embedder: str = "stub"  # stub | bge-m3
     retriever: str = "pgvector-hybrid"  # pgvector-hybrid | bm25-only
     reranker: str = "noop"  # noop | bge-reranker-v2-m3
     llm: str = "stub"  # stub
 
-    # Recursive chunker defaults. Markdown/code/pdf chunkers each have
-    # their own internal size logic but consult these for "the chunk is
-    # too long" overflow.
+    # Default sizing for every built-in chunker. Markdown/code/pdf and the
+    # structure-aware docx/html chunkers have their own block logic but
+    # consult these for "the chunk is too long" overflow. A per-upload
+    # override wins, and the effective values are recorded on the document.
     chunk_size: int = Field(default=512, ge=1)
     chunk_overlap: int = Field(default=64, ge=0)
 

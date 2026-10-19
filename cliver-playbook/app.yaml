@@ -112,7 +112,9 @@ rag:
   reranker: noop
   llm: stub
 
-  # Recursive chunker sizing used when an upload does not override it.
+  # Default chunk sizing for every built-in chunker, used when an upload does
+  # not override it. The effective size, overlap and chunker options are
+  # recorded per document as chunker_config.
   chunk_size: 512
   chunk_overlap: 64
 
