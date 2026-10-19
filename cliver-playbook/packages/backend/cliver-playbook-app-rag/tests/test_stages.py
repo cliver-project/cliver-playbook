@@ -12,7 +12,9 @@ async def test_stages_lists_every_registry(client: AsyncClient) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
 
-    assert {"recursive", "markdown", "code", "pdf"} <= {c["name"] for c in body["chunkers"]}
+    assert {"recursive", "markdown", "code", "pdf", "docx", "html"} <= {
+        c["name"] for c in body["chunkers"]
+    }
     assert {"stub", "bge-m3", "bge-base-zh-v1.5"} <= {e["name"] for e in body["embedders"]}
     assert {"bm25-only", "pgvector-hybrid"} <= {r_["name"] for r_ in body["retrievers"]}
     assert {"noop", "bge-reranker-v2-m3"} <= {r_["name"] for r_ in body["rerankers"]}
@@ -42,6 +44,43 @@ async def test_stages_reports_the_configured_defaults(client: AsyncClient) -> No
         "reranker": "noop",
         "llm": "stub",
     }
+
+
+async def test_stages_reports_chunker_config_schemas(client: AsyncClient) -> None:
+    """The UI renders chunker options from the live catalog.
+
+    ``[]`` means "configurable, no options"; ``null`` means "this
+    stage does not accept options at all".
+    """
+    body = (await client.get(STAGES)).json()
+    chunkers = {c["name"]: c for c in body["chunkers"]}
+
+    assert chunkers["recursive"]["config_schema"] == []
+
+    docx = {field["name"]: field for field in chunkers["docx"]["config_schema"]}
+    assert docx["drop_toc"] == {
+        "name": "drop_toc",
+        "label": "Drop Toc",
+        "type": "boolean",
+        "default": True,
+        "enum": None,
+        "minimum": None,
+        "maximum": None,
+        "description": "Skip paragraphs styled as a table of contents.",
+    }
+    assert docx["max_heading_level"]["type"] == "integer"
+    assert docx["max_heading_level"]["minimum"] == 1
+    assert docx["max_heading_level"]["maximum"] == 9
+    assert docx["table_format"]["type"] == "enum"
+    assert docx["table_format"]["enum"] == ["markdown", "html"]
+
+    html = {field["name"]: field for field in chunkers["html"]["config_schema"]}
+    assert html["content_selector"]["type"] == "string"
+    assert html["content_selector"]["default"] is None
+    assert html["remove_boilerplate"]["default"] is True
+
+    embedders = {e["name"]: e for e in body["embedders"]}
+    assert embedders["stub"]["config_schema"] is None
 
 
 async def test_stages_reports_retriever_modes(client: AsyncClient) -> None:

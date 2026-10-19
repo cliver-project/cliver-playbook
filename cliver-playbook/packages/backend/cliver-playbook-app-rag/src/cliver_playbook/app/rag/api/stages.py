@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
 from cliver_playbook.app.rag.chunking import registry as chunker_registry
+from cliver_playbook.app.rag.chunking.options import describe_options
 from cliver_playbook.app.rag.embedding import registry as embedder_registry
 from cliver_playbook.app.rag.llm import registry as llm_registry
 from cliver_playbook.app.rag.models.entities import Document
@@ -32,6 +33,7 @@ from cliver_playbook.app.rag.schemas.stages import (
     StageCatalog,
     StageDefaults,
     StageOption,
+    StageOptionField,
 )
 from cliver_playbook.app.rag.settings import settings
 from cliver_playbook.app.user.auth.dependencies import Viewer, require_any_perm
@@ -50,6 +52,7 @@ def _options(names: set[str], get) -> list[StageOption]:
     for name in sorted(names):
         impl = get(name)
         modes = getattr(impl, "modes", None)
+        options_model = getattr(impl, "options_model", None)
         options.append(
             StageOption(
                 name=name,
@@ -57,6 +60,11 @@ def _options(names: set[str], get) -> list[StageOption]:
                 version=getattr(impl, "version", None),
                 dim=getattr(impl, "dim", None),
                 modes=sorted(modes) if modes else None,
+                config_schema=(
+                    [StageOptionField(**field) for field in describe_options(options_model)]
+                    if options_model is not None
+                    else None
+                ),
             )
         )
     return options
