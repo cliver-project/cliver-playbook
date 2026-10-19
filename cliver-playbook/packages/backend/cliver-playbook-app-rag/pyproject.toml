@@ -31,6 +31,10 @@ dependencies = [
     # brings lxml with it, and its imports stay inside the chunker so
     # importing the chunking folder does not require it until used.
     "python-docx>=1.2,<2.0",
+    # HTML chunker. BeautifulSoup's stdlib html.parser builder keeps
+    # the dependency light (no lxml requirement) and handles charset
+    # detection for byte input.
+    "beautifulsoup4>=4.12",
     # Pluggable embedder + reranker: BGE-M3 (CPU-capable, dense+sparse+
     # ColBERT from one forward pass) and bge-reranker-v2-m3.
     "FlagEmbedding>=1.2.0",

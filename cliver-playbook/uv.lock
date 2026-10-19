@@ -746,6 +746,7 @@ source = { editable = "packages/backend/cliver-playbook-app-rag" }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "beautifulsoup4" },
     { name = "cliver-playbook-app-user" },
     { name = "fastapi" },
     { name = "flagembedding" },
@@ -778,6 +779,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "cliver-playbook-app-user", editable = "packages/backend/cliver-playbook-app-user" },
     { name = "fastapi", specifier = ">=0.143.0" },
     { name = "flagembedding", specifier = ">=1.2.0" },

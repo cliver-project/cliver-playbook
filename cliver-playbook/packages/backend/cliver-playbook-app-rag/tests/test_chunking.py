@@ -10,7 +10,7 @@ from cliver_playbook.app.rag.chunking.registry import registry
 
 
 def test_registry_has_default_chunkers() -> None:
-    assert set(registry.names()) == {"recursive", "markdown", "code", "pdf", "docx"}
+    assert set(registry.names()) == {"recursive", "markdown", "code", "pdf", "docx", "html"}
 
 
 def test_recursive_chunker_idempotent() -> None:

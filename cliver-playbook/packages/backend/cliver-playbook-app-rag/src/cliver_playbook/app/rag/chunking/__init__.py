@@ -1,9 +1,14 @@
-"""Chunker protocol + four default implementations.
+"""Chunker protocol + six default implementations.
 
 The chunker is the first of the five RAG stages; the public
 ``get_chunker(name)`` returns one of ``recursive`` / ``markdown`` /
-``code`` / ``pdf``. New chunkers register themselves at import via
-``chunking.registry.register(name, factory)``.
+``code`` / ``pdf`` / ``docx`` / ``html``. New chunkers register
+themselves at import via ``chunking.registry.register(name, factory)``.
+
+The subpackage is intentionally self-contained: every internal import
+is relative and third-party parser imports are lazy, so the folder can
+be copied into another project without the rest of ``cliver_playbook``.
+See ``chunking/README.md``.
 """
 
 from __future__ import annotations
