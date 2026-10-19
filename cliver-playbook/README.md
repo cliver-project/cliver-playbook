@@ -20,7 +20,7 @@ Backend — Python, one distribution each, importing as `cliver_playbook.app.<na
 | --- | --- |
 | `packages/backend/cliver-playbook-app-basic` | Settings/runtime (ADR-0016), the async engine and session factory, the demo `items` table and its CRUD endpoints, the first migration chain. No business dependencies. |
 | `packages/backend/cliver-playbook-app-user` | The identity domain (ADR-0003/0004/0005): users/roles/permissions, password login with lockout and must-change-password, multi-provider OIDC login, the OAuth 2.1 authorization server for agent clients, linked accounts, the unified audit log, and the admin API. |
-| `packages/backend/cliver-playbook-app-rag` | The knowledge base (ADR-0018): pluggable chunking, embedding, retrieval, reranking and LLM stages with per-request selection, upload/index/search/chat endpoints, pgvector storage with a lexical fallback, and stage discovery for the UI. |
+| `packages/backend/cliver-playbook-app-rag` | The knowledge base (ADR-0018/0019): pluggable, format-specific and configurable chunking plus embedding, retrieval, reranking and LLM stages with per-request selection, upload/index/search/chat endpoints, pgvector storage with a lexical fallback, and stage discovery for the UI. |
 | `packages/backend/cliver-playbook-app-mcp` | The MCP surface (ADR-0014/0017): the streamable-http endpoint as an ordinary router route with a permission gate, stdio transport, permission-enforced example tools, agent identity and call audit, and the aggregate `migrate` entry point. |
 
 Frontend — React 19 + Vite, source-only packages (ADR-0008): the app's build
@@ -116,6 +116,7 @@ applying — read before deviating:
 - 0016 Extensible settings and the process runtime
 - 0017 The MCP endpoint is an ordinary router route
 - 0018 RAG as a composable package with pluggable stages
+- 0019 Configurable chunkers and per-document chunker configuration
 
 ## Conventions
 

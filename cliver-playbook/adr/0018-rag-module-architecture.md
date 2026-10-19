@@ -214,3 +214,10 @@ of it; this section is appended, and the earlier sections stay as written.
     `rag:search:read`; timestamps follow the UI language. Failures invalidate
     the document/catalog queries so a server-side `failed` row is visible even
     when the toast is missed.
+11. **Chunkers became format-specific and configurable (ADR-0019,
+    2026-10-19).** The chunker registry gained `docx` and `html`; every
+    chunker declares a flat options model that the stage catalog exposes as
+    `config_schema`, and the effective configuration is persisted per document
+    in `rag_documents.chunker_config`. This refines decision 10 (the upload UI
+    renders from the catalog) and leaves the five-stage architecture and the
+    chunker contract unchanged.

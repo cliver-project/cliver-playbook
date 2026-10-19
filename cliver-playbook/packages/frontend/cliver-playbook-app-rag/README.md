@@ -53,10 +53,7 @@ Stage dropdowns are populated from `GET /api/v1/rag/stages`, so the server's
 registries are the only list of available chunkers, embedders, retrievers,
 rerankers and LLMs. The UI never hardcodes them.
 
-Chunkers may declare output-shaping options. The upload page renders one
-control per field of the selected chunker's `config_schema` (boolean,
-integer, string, or enum), so adding a server-side option needs no frontend
-change. Selecting a `.docx` or `.html`/`.htm` file switches the chunker to
-`docx` or `html` automatically; the user can override the choice afterwards.
-Options are sent as the `chunker_options` JSON form field and recorded per
-document as `chunker_config`.
+Chunkers declare output options; the upload page renders one control per
+`config_schema` field, so adding a server-side option needs no frontend change.
+Selecting `.docx` or `.html`/`.htm` auto-selects its chunker (overridable);
+resolved options travel as `chunker_options` and persist as `chunker_config`.
