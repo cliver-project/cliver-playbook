@@ -35,6 +35,7 @@ session manager instead of each test trying to boot its own.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 
 import pytest
@@ -42,6 +43,7 @@ from fastapi.routing import RouteContext, iter_route_contexts
 from starlette.routing import Mount
 from starlette.testclient import TestClient
 
+from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.mcp.api.streamable import MCP_PATH, install_streamable_app
 
 # A minimal but valid JSON-RPC initialize request. protocolVersion matches
@@ -63,11 +65,26 @@ MCP_ACCEPT = "application/json, text/event-stream"
 _OAUTH_SHADOW_METADATA_PATH = "/.well-known/oauth-authorization-server"
 
 
+def _discard_pool() -> None:
+    """Drop the process engine pool without closing its connections.
+
+    asyncpg connections are bound to the event loop that created them. The
+    TestClient runs the lifespan in its own portal loop, while the pool may
+    still hold connections acquired in a previous test's (now closed) loop.
+    ``close=False`` replaces the pool without touching those connections:
+    they belong to loops this fixture must not drive, and closing the
+    lifespan would otherwise pick one up across loops and fail startup.
+    """
+    asyncio.run(runtime.engine().dispose(close=False))
+
+
 @pytest.fixture(scope="module")
 def booted_client(app) -> Iterator[TestClient]:
     """One entered TestClient for the whole process (see module docstring)."""
+    _discard_pool()
     with TestClient(app) as client:
         yield client
+    _discard_pool()
 
 
 def _route_table(app) -> list[RouteContext]:

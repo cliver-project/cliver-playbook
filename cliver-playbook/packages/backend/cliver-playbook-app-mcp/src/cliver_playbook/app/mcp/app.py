@@ -43,6 +43,7 @@ from fastapi import FastAPI
 
 from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.basic.api.routes import ROUTERS as BASIC_ROUTERS
+from cliver_playbook.app.basic.runtime_settings import load_persisted_settings
 from cliver_playbook.app.mcp.api.routes import ROUTERS as MCP_ROUTERS
 from cliver_playbook.app.mcp.api.streamable import MCP_PATH, install_streamable_app
 from cliver_playbook.app.mcp.settings import Settings
@@ -62,6 +63,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     holds the task group every session runs in, so its scope is exactly the
     scope of the process serving requests.
     """
+    # Operator overrides take effect before the first request. Loading here
+    # (rather than at import) keeps package imports side-effect free; a
+    # missing table is warned about, not fatal (ADR-0021).
+    await load_persisted_settings()
     manager = install_streamable_app()
     async with manager.run():
         logger.info("MCP session manager running at %s", MCP_PATH)

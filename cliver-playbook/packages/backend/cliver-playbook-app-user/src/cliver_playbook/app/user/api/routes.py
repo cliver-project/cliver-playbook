@@ -19,7 +19,7 @@ an APIRouter's static prefix cannot express.
 
 from fastapi import APIRouter
 
-from cliver_playbook.app.user.api import admin, auth
+from cliver_playbook.app.user.api import admin, admin_settings, auth
 
-# List order is the include order; the two prefixes are disjoint.
-ROUTERS: list[APIRouter] = [auth.router, admin.router]
+# List order is the include order; the prefixes are disjoint.
+ROUTERS: list[APIRouter] = [auth.router, admin.router, admin_settings.router]

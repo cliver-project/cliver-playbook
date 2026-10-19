@@ -3,6 +3,7 @@
     "users": "用户",
     "roles": "角色",
     "oauth": "OAuth",
+    "settings": "设置",
     "audit": "审计日志",
     "profile": "个人资料"
   },
@@ -93,6 +94,8 @@
       "name": "名称",
       "description": "描述",
       "permissions": "权限",
+      "adminLocked": "admin 角色始终持有 * 通配权限，不能收窄。",
+      "wildcardHint": "* 授予全部权限，包括未来模块新增的权限。",
       "empty": "暂无角色——创建第一个吧。",
       "deleteTitle": "删除 {{code}}",
       "deleteConfirm": "持有该角色的用户将立即失去其权限，此操作不可撤销。",
@@ -121,6 +124,29 @@
       "revoked": "授权已吊销",
       "grantsEmpty": "暂无活跃授权——当前没有代理获得授权。",
       "clientsEmpty": "暂无已注册客户端。"
+    },
+    "settings": {
+      "title": "运行时设置",
+      "description": "各模块自有的应用设置。环境变量与 .env 的优先级更高，在此只读；修改立即生效并持久化，供下次启动使用。",
+      "empty": "尚未注册任何设置分区。",
+      "reset": "恢复启动值",
+      "resetTitle": "恢复 {{title}}",
+      "resetConfirm": "丢弃该分区已保存的运行时覆盖，恢复进程启动时的值？环境变量、.env、app.yaml 与默认值不受影响。",
+      "resetDone": "{{title}} 已恢复启动值",
+      "saved": "{{title}} 已更新",
+      "selectValue": "请选择",
+      "secretConfigured": "已配置",
+      "secretMissing": "未配置",
+      "secretHint": "请在环境中设置 {{env}}",
+      "secretEnterHint": "请输入 API 密钥",
+      "secretReplaceHint": "已保存密钥——输入新值以替换",
+      "invalidJson": "{{field}} 的 JSON 格式无效",
+      "invalidNumber": "{{field}} 的数值无效",
+      "sources": {
+        "environment": "环境变量",
+        "runtime": "运行时覆盖",
+        "config": "静态配置"
+      }
     },
     "audit": {
       "title": "审计日志",
@@ -164,6 +190,30 @@
         "not_allowed": "当前账号不允许关联外部身份。",
         "state_mismatch": "关联会话已过期或无效，请重试。",
         "unknown": "关联失败，请重试。"
+      }
+    }
+  },
+  "settingsSections": {
+    "user": {
+      "title": "身份与访问",
+      "description": "会话有效期、暴力破解锁定，以及外部登录重定向使用的前端地址。",
+      "fields": {
+        "token_ttl_days": {
+          "label": "网页会话有效期（天）",
+          "description": "新签发的浏览器会话与静态令牌的有效期。"
+        },
+        "login_lockout_threshold": {
+          "label": "锁定前的失败登录次数",
+          "description": "连续密码错误达到该次数后锁定账户。"
+        },
+        "login_lockout_minutes": {
+          "label": "锁定时长（分钟）",
+          "description": "达到失败次数阈值后账户保持锁定的时长。"
+        },
+        "web_base_url": {
+          "label": "前端基础地址",
+          "description": "单页应用所在地址；OIDC 登录完成后后端会重定向到这里。当反向代理改写 Host 时需要设置。"
+        }
       }
     }
   }

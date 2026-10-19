@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
-from cliver_playbook.app.user.auth.permissions import permission_codes
+from cliver_playbook.app.user.auth.permissions import ALL_PERMISSIONS, permission_codes
 from cliver_playbook.app.user.auth.tokens import verify_bearer
 from cliver_playbook.app.user.models.entities import Role, RolePermission, User, UserRole
 
@@ -51,7 +51,13 @@ class Viewer:
     token_id: int | None = None
 
     def has(self, code: str) -> bool:
-        return code in self.permissions
+        """True when the viewer holds `code` or the superuser wildcard.
+
+        The wildcard also covers permission codes registered after the role
+        was created, which is why the seeded admin role is pinned to it
+        (ADR-0021) instead of enumerating the catalog at migration time.
+        """
+        return ALL_PERMISSIONS in self.permissions or code in self.permissions
 
 
 async def load_viewer(

@@ -8,11 +8,12 @@ runnable API slice.
 
 | Area | Path (under `src/cliver_playbook/app/basic/`) | Notes |
 |---|---|---|
-| Settings | `settings.py` | Layered: env > .env > app.yaml (Jinja2) > defaults. Subclass `Settings` to extend (ADR-0016). |
+| Settings | `settings.py` | Layered: env > .env > runtime overrides > app.yaml (Jinja2) > defaults. Subclass `Settings` to extend (ADR-0016). |
 | Runtime | `runtime.py` | `configure(settings)` binds settings + async engine once per process; nothing is built at import time. |
+| Runtime settings | `runtime_settings.py` | Package-owned settings sections: field description, validation, live apply, `app_settings` persistence and the lifespan overlay (ADR-0021). |
 | Routers | `api/routes.py` | `ROUTERS: list[APIRouter]` — a composed app includes them (ADR-0015). |
 | Demo slice | `api/items.py`, `services/`, `schemas/`, `models/entities.py` | Full CRUD example: the `items` table and `/api/v1/items`. Optional — delete together with its migration and tests. |
-| Migrations | `alembic/` | Own chain, version table `alembic_version_basic`. |
+| Migrations | `alembic/` | Own chain, version table `alembic_version_basic`; creates `items` and `app_settings`. |
 | Application | `app.py`, `__main__.py` | `create_app()` and `python -m cliver_playbook.app.basic`. |
 
 ## Install

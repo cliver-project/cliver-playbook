@@ -269,6 +269,15 @@ async def force_logout(
 # ---------------------------------------------------------------------------
 
 
+async def _role_permission_codes(db: AsyncSession, role_id: int) -> list[str]:
+    return sorted(
+        code
+        for (code,) in await db.execute(
+            select(RolePermission.permission_code).where(RolePermission.role_id == role_id)
+        )
+    )
+
+
 def _role_read(role, permission_codes: list[str]) -> RoleRead:
     return RoleRead(
         id=role.id,
@@ -304,6 +313,7 @@ async def create_role(
             name=payload.name,
             description=payload.description,
             permission_codes=payload.permission_codes,
+            actor=viewer,
         )
     except DomainError as exc:
         raise _domain_error(exc) from exc
@@ -317,7 +327,7 @@ async def create_role(
         request=request,
     )
     await db.commit()
-    return _role_read(role, payload.permission_codes)
+    return _role_read(role, await _role_permission_codes(db, role.id))
 
 
 @router.patch("/roles/{role_id}", response_model=RoleRead)
@@ -339,6 +349,7 @@ async def update_role(
             description=payload.description,
             code=payload.code,
             permission_codes=payload.permission_codes,
+            actor=viewer,
         )
     except DomainError as exc:
         raise _domain_error(exc) from exc
@@ -352,13 +363,7 @@ async def update_role(
         request=request,
     )
     await db.commit()
-    perms = sorted(
-        code
-        for (code,) in await db.execute(
-            select(RolePermission.permission_code).where(RolePermission.role_id == role_id)
-        )
-    )
-    return _role_read(role, perms)
+    return _role_read(role, await _role_permission_codes(db, role.id))
 
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -372,7 +377,7 @@ async def delete_role(
     if role is None:
         raise HTTPException(status_code=404, detail="Role not found")
     try:
-        await roles_service.delete_role(db, role)
+        await roles_service.delete_role(db, role, actor=viewer)
     except DomainError as exc:
         raise _domain_error(exc) from exc
     await write_audit(

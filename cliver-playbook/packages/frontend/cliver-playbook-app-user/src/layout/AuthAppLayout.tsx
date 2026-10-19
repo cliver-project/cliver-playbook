@@ -29,6 +29,7 @@ export const userNavItems: AuthedNavItem[] = [
   { to: "/users", labelKey: "nav.users", perm: "user:read" },
   { to: "/roles", labelKey: "nav.roles", perm: "role:read" },
   { to: "/oauth", labelKey: "nav.oauth", perm: "oauth:read" },
+  { to: "/settings", labelKey: "nav.settings", perm: "settings:read" },
   { to: "/audit", labelKey: "nav.audit", perm: "audit:read" },
 ];
 

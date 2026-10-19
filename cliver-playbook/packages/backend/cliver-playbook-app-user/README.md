@@ -14,10 +14,11 @@ and contributes its own `ROUTERS`, migration chain and self-application.
 | Area | Path (under `src/cliver_playbook/app/user/`) | Notes |
 |---|---|---|
 | Settings | `settings.py` | `Settings(basic.Settings)`: secret key, login policy, OIDC registry, OAuth 2.1 knobs. |
-| Routers | `api/routes.py` | `ROUTERS: list[APIRouter]` — `/api/v1/auth` + `/api/v1/admin` (ADR-0015). |
-| Identity | `auth/` | Passwords, tokens, permissions catalog, RBAC dependencies, OIDC client, OAuth 2.1 provider, audit writer. |
+| Routers | `api/routes.py` | `ROUTERS: list[APIRouter]` — `/api/v1/auth` + `/api/v1/admin`, including the section-agnostic settings surface (ADR-0015/0021). |
+| Identity | `auth/` | Passwords, tokens, permissions catalog with the `*` superuser wildcard, RBAC dependencies, OIDC client, OAuth 2.1 provider, audit writer. |
+| Runtime settings | `settings_section.py`, `api/admin_settings.py` | This package's identity-policy section plus the generic describe/update/reset HTTP layer delegated to each owning package (ADR-0021). |
 | Domain | `api/`, `services/`, `schemas/`, `models/entities.py` | Endpoints + service layer; tables: users, roles, user_roles, role_permissions, oauth_identities, oauth_clients, oauth_codes, oauth_refresh_tokens, auth_tokens, audit_logs. |
-| Migrations | `alembic/` | Own chain, version table `alembic_version_user`; seeds the admin/user roles and the initial admin account. |
+| Migrations | `alembic/` | Own chain, version table `alembic_version_user`; seeds the admin/user roles and the initial admin account, and pins the admin role to `*`. |
 | Application | `app.py`, `__main__.py` | `create_app()` composes basic + user; `python -m cliver_playbook.app.user`. |
 
 The OAuth 2.1 provider (`auth/oauth21.py`) adds root-level routes

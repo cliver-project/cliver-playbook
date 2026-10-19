@@ -33,6 +33,10 @@ class _RuntimeState:
     """State created exactly once by ``configure`` (see module docstring)."""
 
     settings: Settings
+    # Pristine copy taken at configuration time. Runtime settings overrides
+    # mutate ``settings`` in place; "reset to defaults" restores fields from
+    # this snapshot without rebuilding the process or the engine (ADR-0021).
+    settings_baseline: Settings
     engine: AsyncEngine
     session_factory: async_sessionmaker[AsyncSession]
 
@@ -63,6 +67,7 @@ def configure(settings: Settings) -> Settings:
     engine = create_async_engine(settings.db_url, future=True, pool_pre_ping=True)
     _state = _RuntimeState(
         settings=settings,
+        settings_baseline=settings.model_copy(deep=True),
         engine=engine,
         # expire_on_commit=False keeps attributes readable on instances after
         # commit — the standard choice for request-scoped sessions handed out
@@ -80,6 +85,15 @@ def is_configured() -> bool:
 def configured_settings() -> Settings | None:
     """The bound settings instance, or None before ``configure``."""
     return _state.settings if _state is not None else None
+
+
+def baseline_settings() -> Settings | None:
+    """The pristine settings snapshot taken by ``configure``, or None.
+
+    Runtime settings overrides are applied by mutating the bound instance;
+    this snapshot is what "reset" restores (ADR-0021).
+    """
+    return _state.settings_baseline if _state is not None else None
 
 
 def engine() -> AsyncEngine:

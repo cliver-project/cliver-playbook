@@ -7,6 +7,11 @@ nonexistent codes (drift) and would need seeding/migration on every code change.
 The catalog here is the single source of truth; roles bind codes from it, and
 `PUT /roles/{id}/permissions` rejects anything outside it.
 
+`ALL_PERMISSIONS` (``*``) is the superuser wildcard (ADR-0021). A viewer
+holding it passes every `Viewer.has()` check, including codes registered by a
+package after the role was created. The seeded ``admin`` role is pinned to it,
+so new permissions never require a migration to reach the administrator.
+
 Adding a permission owned by THIS package = add a row to `_BASE_CATALOG` plus a
 `require_perm("...")` call site in one commit.
 
@@ -28,6 +33,10 @@ the load-bearing example: applying the chain in a process that imported the
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+# The superuser wildcard. A role holding it passes every permission check;
+# it is the only code that also covers codes registered later by a package.
+ALL_PERMISSIONS = "*"
+
 
 @dataclass(frozen=True)
 class Permission:
@@ -41,6 +50,8 @@ class Permission:
 # Codes owned by this package. Order is presentation order in the admin UI
 # pick-list (grouped by the `group` field).
 _BASE_CATALOG: tuple[Permission, ...] = (
+    # Superuser — first so it leads the admin pick-list and the seeded role.
+    Permission(ALL_PERMISSIONS, "All permissions", "System"),
     # User administration
     Permission("user:read", "View users", "Users"),
     Permission("user:create", "Create users", "Users"),
@@ -51,6 +62,9 @@ _BASE_CATALOG: tuple[Permission, ...] = (
     # Role administration
     Permission("role:read", "View roles and permission bindings", "Roles"),
     Permission("role:manage", "Create/edit roles and bind permissions", "Roles"),
+    # Runtime settings (ADR-0021)
+    Permission("settings:read", "View runtime settings", "Settings"),
+    Permission("settings:manage", "Change runtime settings", "Settings"),
     # Compliance
     Permission("audit:read", "Read the audit log", "Audit"),
     # OAuth 2.1 provider administration (ADR-0005)

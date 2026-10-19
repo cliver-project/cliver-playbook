@@ -343,3 +343,64 @@ export async function listAudit(query: AuditQuery = {}): Promise<AuditLogPage> {
   const { data } = await api.get<AuditLogPage>("/admin/audit", { params: query });
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Admin: runtime settings (module-owned sections)
+// ---------------------------------------------------------------------------
+
+/** Where a field's effective value comes from. */
+export type SettingsSource = "environment" | "runtime" | "config";
+
+export interface SettingsFieldInfo {
+  name: string;
+  label: string;
+  type: "string" | "integer" | "number" | "boolean" | "enum" | "json";
+  description: string;
+  enum: string[] | null;
+  minimum: number | null;
+  maximum: number | null;
+  env_var: string | null;
+  secret: boolean;
+  /** Presentational grouping: fields sharing a key render together. */
+  group: string | null;
+  /** The owning package's untranslated heading for the group. */
+  group_title: string;
+  /** Optional nested grouping inside a group (one purpose per subsection). */
+  subgroup: string | null;
+  subgroup_title: string;
+  /** Secrets and environment-managed fields reject writes. */
+  read_only: boolean;
+  source: SettingsSource;
+  /** Never present for a secret. */
+  value: unknown;
+  /** Secrets only: whether the environment supplies a value. */
+  configured: boolean | null;
+}
+
+export interface SettingsSectionInfo {
+  key: string;
+  title: string;
+  description: string;
+  fields: SettingsFieldInfo[];
+}
+
+export async function listSettings(): Promise<SettingsSectionInfo[]> {
+  const { data } = await api.get<SettingsSectionInfo[]>("/admin/settings");
+  return data;
+}
+
+export async function updateSettings(
+  section: string,
+  values: Record<string, unknown>,
+): Promise<SettingsSectionInfo> {
+  const { data } = await api.put<SettingsSectionInfo>(`/admin/settings/${section}`, {
+    values,
+  });
+  return data;
+}
+
+/** Drop the section's runtime overrides and restore startup values. */
+export async function resetSettings(section: string): Promise<SettingsSectionInfo> {
+  const { data } = await api.delete<SettingsSectionInfo>(`/admin/settings/${section}`);
+  return data;
+}

@@ -38,6 +38,10 @@ import {
  *
  * System roles (admin, user — seeded by the migration) are immutable in the
  * ways that matter: they cannot be deleted and their code cannot change.
+ *
+ * The `*` entry is the superuser wildcard (ADR-0021): it subsumes every
+ * permission, so selecting it replaces the rest of the set. The admin role is
+ * pinned to exactly `*`; only a viewer who also holds `*` may touch either.
  */
 
 interface RoleFormState {
@@ -116,7 +120,11 @@ export default function RolesPage() {
                     {role.permission_codes.length > 0 ? (
                       <div className="flex max-w-72 flex-wrap gap-1">
                         {role.permission_codes.map((code) => (
-                          <Badge key={code} variant="outline" className="font-mono text-xs">
+                          <Badge
+                            key={code}
+                            variant={code === "*" ? "default" : "outline"}
+                            className="font-mono text-xs"
+                          >
                             {code}
                           </Badge>
                         ))}
@@ -126,7 +134,8 @@ export default function RolesPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {hasPerm("role:manage") ? (
+                    {hasPerm("role:manage") &&
+                    (!role.permission_codes.includes("*") || hasPerm("*")) ? (
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setEditing(role)}>
                           {t("common.edit")}
@@ -217,6 +226,7 @@ function RoleDialog({
   onSubmit: (form: RoleFormState) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const { hasPerm } = useAuth();
   const [form, setForm] = useState<RoleFormState>(
     role
       ? {
@@ -240,13 +250,33 @@ function RoleDialog({
     return [...map.entries()];
   }, [catalog]);
 
+  // The admin role is pinned to the wildcard; the server enforces the same
+  // invariant, so there is no point offering a check-list for it.
+  const isAdminRole = role?.code === "admin";
+  const hasWildcard = form.permission_codes.includes("*");
+
   function togglePermission(code: string, checked: boolean) {
-    setForm((prev) => ({
-      ...prev,
-      permission_codes: checked
-        ? [...prev.permission_codes, code]
-        : prev.permission_codes.filter((c) => c !== code),
-    }));
+    if (isAdminRole) return;
+    if (code === "*") {
+      // The wildcard subsumes every other code; mixing them would only be
+      // normalized back to ["*"] by the server.
+      setForm((prev) => ({
+        ...prev,
+        permission_codes: checked
+          ? ["*"]
+          : prev.permission_codes.filter((c) => c !== "*"),
+      }));
+      return;
+    }
+    setForm((prev) => {
+      if (prev.permission_codes.includes("*")) return prev;
+      return {
+        ...prev,
+        permission_codes: checked
+          ? [...prev.permission_codes, code]
+          : prev.permission_codes.filter((c) => c !== code),
+      };
+    });
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -307,6 +337,15 @@ function RoleDialog({
 
           <div className="grid gap-2">
             <Label>{t("admin.roles.permissions")}</Label>
+            {isAdminRole ? (
+              <p className="text-muted-foreground text-xs">
+                {t("admin.roles.adminLocked")}
+              </p>
+            ) : hasWildcard ? (
+              <p className="text-muted-foreground text-xs">
+                {t("admin.roles.wildcardHint")}
+              </p>
+            ) : null}
             <div className="grid gap-4 rounded-lg border p-3">
               {grouped.length === 0 ? (
                 <p className="text-muted-foreground text-xs">{t("common.loading")}</p>
@@ -319,7 +358,16 @@ function RoleDialog({
                     {items.map((item) => (
                       <label key={item.code} className="flex items-center gap-2 text-sm">
                         <Checkbox
-                          checked={form.permission_codes.includes(item.code)}
+                          checked={
+                            isAdminRole
+                              ? item.code === "*"
+                              : form.permission_codes.includes(item.code)
+                          }
+                          disabled={
+                            isAdminRole ||
+                            (item.code === "*" && !hasPerm("*")) ||
+                            (hasWildcard && item.code !== "*")
+                          }
                           onCheckedChange={(checked) =>
                             togglePermission(item.code, checked === true)
                           }

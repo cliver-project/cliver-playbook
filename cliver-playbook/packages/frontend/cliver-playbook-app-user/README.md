@@ -20,7 +20,7 @@ dependencies (the app owns the single React instance).
 | `src/components/auth/` | `AuthProvider`/`useAuth`, `AuthShell` (standalone-page chrome), `RequirePerm`. |
 | `src/api/auth.ts` | Every auth/admin endpoint, as typed wrappers over the shared client. |
 | `src/pages/` | Sign-in, password gate, OIDC callback, OAuth 2.1 authorize, profile. |
-| `src/pages/admin/` | Users, roles, OAuth clients/grants, audit log. |
+| `src/pages/admin/` | Users, roles (with the `*` superuser wildcard), runtime settings rendered from each package's section, OAuth clients/grants, audit log. |
 | `src/locales/` | `en.json` / `zh.json` — the keys this package owns, plus `userTranslations`. |
 | `dev/` | A composed app (basic + user) that consumes both packages by name. |
 
@@ -100,3 +100,16 @@ providers, route table, Tailwind entry, auth client install.
   and its `nav.*` entries; `app`, `common`, `nav.home`, `nav.items` and the demo
   `home`/`items` trees stay in the basic package. The bundles are deep-merged,
   which is what lets both packages contribute to one `nav` tree.
+- Runtime-settings copy follows one shared namespace: a package that registers
+  a settings section adds `settingsSections.<section-key>.title`,
+  `.description`, `.fields.<field-name>.label`/`.description`, and — for
+  grouped fields — `.groups.<group-key>.title` (plus
+  `.groups.<group-key>.subgroups.<subgroup-key>.title` for a nested
+  subgroup) to its own locale files. Groups and subgroups render as
+  collapsible blocks. The page falls back to the English string the backend
+  sends, so an untranslated section still renders and no frontend change is
+  needed.
+- Secret fields render a write-only password input: the stored value is never
+  returned, the placeholder shows whether one is configured, and an
+  environment-managed secret is masked and read-only. Submitting a non-empty
+  value replaces the stored one; an untouched blank input sends nothing.

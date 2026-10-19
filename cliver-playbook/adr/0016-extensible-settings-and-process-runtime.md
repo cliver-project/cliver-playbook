@@ -56,3 +56,12 @@ into site-packages once installed.
   `Settings(**overrides)` directly, as the config tests do.
 - Per-package `.env`/app.yaml files: configuration belongs to the application,
   not to the libraries it composes.
+
+## Amendments
+
+- **2026-10-19 — runtime settings layer (ADR-0021).** A persisted,
+  module-owned layer now sits between `.env` and `app.yaml`: effective
+  precedence is env > `.env` > runtime overrides > `app.yaml` > defaults.
+  `configure()` also stores a deep baseline copy for reset. This refines
+  decision 1's precedence list and the runtime's responsibilities; the
+  process-binding rule and the layering machinery are unchanged.

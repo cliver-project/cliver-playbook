@@ -9,6 +9,7 @@ import ProfilePage from "cliver-playbook-app-user/pages/ProfilePage.tsx";
 import AuditPage from "cliver-playbook-app-user/pages/admin/AuditPage.tsx";
 import OAuthPage from "cliver-playbook-app-user/pages/admin/OAuthPage.tsx";
 import RolesPage from "cliver-playbook-app-user/pages/admin/RolesPage.tsx";
+import SettingsPage from "cliver-playbook-app-user/pages/admin/SettingsPage.tsx";
 import UsersPage from "cliver-playbook-app-user/pages/admin/UsersPage.tsx";
 
 /**
@@ -64,6 +65,14 @@ export const userRoutes: RouteObject[] = [
     element: (
       <RequirePerm code="oauth:read">
         <OAuthPage />
+      </RequirePerm>
+    ),
+  },
+  {
+    path: "settings",
+    element: (
+      <RequirePerm code="settings:read">
+        <SettingsPage />
       </RequirePerm>
     ),
   },

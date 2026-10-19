@@ -3,6 +3,7 @@
     "users": "Users",
     "roles": "Roles",
     "oauth": "OAuth",
+    "settings": "Settings",
     "audit": "Audit log",
     "profile": "Profile"
   },
@@ -93,6 +94,8 @@
       "name": "Name",
       "description": "Description",
       "permissions": "Permissions",
+      "adminLocked": "The admin role always holds the * wildcard and cannot be narrowed.",
+      "wildcardHint": "* grants every permission, including permissions added by future modules.",
       "empty": "No roles yet — create the first one.",
       "deleteTitle": "Delete {{code}}",
       "deleteConfirm": "Users holding this role lose its permissions immediately. This cannot be undone.",
@@ -121,6 +124,29 @@
       "revoked": "Grant revoked",
       "grantsEmpty": "No active grants — no agent is currently authorized.",
       "clientsEmpty": "No registered clients yet."
+    },
+    "settings": {
+      "title": "Runtime settings",
+      "description": "Application settings owned by each module. Environment and .env values take precedence and are read-only here; changes apply immediately and are stored for the next restart.",
+      "empty": "No settings sections are registered.",
+      "reset": "Reset to startup",
+      "resetTitle": "Reset {{title}}",
+      "resetConfirm": "Discard the stored runtime overrides for this section and restore the values the process started with? Environment, .env, app.yaml, and defaults are unaffected.",
+      "resetDone": "{{title}} reset to startup values",
+      "saved": "{{title}} updated",
+      "selectValue": "Select a value",
+      "secretConfigured": "Configured",
+      "secretMissing": "Not configured",
+      "secretHint": "Set {{env}} in the environment",
+      "secretEnterHint": "Enter the API key",
+      "secretReplaceHint": "A key is stored — enter a new value to replace it",
+      "invalidJson": "Invalid JSON in {{field}}",
+      "invalidNumber": "Invalid number in {{field}}",
+      "sources": {
+        "environment": "Environment",
+        "runtime": "Runtime override",
+        "config": "Static config"
+      }
     },
     "audit": {
       "title": "Audit log",

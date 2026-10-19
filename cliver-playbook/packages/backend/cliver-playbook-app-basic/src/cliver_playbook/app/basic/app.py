@@ -17,6 +17,7 @@ from fastapi import FastAPI
 
 from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.basic.api.routes import ROUTERS
+from cliver_playbook.app.basic.runtime_settings import settings_lifespan
 from cliver_playbook.app.basic.settings import Settings
 
 logger = logging.getLogger("cliver_playbook.app.basic")
@@ -39,7 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     runtime.configure(resolved)
 
     logging.basicConfig(level=resolved.log_level.upper())
-    app = FastAPI(title=resolved.app_name, version="0.1.0")
+    app = FastAPI(title=resolved.app_name, version="0.1.0", lifespan=settings_lifespan)
     for router in ROUTERS:
         app.include_router(router)
 
