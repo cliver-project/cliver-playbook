@@ -51,6 +51,9 @@ async def test_get_document(client: AsyncClient) -> None:
     assert body["status"] == "indexed"
     assert body["mime_type"] == "text/plain"
     assert body["dim"] == 64
+    # The column exists and serializes even before the upload path starts
+    # filling it (step 7 writes the effective configuration).
+    assert "chunker_config" in body
 
 
 async def test_get_document_chunks(client: AsyncClient) -> None:

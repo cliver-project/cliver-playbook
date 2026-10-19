@@ -3,7 +3,8 @@
 Three tables by design:
 
 - ``rag_documents`` — one row per upload, recording which chunker and
-  embedder were selected for the document. Re-uploading the same
+  embedder were selected for the document, plus the chunker
+  configuration that produced the current chunks. Re-uploading the same
   content upserts by content-hash id, so a document row's `version`
   bumps on re-upload rather than creating a duplicate.
 - ``rag_chunks`` — one row per chunk. The chunk id is a content-hash
@@ -42,6 +43,13 @@ class Document(Base):
     source_uri: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     mime_type: Mapped[str] = mapped_column(String(128))
     chunker_id: Mapped[str] = mapped_column(String(64))
+    # The effective chunker configuration that produced the current
+    # chunks: implementation version, size/overlap and validated options.
+    # A JSONB column avoids a migration for every new chunker option and
+    # is replaced atomically together with the chunks on re-upload. It is
+    # 1:1 with the row and never queried independently, so a separate
+    # table would add a join without enforcing any new invariant.
+    chunker_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     embedder_id: Mapped[str] = mapped_column(String(64))
     dim: Mapped[int] = mapped_column(Integer)
     version: Mapped[int] = mapped_column(Integer, default=1)

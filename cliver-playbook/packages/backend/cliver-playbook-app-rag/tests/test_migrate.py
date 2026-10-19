@@ -24,6 +24,7 @@ def test_offline_migration_renders_the_rag_schema(capsys) -> None:
     sql = capsys.readouterr().out
     assert "CREATE EXTENSION IF NOT EXISTS vector" in sql
     assert "CREATE TABLE rag_documents" in sql
+    assert "chunker_config" in sql
     assert "CREATE TABLE rag_chunks" in sql
     assert "CREATE TABLE rag_chunk_embeddings" in sql
     assert "rag_chunk_embeddings_hnsw_1024_idx" in sql

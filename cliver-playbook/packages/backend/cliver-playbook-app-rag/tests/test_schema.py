@@ -50,6 +50,7 @@ def test_document_columns(engine) -> None:
         "source_uri",
         "mime_type",
         "chunker_id",
+        "chunker_config",
         "embedder_id",
         "dim",
         "version",
@@ -94,6 +95,25 @@ def test_chunk_embedding_has_fk_to_chunk(engine) -> None:
     assert any(fk["referred_table"] == "rag_chunks" for fk in fks)
 
 
+def test_document_chunker_config_defaults_to_an_empty_object(engine) -> None:
+    Session = sessionmaker(bind=engine)
+    with Session() as s:
+        doc = Document(
+            id="doc-default",
+            title="hello",
+            source_uri="hello.txt",
+            mime_type="text/plain",
+            chunker_id="recursive",
+            embedder_id="stub",
+            dim=64,
+        )
+        s.add(doc)
+        s.commit()
+
+    with Session() as s:
+        assert s.get(Document, "doc-default").chunker_config == {}
+
+
 def test_round_trip_document_and_chunks(engine) -> None:
     Session = sessionmaker(bind=engine)
     with Session() as s:
@@ -103,6 +123,12 @@ def test_round_trip_document_and_chunks(engine) -> None:
             source_uri="file:///tmp/hello.txt",
             mime_type="text/plain",
             chunker_id="recursive",
+            chunker_config={
+                "version": "1.0.0",
+                "chunk_size": 512,
+                "chunk_overlap": 64,
+                "options": {"drop_toc": True},
+            },
             embedder_id="stub",
             dim=64,
             status="indexed",
@@ -145,6 +171,7 @@ def test_round_trip_document_and_chunks(engine) -> None:
         doc = s.get(Document, "doc1")
         assert doc is not None
         assert doc.chunk_count == 2
+        assert doc.chunker_config["options"]["drop_toc"] is True
         assert len(doc.chunks) == 2
         # ordinal ordering
         assert doc.chunks[0].ordinal == 0
