@@ -14,12 +14,14 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
 )
 
-from cliver_playbook.app.rag.chunking.base import (
+from .base import (
     Chunk,
     Document,
+    OptionsInput,
     SourceOffset,
     make_chunk_id,
 )
+from .options import EmptyOptions
 
 VERSION = "1.0.0"
 
@@ -38,6 +40,7 @@ class MarkdownChunker:
 
     name = "markdown"
     version = VERSION
+    options_model = EmptyOptions
 
     def split(
         self,
@@ -45,7 +48,9 @@ class MarkdownChunker:
         *,
         chunk_size: int = 512,
         chunk_overlap: int = 64,
+        options: OptionsInput | None = None,
     ) -> list[Chunk]:
+        del options
         text = doc.raw if isinstance(doc.raw, str) else doc.raw.decode("utf-8")
         # Always run the header splitter first so every chunk knows
         # its section_path; the recursive fallback only fires when a

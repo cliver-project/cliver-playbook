@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from cliver_playbook.app.rag.chunking.base import Chunker
+from .base import Chunker
 
 _factory: dict[str, Callable[[], Chunker]] = {}
 
@@ -50,12 +50,7 @@ registry = type(
 # single import. The chunker modules register themselves; this
 # module's bottom triggers that import.
 def _register_defaults() -> None:
-    from cliver_playbook.app.rag.chunking import (
-        code,
-        markdown,
-        pdf,
-        recursive,
-    )
+    from . import code, markdown, pdf, recursive
 
     register("recursive", lambda: recursive.RecursiveChunker())
     register("markdown", lambda: markdown.MarkdownChunker())

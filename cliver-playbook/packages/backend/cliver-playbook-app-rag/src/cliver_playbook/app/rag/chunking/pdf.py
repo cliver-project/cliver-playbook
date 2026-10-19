@@ -11,23 +11,21 @@ endpoint catches that and returns 422 with a clear reason.
 
 from __future__ import annotations
 
-from cliver_playbook.app.rag.chunking.base import (
+from .base import (
     Chunk,
     Document,
+    EmptyDocumentError,
+    OptionsInput,
     SourceOffset,
     make_chunk_id,
 )
+from .options import EmptyOptions
 
 VERSION = "1.0.0"
 
-
-class EmptyDocumentError(ValueError):
-    """The PDF produced no extractable elements.
-
-    Surfaced by the upload endpoint as 422 ``no_extractable_text`` so
-    the operator can re-upload a non-OCR-required version or run OCR
-    upstream before re-trying.
-    """
+# Re-exported for callers that imported the error from this module
+# before it moved to ``base`` with the other chunker errors.
+__all__ = ["EmptyDocumentError", "PdfChunker"]
 
 
 def _partition(pdf_bytes: bytes) -> list:
@@ -43,6 +41,7 @@ class PdfChunker:
 
     name = "pdf"
     version = VERSION
+    options_model = EmptyOptions
 
     def split(
         self,
@@ -50,7 +49,9 @@ class PdfChunker:
         *,
         chunk_size: int = 512,
         chunk_overlap: int = 64,
+        options: OptionsInput | None = None,
     ) -> list[Chunk]:
+        del options
         if not isinstance(doc.raw, bytes):
             raise TypeError("PdfChunker expects bytes in Document.raw")
         elements = _partition(doc.raw)

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from cliver_playbook.app.rag.chunking.base import (
+from .base import (
     Chunk,
     Document,
+    OptionsInput,
     chunk_text_recursive,
 )
+from .options import EmptyOptions
 
 VERSION = "1.0.0"
 
@@ -21,6 +23,7 @@ class RecursiveChunker:
 
     name = "recursive"
     version = VERSION
+    options_model = EmptyOptions
 
     def split(
         self,
@@ -28,7 +31,9 @@ class RecursiveChunker:
         *,
         chunk_size: int = 512,
         chunk_overlap: int = 64,
+        options: OptionsInput | None = None,
     ) -> list[Chunk]:
+        del options
         text = doc.raw if isinstance(doc.raw, str) else doc.raw.decode("utf-8")
         return chunk_text_recursive(
             text=text,
