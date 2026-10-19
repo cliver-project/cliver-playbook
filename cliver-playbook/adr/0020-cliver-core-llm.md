@@ -87,3 +87,14 @@ Embeddings and reranking now have cliver-core-backed stages as well
 through its own purpose binding. See ADR-0022. The non-goal above still
 holds: the local BGE stages are not migrated and remain available alongside
 the remote stages.
+
+## Amendment (2026-10-19): local BGE migration
+
+cliver-core 0.3.0a2 added in-process local embedding and reranking. The
+non-goal "Migrating the local BGE embedder and reranker to cliver-core
+capabilities" is now complete: `bge-m3`, `bge-base-zh-v1.5` and
+`bge-reranker-v2-m3` remain registered stages with unchanged names, ids and
+dimensions, but model loading and inference delegate to cliver-core's local
+providers. The dependency becomes `cliver-core[local]==0.3.0a2` so both
+local backends are installed; the `[mcp]` extra remains absent. See the
+amendment in ADR-0022.

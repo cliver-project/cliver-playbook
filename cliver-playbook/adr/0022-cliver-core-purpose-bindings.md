@@ -157,3 +157,33 @@ is editable as part of the application's settings rather than only in
 - **Rerank scores are provider-defined.** They are treated as normalized
   relevance because that is the contract the stage advertises; a provider
   that returns raw logits would make `score_floor` behave differently.
+
+## Amendment (2026-10-19): local BGE stages use cliver-core
+
+cliver-core 0.3.0a2 added in-process local embedding and rerank providers
+(`LocalEmbeddingProvider`, `LocalRerankProvider`, `local_embed`,
+`local_rerank`) behind the same `capabilities.embed` and
+`capabilities.rerank` entry points. The local BGE stages now delegate model
+loading and inference to them. This section is appended; the decisions
+above stay as written, with the following narrowed readings:
+
+- Decision 1 ("single model-access layer") now covers local model execution
+  too, not only remote transports.
+- Decision 10's "stay local implementations" is narrowed: the stages, their
+  stable ids, dimensions, query instruction and hit remapping remain
+  RAG-owned; the model runtime belongs to cliver-core.
+- The non-goal "Migrating the local BGE stages to cliver-core" is complete.
+- The alpha pin advances to `cliver-core[local]==0.3.0a2`, which installs
+  both local backends (sentence-transformers and FlagEmbedding).
+
+Unlike the remote adapters in decision 5, a local stage keeps one
+long-lived provider and builds one binding at construction. cliver-core
+deliberately has no process-global model cache; sharing is expressed by
+sharing the provider object, and the registry-cached stage instance is that
+share. The synchronous seam is unchanged: each `embed` / `rerank` call runs
+`asyncio.run(...)` on the caller's worker thread, and the provider
+serializes inference internally.
+
+Stage names, `id` / `model_id` values (`...@lazy`) and dimensions are
+unchanged, so vectors already stored in `rag_chunk_embeddings` remain
+retrievable.

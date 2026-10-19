@@ -28,9 +28,11 @@ class Embedder(Protocol):
 
     Implementations: ``StubEmbedder`` (offline default, deterministic
     hash-based 64-d), ``BgeM3Embedder`` (BGE-M3, 1024-d, CPU-capable
-    via FlagEmbedding), ``BgeBaseZhEmbedder`` (BGE-base-zh-v1.5,
-    768-d, CPU-capable via SentenceTransformers). New embedders
-    register themselves at import via
+    through cliver-core's local FlagEmbedding backend),
+    ``BgeBaseZhEmbedder`` (BGE-base-zh-v1.5, 768-d, CPU-capable through
+    cliver-core's local sentence-transformers backend), and
+    ``CliverCoreEmbedder`` (remote binding). New embedders register
+    themselves at import via
     ``embedding.registry.register(name, factory)``.
     """
 

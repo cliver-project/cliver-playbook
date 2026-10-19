@@ -35,10 +35,6 @@ dependencies = [
     # the dependency light (no lxml requirement) and handles charset
     # detection for byte input.
     "beautifulsoup4>=4.12",
-    # Pluggable embedder + reranker: BGE-M3 (CPU-capable, dense+sparse+
-    # ColBERT from one forward pass) and bge-reranker-v2-m3.
-    "FlagEmbedding>=1.2.0",
-    "sentence-transformers>=3.0.0",
     # Offline BM25-only retriever fallback (also useful in tests so a
     # SQLite test db can still answer search queries).
     "rank-bm25>=0.2.2",
@@ -48,13 +44,14 @@ dependencies = [
     "unstructured[pdf]>=0.16.0",
     # pgvector's SQLAlchemy Vector type for the rag_chunk_embeddings table.
     "pgvector>=0.3.0",
-    # Unified LLM transport. cliver-core owns provider selection, the
-    # OpenAI/Anthropic protocols, tool calling and the agentic loop; the
-    # RAG generator stage only builds a ModelBinding and reads the final
-    # message. Pinned exactly because it is an alpha release. The [mcp]
-    # extra is deliberately absent: RAG chat advertises no tools. Add it
-    # only when the generator itself needs MCP tools.
-    "cliver-core==0.3.0a1",
+    # Unified model access. cliver-core owns remote provider selection and
+    # the OpenAI/Anthropic protocols, and its in-process local provider owns
+    # model loading/inference for the BGE embedding and rerank stages. The
+    # [local] extra installs sentence-transformers and FlagEmbedding; the
+    # base package stays torch-free. Pinned exactly because it is an alpha
+    # release. The [mcp] extra is deliberately absent: RAG chat advertises
+    # no tools. Add it only when the generator itself needs MCP tools.
+    "cliver-core[local]==0.3.0a2",
     "numpy>=1.26.0",
     "httpx>=0.27.0",
 ]

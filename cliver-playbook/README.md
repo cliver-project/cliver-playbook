@@ -96,9 +96,11 @@ reranker, `stub` generator), so the knowledge-base pages work on a fresh clone w
 downloading model weights or holding an API key. Set `CLIVER_RAG__EMBEDDER=bge-base-zh-v1.5`
 for a compact Chinese embedder (768-d, ~400 MB) or `CLIVER_RAG__EMBEDDER=bge-m3` for the
 larger multilingual model; set `CLIVER_RAG__RERANKER=bge-reranker-v2-m3` for the production
-reranker. Remote model access goes through cliver-core: set
+reranker. All model access goes through cliver-core: the local `bge-*` stages
+use its in-process providers for model loading and inference, while
 `CLIVER_RAG__LLM=cliver-core`, `CLIVER_RAG__EMBEDDER=cliver-core`, or
-`CLIVER_RAG__RERANKER=cliver-core` and fill the corresponding purpose binding
+`CLIVER_RAG__RERANKER=cliver-core` select its remote path. Fill the
+corresponding purpose binding
 (`cliver_llm`, `cliver_embed`, `cliver_rerank`) — in `app.yaml`, from the environment,
 or live under Admin → Settings → RAG, where the three blocks share one collapsible
 group (ADR-0020/0022). Only the chat binding selects a protocol (openai or anthropic);

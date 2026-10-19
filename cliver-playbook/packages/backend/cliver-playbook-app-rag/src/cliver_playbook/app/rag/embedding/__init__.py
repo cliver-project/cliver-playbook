@@ -1,8 +1,10 @@
-"""Embedder protocol + stub and BGE-M3 implementations.
+"""Embedder protocol + stub, local BGE and cliver-core implementations.
 
 The embedder is the second of the five RAG stages. ``get_embedder(name)``
-returns one of ``stub`` (offline default, deterministic, 64-d) or
-``bge-m3`` (BAAI/bge-m3, 1024-d, CPU-capable, lazily loaded).
+returns one of ``stub`` (offline default, deterministic, 64-d),
+``bge-m3`` or ``bge-base-zh-v1.5`` (CPU-capable local models loaded
+lazily through cliver-core's in-process providers), or ``cliver-core``
+(remote purpose binding).
 """
 
 from __future__ import annotations

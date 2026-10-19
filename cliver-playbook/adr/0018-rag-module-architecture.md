@@ -221,3 +221,11 @@ of it; this section is appended, and the earlier sections stay as written.
     in `rag_documents.chunker_config`. This refines decision 10 (the upload UI
     renders from the catalog) and leaves the five-stage architecture and the
     chunker contract unchanged.
+12. **Local model stages delegate to cliver-core (ADR-0022, 2026-10-19).**
+    `bge-m3`, `bge-base-zh-v1.5` and `bge-reranker-v2-m3` remain registered
+    stages with unchanged names, ids and dimensions, but model loading and
+    inference now run through cliver-core 0.3.0a2's in-process local
+    providers. This clarifies amendment 9: the loaded weights and lazy-load
+    state live on the long-lived provider owned by the registry-cached stage
+    instance. The five-stage architecture, registry memoization and lazy
+    first-use loading are unchanged.

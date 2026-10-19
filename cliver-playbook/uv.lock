@@ -645,7 +645,7 @@ wheels = [
 
 [[package]]
 name = "cliver-core"
-version = "0.3.0a1"
+version = "0.3.0a2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
@@ -653,9 +653,16 @@ dependencies = [
     { name = "openai" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9d/63/3aeec57f203e0b985befbe3050f7641ea1c084a8ffdce425d90b7da37e8d/cliver_core-0.3.0a1.tar.gz", hash = "sha256:fb07dea34eef2b27c80f76004e554d961e98ad7fa5201ced4f1360f465a8fee1", size = 144516, upload-time = "2026-10-19T05:03:14.978Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/b8/e772c87ff502be7f0ca7dbebf188824f19e9f496399528535e12b3a0753a/cliver_core-0.3.0a2.tar.gz", hash = "sha256:e7c762ba8d9fe334468e1ad96a94425d1ee9645152041dac02a48a20481e062a", size = 166233, upload-time = "2026-10-19T10:16:56.423Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/a4/7b57e7252be1775439c7b5e28a2be0c955e004f777c1d830c8039de082cd/cliver_core-0.3.0a1-py3-none-any.whl", hash = "sha256:b2115a0b627e0cde1efd70e0b9eda9996a790dee486a98fb1370457b34fe8a9f", size = 121044, upload-time = "2026-10-19T05:03:13.94Z" },
+    { url = "https://files.pythonhosted.org/packages/de/6d/dca0ed5a95f2b65ed56ca79481891e4cacd000ae43f963540f1c90e2e84e/cliver_core-0.3.0a2-py3-none-any.whl", hash = "sha256:871bfbaa4b88d38876c69a888410033c527bbf9594e1fe093d60cae7a9517b6b", size = 143017, upload-time = "2026-10-19T10:16:55.005Z" },
+]
+
+[package.optional-dependencies]
+local = [
+    { name = "flagembedding" },
+    { name = "huggingface-hub" },
+    { name = "sentence-transformers" },
 ]
 
 [[package]]
@@ -781,10 +788,9 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
-    { name = "cliver-core" },
+    { name = "cliver-core", extra = ["local"] },
     { name = "cliver-playbook-app-user" },
     { name = "fastapi" },
-    { name = "flagembedding" },
     { name = "httpx" },
     { name = "langchain-text-splitters" },
     { name = "numpy" },
@@ -794,7 +800,6 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-docx" },
     { name = "rank-bm25" },
-    { name = "sentence-transformers" },
     { name = "sqlalchemy" },
     { name = "unstructured", extra = ["pdf"] },
     { name = "uvicorn" },
@@ -814,10 +819,9 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "beautifulsoup4", specifier = ">=4.12" },
-    { name = "cliver-core", specifier = "==0.3.0a1" },
+    { name = "cliver-core", extras = ["local"], specifier = "==0.3.0a2" },
     { name = "cliver-playbook-app-user", editable = "packages/backend/cliver-playbook-app-user" },
     { name = "fastapi", specifier = ">=0.143.0" },
-    { name = "flagembedding", specifier = ">=1.2.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "langchain-text-splitters", specifier = ">=0.3.0" },
     { name = "numpy", specifier = ">=1.26.0" },
@@ -827,7 +831,6 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.16.0" },
     { name = "python-docx", specifier = ">=1.2,<2.0" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
-    { name = "sentence-transformers", specifier = ">=3.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
     { name = "unstructured", extras = ["pdf"], specifier = ">=0.16.0" },
     { name = "uvicorn", specifier = ">=0.31.1" },

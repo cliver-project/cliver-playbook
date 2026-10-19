@@ -1,11 +1,62 @@
-"""Embedder tests: registry, stub determinism, BGE-M3 metadata."""
+"""Embedder tests: registry, stub determinism, and the local BGE stages.
+
+The BGE stages delegate model loading and inference to cliver-core's
+in-process local providers. These tests inject a fake cliver-core backend,
+so they exercise the real provider, binding and result plumbing without
+resolving a Hugging Face repository or downloading weights.
+"""
 
 from __future__ import annotations
 
 import math
 
+import pytest
+from cliver_core.local import LoadedEmbedding, LoadSpec, LocalEmbeddingProvider
+
 from cliver_playbook.app.rag.embedding import get_embedder
+from cliver_playbook.app.rag.embedding.bge_base_zh import (
+    QUERY_INSTRUCTION,
+    BgeBaseZhEmbedder,
+)
+from cliver_playbook.app.rag.embedding.bge_m3 import BgeM3Embedder
 from cliver_playbook.app.rag.embedding.registry import registry
+
+
+class _FakeEmbeddingBackend:
+    """A cliver-core backend returning a fixed 3-4-5 vector, with no model."""
+
+    name = "fake-embedding"
+
+    def __init__(self, dim: int) -> None:
+        self.dim = dim
+        self.spec: LoadSpec | None = None
+        self.batches: list[tuple[list[str], int]] = []
+
+    def load_embedding(self, spec: LoadSpec) -> LoadedEmbedding:
+        self.spec = spec
+        return LoadedEmbedding(
+            handle=object(),
+            resolved_model=spec.model,
+            revision=None,
+            device="cpu",
+            dtype="float32",
+            dim=self.dim,
+            max_length=spec.max_length,
+        )
+
+    def embed(
+        self, loaded: LoadedEmbedding, texts: list[str], *, batch_size: int
+    ) -> list[list[float]]:
+        self.batches.append((list(texts), batch_size))
+        raw = [3.0, 4.0] + [0.0] * (self.dim - 2)
+        return [list(raw) for _ in texts]
+
+    def unload_embedding(self, loaded: LoadedEmbedding) -> None:
+        pass
+
+
+def _assert_unit_norm(vector: list[float]) -> None:
+    assert math.sqrt(sum(value * value for value in vector)) == pytest.approx(1.0)
 
 
 def test_registry_has_bge_m3_and_stub() -> None:
@@ -21,8 +72,7 @@ def test_stub_embedder_is_deterministic_unit_norm() -> None:
     a = e.embed(["hello world"], mode="document")[0]
     b = e.embed(["hello world"], mode="document")[0]
     assert a == b
-    norm = math.sqrt(sum(x * x for x in a))
-    assert abs(norm - 1.0) < 1e-5
+    _assert_unit_norm(a)
     assert e.dim == 64
     assert "stub" in e.id
 
@@ -43,86 +93,57 @@ def test_stub_estimate_tokens_is_word_count() -> None:
 
 def test_bge_m3_embedder_metadata() -> None:
     e = get_embedder("bge-m3")
-    # Don't run the actual model in unit tests; only check metadata
+    # Constructing the stage must not load or download the model; the
+    # cliver-core provider defers that to the first embed call.
     assert e.dim == 1024
+    assert e.max_input_tokens == 8192
     assert e.supports_query_document_modes is True
-    assert e.id.startswith("BAAI/bge-m3@") or e.id.startswith("bge-m3@")
+    assert e.id.startswith("BAAI/bge-m3@")
+    info = e._provider.info()
+    assert info.model == "BAAI/bge-m3"
+    assert info.backend == "flag-embedding"
+    assert info.max_length == 8192
+    assert info.loaded is False
 
 
-def test_bge_m3_loads_through_the_public_constructor(monkeypatch) -> None:
-    """FlagEmbedding 1.4.x has no ``BGEM3FlagModel.from_finetuned``.
-
-    The loader must call the public constructor with the model path; a
-    classmethod that does not exist would only fail at the first real
-    use (after a download decision), so this test pins the call shape
-    with a fake module instead of downloading weights.
-    """
-    import sys
-    import types
-
-    calls: list[tuple[tuple, dict]] = []
-
-    class _FakeModel:
-        def __init__(self, *args, **kwargs):
-            calls.append((args, kwargs))
-
-        def encode(self, texts, **kwargs):
-            return {"dense_vecs": [[3.0, 4.0] for _ in texts]}
-
-    monkeypatch.setitem(
-        sys.modules, "FlagEmbedding", types.SimpleNamespace(BGEM3FlagModel=_FakeModel)
-    )
-
-    from cliver_playbook.app.rag.embedding.bge_m3 import BgeM3Embedder
-
-    embedder = BgeM3Embedder()
-    vectors = embedder.embed(["hello"], mode="document")
-
-    assert calls and calls[0][0] == ("BAAI/bge-m3",)
-    assert calls[0][1] == {"use_fp16": False, "devices": "cpu"}
-    # The returned vector is L2-normalized (3-4-5 triangle → 0.6/0.8);
-    # the model runs in float32, so compare with a tolerance.
-    import pytest
-
-    assert vectors[0] == pytest.approx([0.6, 0.8])
+def test_bge_base_zh_embedder_metadata() -> None:
+    e = get_embedder("bge-base-zh-v1.5")
+    assert e.dim == 768
+    assert e.max_input_tokens == 512
+    assert e.supports_query_document_modes is True
+    assert e.id.startswith("BAAI/bge-base-zh-v1.5@")
+    info = e._provider.info()
+    assert info.model == "BAAI/bge-base-zh-v1.5"
+    assert info.backend == "sentence-transformers"
+    assert info.max_length == 512
+    assert info.loaded is False
 
 
-def test_bge_base_zh_metadata_and_query_instruction(monkeypatch) -> None:
-    """BGE-base-zh-v1.5 loads lazily and prefixes queries only.
+def test_bge_m3_delegates_to_cliver_core_local_embed() -> None:
+    backend = _FakeEmbeddingBackend(1024)
+    provider = LocalEmbeddingProvider(model="BAAI/bge-m3", backend=backend)
+    embedder = BgeM3Embedder(provider=provider)
 
-    The real model is not downloaded: a fake ``sentence_transformers``
-    module pins the constructor and encode call shapes. The query
-    instruction is the asymmetry the model card recommends, so it must
-    not leak into document embeddings.
-    """
-    import sys
-    import types
+    vectors = embedder.embed(["hello", "world"], mode="document")
 
-    import numpy as np
+    assert backend.spec is not None
+    assert backend.spec.model == "BAAI/bge-m3"
+    assert backend.batches == [(["hello", "world"], 32)]
+    assert len(vectors) == 2
+    assert vectors[0] == pytest.approx([0.6, 0.8] + [0.0] * 1022)
+    _assert_unit_norm(vectors[0])
+    _assert_unit_norm(vectors[1])
 
-    init_calls: list[tuple[tuple, dict]] = []
-    encode_calls: list[tuple[tuple, dict]] = []
+    # Empty input is answered without touching the model.
+    assert embedder.embed([], mode="query") == []
+    assert len(backend.batches) == 1
 
-    class _FakeModel:
-        def __init__(self, *args, **kwargs):
-            init_calls.append((args, kwargs))
 
-        def encode(self, texts, **kwargs):
-            encode_calls.append((tuple(texts), kwargs))
-            return np.asarray([[3.0, 4.0] for _ in texts])
+def test_bge_base_zh_delegates_to_cliver_core_and_prefixes_queries_only() -> None:
+    backend = _FakeEmbeddingBackend(768)
+    provider = LocalEmbeddingProvider(model="BAAI/bge-base-zh-v1.5", backend=backend)
+    embedder = BgeBaseZhEmbedder(provider=provider)
 
-    monkeypatch.setitem(
-        sys.modules,
-        "sentence_transformers",
-        types.SimpleNamespace(SentenceTransformer=_FakeModel),
-    )
-
-    from cliver_playbook.app.rag.embedding.bge_base_zh import (
-        QUERY_INSTRUCTION,
-        BgeBaseZhEmbedder,
-    )
-
-    embedder = BgeBaseZhEmbedder()
     assert embedder.dim == 768
     assert embedder.max_input_tokens == 512
     assert embedder.id.startswith("BAAI/bge-base-zh-v1.5@")
@@ -130,20 +151,18 @@ def test_bge_base_zh_metadata_and_query_instruction(monkeypatch) -> None:
     document_vectors = embedder.embed(["政策正文"], mode="document")
     query_vectors = embedder.embed(["政策如何规定？"], mode="query")
 
-    assert init_calls == [(("BAAI/bge-base-zh-v1.5",), {"device": "cpu"})]
-    assert encode_calls[0][0] == ("政策正文",)
-    assert encode_calls[1][0] == (QUERY_INSTRUCTION + "政策如何规定？",)
-    assert encode_calls[0][1]["normalize_embeddings"] is True
-    assert encode_calls[0][1]["show_progress_bar"] is False
-
-    import pytest
-
-    assert document_vectors[0] == pytest.approx([0.6, 0.8])
-    assert query_vectors[0] == pytest.approx([0.6, 0.8])
+    assert backend.spec is not None
+    assert backend.spec.model == "BAAI/bge-base-zh-v1.5"
+    assert [batch[0] for batch in backend.batches] == [
+        ["政策正文"],
+        [QUERY_INSTRUCTION + "政策如何规定？"],
+    ]
+    assert document_vectors[0] == pytest.approx([0.6, 0.8] + [0.0] * 766)
+    assert query_vectors[0] == pytest.approx([0.6, 0.8] + [0.0] * 766)
+    _assert_unit_norm(document_vectors[0])
+    _assert_unit_norm(query_vectors[0])
 
 
 def test_unknown_embedder_raises() -> None:
-    import pytest
-
     with pytest.raises(KeyError):
         get_embedder("no-such-embedder")

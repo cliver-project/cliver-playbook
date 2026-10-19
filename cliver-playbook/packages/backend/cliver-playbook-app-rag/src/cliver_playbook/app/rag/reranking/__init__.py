@@ -1,8 +1,9 @@
-"""Reranker protocol + BGE cross-encoder and noop implementations.
+"""Reranker protocol + BGE cross-encoder, noop and cliver-core implementations.
 
 The reranker is the fourth of the five RAG stages. ``get_reranker(name)``
-returns one of ``bge-reranker-v2-m3`` (production default, lazily
-loaded) or ``noop`` (identity, offline-safe).
+returns one of ``bge-reranker-v2-m3`` (production default, loaded lazily
+through cliver-core's in-process provider), ``noop`` (identity,
+offline-safe), or ``cliver-core`` (remote purpose binding).
 """
 
 from __future__ import annotations
