@@ -71,11 +71,31 @@ createI18n(userTranslations, ragTranslations, mcpTranslations);
 ### The assembly skill
 
 The `cliver-playbook-assemble-project` skill takes an agent from an empty
-directory to a running, production-grade project: choose the smallest profile,
-decide reuse/configure/create/vendor for every capability, wire the backend and
-frontend, build one vertical slice, and pass the production gates. It ships in
-this repository under `skills/cliver-playbook-assemble-project/` and installs
-with [vercel-labs/skills](https://github.com/vercel-labs/skills):
+directory to a running, production-grade project. Starting from a one-paragraph
+brief, it:
+
+1. Fetches the pinned playbook release into `var/playbook`; the clone is
+   read-only reference material, the published packages are the dependency.
+2. Picks the smallest profile: `minimal` (API only), `web` (accounts, roles,
+   admin), `rag` (knowledge base), or `mcp` (agent tools on top).
+3. Classifies every capability as **reuse**, **configure**, **create**, or
+   **vendor**, and records the decisions in `project-manifest.yaml`.
+4. Wires the backend and frontend from the matching `dev/` shell: settings,
+   routers, permissions, migrations, routes, nav, i18n, and Tailwind.
+5. Builds one real vertical slice end to end before adding breadth.
+6. Runs the production gates: frozen installs, migrations from an empty
+   database, boot and health, lint, tests, typecheck, and build.
+7. Closes the loop: a playbook gap goes back upstream as a failing test and a
+   new release tag, never as an edit to an installed package.
+
+It enforces the same non-negotiables as this repository: one pinned release tag
+everywhere, compose before copying and copy before vendoring, no
+`FastAPI.mount()`, all model access through cliver-core, and no secrets in the
+repository.
+
+The skill ships in this repository under
+`skills/cliver-playbook-assemble-project/` and installs with
+[vercel-labs/skills](https://github.com/vercel-labs/skills):
 
 ```sh
 # Installs the current skill from the default branch
@@ -92,8 +112,9 @@ latest guidance, and does not need to match the release a project pins.
 skills directory (`.claude/skills/` for Claude Code, `.agents/skills/` for the
 other supported agents); add `-g` for a user-level install or `--list` to
 inspect what the repository offers.
-`skills/cliver-playbook-assemble-project/SKILL.md` holds the workflow and
-`skills/cliver-playbook-assemble-project/reference/` the detailed guides.
+`SKILL.md` holds the workflow; `reference/` holds the detailed guides
+(decision guide, backend and frontend composition, quality gates, upstream
+loop), and `assets/` the project-manifest template.
 
 `scripts/assemble_project.py --dry-run` prints the package set for a profile, and
 the mcp frontend shell remains the worked composition. Releases are cut with
