@@ -2,8 +2,9 @@ name: Release
 
 on:
   push:
+    # The release tag is the version itself (for example 0.2.0).
     tags:
-      - "v*"
+      - "[0-9]*"
 
 permissions:
   contents: read
@@ -38,7 +39,7 @@ jobs:
       - name: Verify the built artifacts
         run: >-
           python3 scripts/check_release_artifacts.py
-          --dist dist --version "${GITHUB_REF_NAME#v}"
+          --dist dist --version "$GITHUB_REF_NAME"
 
       - name: Publish to PyPI in dependency order
         run: |

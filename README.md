@@ -70,8 +70,9 @@ createI18n(userTranslations, ragTranslations, mcpTranslations);
 
 The `assemble-project` Claude Code skill automates the assembly (choose a profile →
 plan → wire), and `scripts/assemble_project.py --dry-run` prints the package set. The
-mcp frontend shell remains the worked example. Releases are cut with a `vX.Y.Z` tag;
-see `docs/releasing.md`.
+mcp frontend shell remains the worked example. Releases are cut with
+`make release` (a bumped version plus a `X.Y.Z` tag); see
+`docs/releasing.md`.
 
 ## Running this repository
 

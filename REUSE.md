@@ -79,7 +79,7 @@ the following:
 ## cliver-playbook-app-<name>
 
 - Source repository: https://github.com/cliver-project/cliver-playbook
-- Revision: vX.Y.Z (commit <sha>)
+- Revision: X.Y.Z (commit <sha>)
 - Source path: packages/backend/cliver-playbook-app-<name>/src/cliver_playbook
 - Target path: vendor/cliver_playbook
 - Date: YYYY-MM-DD
@@ -95,20 +95,23 @@ the decision to merge or decline it in the same file.
 ## Versioning
 
 - **One version for the whole library.** Every backend distribution and every
-  frontend package shares the same version number. Bump all of them with
-  `make version-set VERSION=X.Y.Z`; `make version-check` rejects drift. A
-  release either publishes the complete set or nothing.
+  frontend package shares the same version number, including the dependency
+  pins between them. Bump all of them with `make version-set VERSION=X.Y.Z`,
+  or let `make release VERSION=X.Y.Z` align and release in one step;
+  `make version-check` rejects drift. A release either publishes the complete
+  set or nothing.
 - **Consume by tag or commit.** New projects pin `playbook.revision` to a
-  release tag such as `v0.2.0`; they never track `main`. The project manifest
+  release tag such as `0.2.0`; they never track `main`. The project manifest
   validator rejects `main`/`HEAD` as the only revision.
-- **Backend packages are published to PyPI.** A `vX.Y.Z` tag triggers the
+- **Backend packages are published to PyPI.** A `X.Y.Z` tag triggers the
   release workflow, which verifies that every manifest carries `X.Y.Z` and
   publishes the four backend distributions. See `docs/releasing.md`.
 - **Frontend packages are consumed from the git tag.** They are private
   source packages and are not published to npm. A project references the
-  package by repository, tag and path, for example:
+  package by repository, tag and path. The tag is the version itself, so the
+  same value appears in `version` and in the git reference, for example:
   ```json
-  "cliver-playbook-app-basic": "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-basic"
+  "cliver-playbook-app-basic": "github:cliver-project/cliver-playbook#0.2.0&path:/packages/frontend/cliver-playbook-app-basic"
   ```
   pnpm resolves the tag and the monorepo subdirectory in one reference; the
   consuming project also maps every playbook package in

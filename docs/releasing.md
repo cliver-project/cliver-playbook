@@ -1,40 +1,58 @@
 # Releasing cliver-playbook
 
 Every backend distribution and every frontend package shares one version.
-Pushing a `vX.Y.Z` tag releases the complete set; no module is released on its
+Pushing a `X.Y.Z` tag (named exactly the version) releases the complete set; no module is released on its
 own.
 
 ## Cut a release
 
-1. Bump every manifest and both lockfiles:
-   ```sh
-   make version-set VERSION=0.2.0
-   ```
-   This rewrites the four backend `pyproject.toml` files (including the
-   `==` pins between them), the workspace `package.json`, and every frontend
-   package and dev shell, then runs `uv lock` and `pnpm install
-   --lockfile-only`.
-2. Verify the tree before tagging (a tag is immutable once published):
-   ```sh
-   make check
-   make verify-reference
-   make release-check
-   git diff                     # review the version bump and lockfiles
-   ```
-3. Commit the bump, then tag and push:
-   ```sh
-   git add -A
-   git commit -m "release: v0.2.0"
-   git tag v0.2.0
-   git push origin main
-   git push origin v0.2.0
-   ```
-4. The `Release` workflow (`.github/workflows/release.yml`) runs on the tag:
-   it verifies that every manifest carries `0.2.0`, builds all four backend
-   distributions, checks that each wheel and sdist carries the Apache-2.0
-   license text, publishes them to PyPI in dependency order
-   (`basic` → `user` → `rag` → `mcp`), and creates a GitHub release with the
-   build artifacts.
+One target cuts the release:
+
+```sh
+make release VERSION=0.2.0
+```
+
+`VERSION` is optional. The target refuses to run when the shared version is
+not bumped past the latest release tag, and tells you to bump first. Either pass
+`VERSION` to let the release script align everything, or bump and commit it
+yourself, then run `make release`:
+
+```sh
+make version-set VERSION=0.2.0
+git add -A && git commit -m "release: 0.2.0"
+make release
+```
+
+Every path checks that the four backend `pyproject.toml` files, the workspace
+`package.json`, all frontend packages and dev shells, and every inter-module
+dependency pin (`==0.2.0` backend pins and frontend sibling versions) agree
+on one version. With `VERSION`, the script rewrites them all and refreshes
+`uv.lock` and `pnpm-lock.yaml`.
+
+The target then:
+
+1. Runs `make check`, `make verify-reference`, and `make release-check`
+   (a tag is immutable once published).
+2. Commits the version bump, but only if the pending changes are version
+   manifests or lockfiles; any other change stops the release.
+3. Creates the annotated tag `0.2.0` (the tag name is the version).
+4. Pushes the current branch and the tag to `origin`; the tag triggers the
+   `Release` workflow, which verifies that every manifest carries `0.2.0`,
+   builds all four backend distributions, checks that each wheel and sdist
+   carries the Apache-2.0 license text, publishes them to PyPI in dependency
+   order (`basic` → `user` → `rag` → `mcp`), and creates a GitHub release
+   with the build artifacts.
+
+Preview without changing anything:
+
+```sh
+make release DRY_RUN=1
+```
+
+After a partial failure, re-run `make release`: an existing local tag on HEAD
+is reused and the push is retried. For a recovery run whose checks already
+passed, run `python3 scripts/release.py --skip-checks`; add `--no-push` to
+keep the tag local.
 
 Each backend package directory contains a copy of the root `LICENSE`
 (`license-files` in its `pyproject.toml`), because a wheel built from a
@@ -78,8 +96,8 @@ sibling dependencies from the same tag as well. In the consuming project:
 ```json
 {
   "dependencies": {
-    "cliver-playbook-app-basic": "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-basic",
-    "cliver-playbook-app-user": "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-user"
+    "cliver-playbook-app-basic": "github:cliver-project/cliver-playbook#0.2.0&path:/packages/frontend/cliver-playbook-app-basic",
+    "cliver-playbook-app-user": "github:cliver-project/cliver-playbook#0.2.0&path:/packages/frontend/cliver-playbook-app-user"
   }
 }
 ```
@@ -93,14 +111,14 @@ packages: []
 # default. The overrides point every playbook package at the same tag.
 blockExoticSubdeps: false
 overrides:
-  cliver-playbook-app-basic: "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-basic"
-  cliver-playbook-app-user: "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-user"
-  cliver-playbook-app-rag: "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-rag"
-  cliver-playbook-app-mcp: "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-mcp"
+  cliver-playbook-app-basic: "github:cliver-project/cliver-playbook#0.2.0&path:/packages/frontend/cliver-playbook-app-basic"
+  cliver-playbook-app-user: "github:cliver-project/cliver-playbook#0.2.0&path:/packages/frontend/cliver-playbook-app-user"
+  cliver-playbook-app-rag: "github:cliver-project/cliver-playbook#0.2.0&path:/packages/frontend/cliver-playbook-app-rag"
+  cliver-playbook-app-mcp: "github:cliver-project/cliver-playbook#0.2.0&path:/packages/frontend/cliver-playbook-app-mcp"
 ```
 
 Then run `pnpm install` and commit `pnpm-lock.yaml`. Upgrade by changing every
-`#vX.Y.Z` in both files to the new tag and reinstalling. If the repository is
+`#X.Y.Z` in both files to the new tag and reinstalling. If the repository is
 private, configure git credentials for pnpm (SSH or a token) before
 installing.
 

@@ -2,12 +2,13 @@
 """Keep every cliver-playbook module on one version.
 
 Usage:
-    python3 scripts/version.py --check [--tag vX.Y.Z]
+    python3 scripts/version.py --check [--tag X.Y.Z]
     python3 scripts/version.py --set X.Y.Z
     python3 scripts/version.py --self-test
 
 Backend distributions, the frontend packages, and the workspace root share a
-single version. A release tag must be ``v`` plus that version.
+single version. The release tag is that version number exactly (``0.2.0``),
+so the same value is the version and the git ref.
 """
 
 from __future__ import annotations
@@ -89,7 +90,7 @@ def check_versions(root: Path, tag: str | None = None) -> list[str]:
     if version is None:
         return errors
 
-    if tag is not None and tag != f"v{version}":
+    if tag is not None and tag != version:
         errors.append(f"tag {tag!r} does not match version {version!r}")
 
     for path in _backend_manifests(root):
@@ -199,11 +200,12 @@ def _self_test() -> int:
                 encoding="utf-8",
             )
 
-        assert not check_versions(root, "v0.1.0")
+        assert not check_versions(root, "0.1.0")
         set_version(root, "0.2.0")
         assert set(collect_versions(root).values()) == {"0.2.0"}
-        assert not check_versions(root, "v0.2.0")
-        assert check_versions(root, "v0.1.0")
+        assert not check_versions(root, "0.2.0")
+        assert check_versions(root, "0.1.0")
+        assert check_versions(root, "v0.2.0")
         dev_manifest = (
             root / "packages/frontend/cliver-playbook-app-basic/dev/package.json"
         )
@@ -242,8 +244,8 @@ def main(argv: list[str]) -> int:
         for path in changed:
             print(f"updated {path}")
         print(
-            f"Version set to {args.set}. Next: run `uv lock`, commit, then "
-            f"push tag v{args.set}."
+            f"Version set to {args.set}. Next: commit, then run `make release` "
+            f"to check, tag {args.set}, and push."
         )
         return 0
 

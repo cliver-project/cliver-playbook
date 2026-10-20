@@ -36,7 +36,7 @@ TOP_LEVEL_KEYS = {
 PLAYBOOK_KEYS = {"source", "revision"}
 PACKAGES_KEYS = {"backend", "frontend"}
 VENDORED_ENTRY_KEYS = {"package", "source_path", "target_path", "revision"}
-RELEASE_TAG = re.compile(r"v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?")
+RELEASE_TAG = re.compile(r"(?:v)?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?")
 COMMIT_SHA = re.compile(r"[0-9a-f]{7,40}")
 
 REQUIRED_KEYS = ("project", "playbook", "mode", "packages", "vendored")
@@ -67,7 +67,7 @@ def _validate_revision(value: Any, where: str, errors: list[str]) -> None:
     if RELEASE_TAG.fullmatch(revision) or COMMIT_SHA.fullmatch(revision):
         return
     errors.append(
-        f"{where} must name a release tag (vX.Y.Z) or a commit SHA, not {revision!r}"
+        f"{where} must name a release tag (X.Y.Z) or a commit SHA, not {revision!r}"
     )
 
 
@@ -205,7 +205,7 @@ def _self_test() -> int:
         "project": "example-app",
         "playbook": {
             "source": "https://github.com/cliver-project/cliver-playbook",
-            "revision": "v0.1.0",
+            "revision": "0.1.0",
         },
         "mode": "compose",
         "packages": {
@@ -224,6 +224,9 @@ def _self_test() -> int:
     pinned = {**base, "playbook": {**base["playbook"], "revision": sha}}
     assert validate_manifest(pinned) == []
 
+    legacy_tag = {**base, "playbook": {**base["playbook"], "revision": "v0.1.0"}}
+    assert validate_manifest(legacy_tag) == []
+
     vendor_manifest = {
         **base,
         "mode": "vendor",
@@ -236,7 +239,7 @@ def _self_test() -> int:
                 "package": "cliver-playbook-app-basic",
                 "source_path": "packages/backend/cliver-playbook-app-basic/src/cliver_playbook",
                 "target_path": "vendor/cliver_playbook",
-                "revision": "v0.1.0",
+                "revision": "0.1.0",
             }
         ],
     }

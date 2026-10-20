@@ -111,6 +111,12 @@ check: backend-lint backend-test web-ui-check version-check ## Everything CI wou
 verify-reference: ## Migrate a scratch DB, boot the composed app, build the reference frontend
 	./scripts/smoke_reference.sh
 
+##@ Release
+
+.PHONY: release
+release: ## Cut a release (make release [VERSION=x.y.z]); quits if the version is not bumped
+	python3 scripts/release.py $(if $(VERSION),--version $(VERSION),) $(if $(DRY_RUN),--dry-run,)
+
 ##@ MCP server
 
 # The composed app already serves /mcp in-process. These targets start the MCP
