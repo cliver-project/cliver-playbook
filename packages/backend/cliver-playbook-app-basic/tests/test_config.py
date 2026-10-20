@@ -13,6 +13,8 @@ from cliver_playbook.app.basic import config_yaml
 from cliver_playbook.app.basic.config_yaml import ConfigError
 from cliver_playbook.app.basic.settings import Settings
 
+from .dsn import derive_test_dsn
+
 
 @pytest.fixture
 def yaml_file(tmp_path, monkeypatch):
@@ -112,3 +114,17 @@ def test_explicit_config_file_must_exist(tmp_path, monkeypatch):
     monkeypatch.setenv(config_yaml.CONFIG_FILE_ENV_VAR, str(tmp_path / "missing.yaml"))
     with pytest.raises(ConfigError, match="does not exist"):
         _settings()
+
+
+def test_derive_test_dsn_preserves_host_and_credentials():
+    assert (
+        derive_test_dsn("postgresql://u:p@db.example:6543/main", "test_x")
+        == "postgresql://u:p@db.example:6543/test_x"
+    )
+
+
+def test_derive_test_dsn_preserves_query_parameters():
+    assert (
+        derive_test_dsn("postgresql://u:p@db.example:6543/main?sslmode=require", "test_x")
+        == "postgresql://u:p@db.example:6543/test_x?sslmode=require"
+    )

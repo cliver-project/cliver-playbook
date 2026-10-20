@@ -22,11 +22,13 @@ import os
 import psycopg
 import pytest
 
+from .dsn import derive_test_dsn
+
 ADMIN_DSN = os.environ.get(
     "CLIVER_TEST_DATABASE_URL", "postgresql://cliver:cliver@127.0.0.1:5432/postgres"
 )
 TEST_DB_NAME = f"cliver_basic_test_{os.getpid()}"
-TEST_DSN = f"postgresql://cliver:cliver@127.0.0.1:5432/{TEST_DB_NAME}"
+TEST_DSN = derive_test_dsn(ADMIN_DSN, TEST_DB_NAME)
 
 
 def _create_temp_database() -> None:
