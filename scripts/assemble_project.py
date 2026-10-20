@@ -115,7 +115,7 @@ def main(argv: list[str]) -> int:
     if args.apply:
         print(
             "--apply is not implemented in P0; run with --dry-run and let the "
-            "assemble-project skill perform the steps.",
+            "cliver-playbook-assemble-project skill perform the steps.",
             file=sys.stderr,
         )
         return 1

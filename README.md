@@ -68,11 +68,36 @@ const routes: RouteObject[] = [
 createI18n(userTranslations, ragTranslations, mcpTranslations);
 ```
 
-The `assemble-project` Claude Code skill automates the assembly (choose a profile →
-plan → wire), and `scripts/assemble_project.py --dry-run` prints the package set. The
-mcp frontend shell remains the worked example. Releases are cut with
-`make release` (a bumped version plus a `X.Y.Z` tag); see
-`docs/releasing.md`.
+### The assembly skill
+
+The `cliver-playbook-assemble-project` skill takes an agent from an empty
+directory to a running, production-grade project: choose the smallest profile,
+decide reuse/configure/create/vendor for every capability, wire the backend and
+frontend, build one vertical slice, and pass the production gates. It ships in
+this repository under `skills/cliver-playbook-assemble-project/` and installs
+with [vercel-labs/skills](https://github.com/vercel-labs/skills):
+
+```sh
+# Installs the current skill from the default branch
+npx skills add cliver-project/cliver-playbook --skill cliver-playbook-assemble-project
+
+# For an exact copy, pin a commit instead
+npx skills add https://github.com/cliver-project/cliver-playbook/tree/<SHA>/skills/cliver-playbook-assemble-project
+```
+
+There is no tag and no release step: the default branch is the distribution.
+The skill is versioned independently of the packages, always describes the
+latest guidance, and does not need to match the release a project pins.
+`npx skills update` re-fetches the default branch. It installs into the agent's
+skills directory (`.claude/skills/` for Claude Code, `.agents/skills/` for the
+other supported agents); add `-g` for a user-level install or `--list` to
+inspect what the repository offers.
+`skills/cliver-playbook-assemble-project/SKILL.md` holds the workflow and
+`skills/cliver-playbook-assemble-project/reference/` the detailed guides.
+
+`scripts/assemble_project.py --dry-run` prints the package set for a profile, and
+the mcp frontend shell remains the worked composition. Releases are cut with
+`make release` (a bumped version plus a `X.Y.Z` tag); see `docs/releasing.md`.
 
 ## Running this repository
 

@@ -15,5 +15,8 @@ var/
 # Claude/Superpowers local design, plan, and note documents
 docs/superpowers/
 
+# Installed agent skills; the source lives in skills/ and is what ships
+.claude/skills/
+
 # Node (frontend packages)
 node_modules/

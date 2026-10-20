@@ -1,0 +1,46 @@
+name: Check the assembly skill
+
+# The skill is distributed from the default branch: `npx skills add` clones
+# main and installs the current SKILL.md. There is no tag and no release step.
+# This workflow only prevents invalid skill content from landing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "skills/**"
+      - "scripts/validate_skill.py"
+      - "scripts/validate_project_manifest.py"
+      - ".github/workflows/skills-check.yml"
+  pull_request:
+    paths:
+      - "skills/**"
+      - "scripts/validate_skill.py"
+      - "scripts/validate_project_manifest.py"
+      - ".github/workflows/skills-check.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skills-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Validate the skill
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+          enable-cache: true
+
+      - name: Validate the skill
+        run: |
+          uv run --with pyyaml python scripts/validate_skill.py --self-test
+          uv run --with pyyaml python scripts/validate_skill.py --all

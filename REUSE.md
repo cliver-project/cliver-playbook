@@ -13,6 +13,31 @@ project selects the capabilities it needs, composes the published packages,
 and owns only its domain code. The playbook packages stay the source of truth
 for the infrastructure (ADR-0015).
 
+## Start with the skill
+
+`skills/cliver-playbook-assemble-project/` turns this document into an
+executable workflow for an agent: choose a profile, classify every capability
+as reuse / configure / create / vendor, wire the backend and frontend, build one
+vertical slice, and pass the production gates. Install it with
+[vercel-labs/skills](https://github.com/vercel-labs/skills):
+
+```sh
+# Installs the current skill from the default branch
+npx skills add cliver-project/cliver-playbook --skill cliver-playbook-assemble-project
+
+# For an exact copy, pin a commit instead
+npx skills add https://github.com/cliver-project/cliver-playbook/tree/<SHA>/skills/cliver-playbook-assemble-project
+```
+
+There is no tag and no release step: the default branch is the distribution,
+and `npx skills update` re-fetches it. The skill is versioned independently of
+the packages and always describes the latest guidance.
+It lands in the agent's skills directory (`.claude/skills/`,
+`.agents/skills/`, …); use `-g` for a user-level install and `--list` to see
+what the repository offers. Its references are the detailed versions of the
+decision tree, the backend and frontend composition, the production gates, and
+the upstream loop.
+
 ## Decision tree
 
 Use the highest rung that satisfies the need:
@@ -143,11 +168,12 @@ the decision to merge or decline it in the same file.
    reason, and never mix modes for one package.
 3. Record `project-manifest.yaml` with the playbook source, the release tag,
    the selected backend/frontend packages, and any vendored trees.
-4. Validate the manifest:
-   `uv run python scripts/validate_project_manifest.py project-manifest.yaml`.
-5. Assemble with the `assemble-project` skill, then wire project routes,
+4. Clone the pinned tag into `var/playbook` and validate the manifest:
+   `uv run --with pyyaml python var/playbook/scripts/validate_project_manifest.py project-manifest.yaml`.
+5. Follow the installed `cliver-playbook-assemble-project` skill: it wires the project routes,
    settings and migrations without editing the playbook packages.
-6. Run the project's lint, tests and frontend build, then boot it against a
-   scratch database and hit its health endpoint.
+6. Run every gate in the skill's `reference/quality-gates.md`: lint, tests,
+   migrations from empty, boot and health, frontend build, and the first
+   vertical slice.
 7. Review the diff: project code only, tagged dependencies, committed
    lockfiles, and `FORKED_FROM.md` for every vendored tree.

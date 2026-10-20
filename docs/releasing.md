@@ -147,10 +147,34 @@ The playbook workspace itself keeps using the local packages:
 `linkWorkspacePackages: true` in `pnpm-workspace.yaml` links the copies whose
 versions match, so development never reaches the registry or GitHub.
 
+## Assembly skill
+
+The skill is published independently of the packages and is not part of the
+`X.Y.Z` release. There is no tag and no release step: the default branch is the
+distribution. `npx skills add` clones `main` and installs the current
+`SKILL.md`; `npx skills update` re-fetches it. No npm package is published.
+
+```sh
+# Installs the current skill from the default branch
+npx skills add cliver-project/cliver-playbook --skill cliver-playbook-assemble-project
+
+# For an exact copy, pin a commit instead
+npx skills add https://github.com/cliver-project/cliver-playbook/tree/<SHA>/skills/cliver-playbook-assemble-project
+```
+
+The skill describes the latest guidance; it has no version of its own and does
+not need to match the tag a project pins. `.github/workflows/skills-check.yml`
+only validates it: on a push to `main` or a pull request that touches
+`skills/**` or the validator scripts, it runs
+`scripts/validate_skill.py`. Invalid content never reaches the default branch.
+`make skill-check` runs the same checks locally.
+
 ## What is intentionally not automated
 
 - `make check` and `make verify-reference` run before the tag, not inside the
   release workflow: the reference smoke needs Docker and a PostgreSQL service,
   and a release should not start on a tree that was never verified locally.
 - No npm publishing, no per-module versioning, and no release branches. Every
-  release is one tag over the whole repository.
+  package release is one tag over the whole repository. The assembly skill has
+  no release of its own: it is served from the default branch and only
+  validated in CI.

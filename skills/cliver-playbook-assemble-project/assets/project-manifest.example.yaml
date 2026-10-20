@@ -1,0 +1,20 @@
+project: example-app
+playbook:
+  source: https://github.com/cliver-project/cliver-playbook
+  revision: 0.1.0
+mode: compose
+packages:
+  backend:
+    - cliver-playbook-app-basic
+    - cliver-playbook-app-user
+  frontend:
+    - cliver-playbook-app-basic
+    - cliver-playbook-app-user
+vendored: []
+decisions:
+  - "Profile web: the first release has accounts and roles but no knowledge base or agent tools."
+  - "Reused basic + user; configured the OIDC provider through the provider registry (no code)."
+  - "Created the orders domain in a project Alembic chain; no playbook table was altered."
+  - "Registered orders:read and orders:write, then assigned them to the operator role; admin keeps the * wildcard."
+  - "Left the demo Items surface in place; it is inert and removing it from a composed install is not a supported seam."
+  - "Vendored nothing: no required change was outside an existing seam."
