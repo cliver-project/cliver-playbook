@@ -549,6 +549,9 @@ async def load_persisted_settings() -> None:
 
 @asynccontextmanager
 async def settings_lifespan(_app: Any):
-    """Lifespan wrapper: overlay persisted settings before serving requests."""
+    """Lifespan wrapper: overlay persisted settings, then release the engine."""
     await load_persisted_settings()
-    yield
+    try:
+        yield
+    finally:
+        await runtime.dispose()
