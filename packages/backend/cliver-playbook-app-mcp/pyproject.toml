@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "cliver-playbook agent surface: MCP server (streamable-http + stdio) on top of the identity stack"
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Lin Gao" }]
 requires-python = ">=3.12"
 # A real dependency on the identity package (not a copied tree): the gate

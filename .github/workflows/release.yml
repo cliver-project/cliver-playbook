@@ -35,6 +35,11 @@ jobs:
       - name: Build every backend distribution
         run: uv build --all-packages --out-dir dist
 
+      - name: Verify the built artifacts
+        run: >-
+          python3 scripts/check_release_artifacts.py
+          --dist dist --version "${GITHUB_REF_NAME#v}"
+
       - name: Publish to PyPI in dependency order
         run: |
           set -euo pipefail

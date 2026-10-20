@@ -1,7 +1,7 @@
 project: example-app
 playbook:
   source: https://github.com/cliver-project/cliver-playbook
-  revision: <tag-or-commit>
+  revision: v0.1.0
 mode: compose
 packages:
   backend:

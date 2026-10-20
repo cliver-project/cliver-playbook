@@ -18,7 +18,7 @@ own.
    ```sh
    make check
    make verify-reference
-   make version-check
+   make release-check
    git diff                     # review the version bump and lockfiles
    ```
 3. Commit the bump, then tag and push:
@@ -31,9 +31,16 @@ own.
    ```
 4. The `Release` workflow (`.github/workflows/release.yml`) runs on the tag:
    it verifies that every manifest carries `0.2.0`, builds all four backend
-   distributions, publishes them to PyPI in dependency order
+   distributions, checks that each wheel and sdist carries the Apache-2.0
+   license text, publishes them to PyPI in dependency order
    (`basic` → `user` → `rag` → `mcp`), and creates a GitHub release with the
    build artifacts.
+
+Each backend package directory contains a copy of the root `LICENSE`
+(`license-files` in its `pyproject.toml`), because a wheel built from a
+package directory cannot reach the repository root and Apache-2.0 requires
+the license text to travel with the distribution. `make release-check` runs
+the same artifact check locally.
 
 `uv publish --check-url` makes the publish step idempotent: files already on
 PyPI are skipped, so a re-run after a partial failure is safe.

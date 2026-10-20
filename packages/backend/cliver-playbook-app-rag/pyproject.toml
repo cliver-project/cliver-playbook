@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "cliver-playbook knowledge base: pluggable RAG (chunker / embedder / retriever / reranker / LLM) over the identity stack"
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Lin Gao" }]
 requires-python = ">=3.12"
 # Real dependency on the identity package (per ADR-0015). The RAG surface

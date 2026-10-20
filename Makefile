@@ -98,6 +98,12 @@ version-set: ## Bump every module (usage: make version-set VERSION=0.2.0)
 	uv lock
 	pnpm install --lockfile-only
 
+.PHONY: release-check
+release-check: ## Build every backend distribution and verify license + version metadata
+	rm -rf dist
+	uv build --all-packages --out-dir dist
+	uv run python scripts/check_release_artifacts.py --dist dist
+
 .PHONY: check
 check: backend-lint backend-test web-ui-check version-check ## Everything CI would run
 

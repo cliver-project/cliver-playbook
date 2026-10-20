@@ -10,6 +10,7 @@ printed on its own line to stderr and the exit status is 1.
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -35,7 +36,8 @@ TOP_LEVEL_KEYS = {
 PLAYBOOK_KEYS = {"source", "revision"}
 PACKAGES_KEYS = {"backend", "frontend"}
 VENDORED_ENTRY_KEYS = {"package", "source_path", "target_path", "revision"}
-FLOATING_REVISIONS = {"main", "master", "head", "latest"}
+RELEASE_TAG = re.compile(r"v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?")
+COMMIT_SHA = re.compile(r"[0-9a-f]{7,40}")
 
 REQUIRED_KEYS = ("project", "playbook", "mode", "packages", "vendored")
 
@@ -43,8 +45,11 @@ REQUIRED_KEYS = ("project", "playbook", "mode", "packages", "vendored")
 def _report_unknown_keys(
     mapping: Mapping[str, Any], allowed: set[str], where: str, errors: list[str]
 ) -> None:
-    for key in sorted(set(mapping) - allowed):
-        errors.append(f"{where}: unknown key {key!r}")
+    for key in sorted((key for key in mapping if key not in allowed), key=str):
+        if not isinstance(key, str):
+            errors.append(f"{where}: keys must be strings, got {key!r}")
+        else:
+            errors.append(f"{where}: unknown key {key!r}")
 
 
 def _require_non_empty_string(value: Any, where: str, errors: list[str]) -> bool:
@@ -52,6 +57,18 @@ def _require_non_empty_string(value: Any, where: str, errors: list[str]) -> bool
         errors.append(f"{where} must be a non-empty string")
         return False
     return True
+
+
+def _validate_revision(value: Any, where: str, errors: list[str]) -> None:
+    """Require a release tag or commit, never a branch or a placeholder."""
+    if not _require_non_empty_string(value, where, errors):
+        return
+    revision = value.strip()
+    if RELEASE_TAG.fullmatch(revision) or COMMIT_SHA.fullmatch(revision):
+        return
+    errors.append(
+        f"{where} must name a release tag (vX.Y.Z) or a commit SHA, not {revision!r}"
+    )
 
 
 def _validate_package_list(value: Any, where: str, errors: list[str]) -> None:
@@ -76,8 +93,18 @@ def _validate_vendored_entry(
     for key in sorted(VENDORED_ENTRY_KEYS):
         if key not in entry:
             errors.append(f"{where}: missing required key {key!r}")
+            continue
+        value = entry[key]
+        if key == "package":
+            if (
+                _require_non_empty_string(value, f"{where}.package", errors)
+                and value not in PACKAGE_NAMES
+            ):
+                errors.append(f"{where}.package: unknown package {value!r}")
+        elif key == "revision":
+            _validate_revision(value, f"{where}.revision", errors)
         else:
-            _require_non_empty_string(entry[key], f"{where}.{key}", errors)
+            _require_non_empty_string(value, f"{where}.{key}", errors)
     return dict(entry)
 
 
@@ -104,13 +131,8 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
             revision = playbook.get("revision")
             if revision is None:
                 errors.append("playbook: missing required key 'revision'")
-            elif (
-                _require_non_empty_string(revision, "playbook.revision", errors)
-                and revision.strip().lower() in FLOATING_REVISIONS
-            ):
-                errors.append(
-                    f"playbook.revision must name a tag or commit, not {revision!r}"
-                )
+            else:
+                _validate_revision(revision, "playbook.revision", errors)
             if "source" in playbook:
                 _require_non_empty_string(playbook["source"], "playbook.source", errors)
 
@@ -178,10 +200,75 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _self_test() -> int:
+    base: dict[str, Any] = {
+        "project": "example-app",
+        "playbook": {
+            "source": "https://github.com/cliver-project/cliver-playbook",
+            "revision": "v0.1.0",
+        },
+        "mode": "compose",
+        "packages": {
+            "backend": ["cliver-playbook-app-basic"],
+            "frontend": ["cliver-playbook-app-basic"],
+        },
+        "vendored": [],
+    }
+    assert validate_manifest(base) == []
+
+    for revision in ("main", "origin/main", "HEAD", "<tag-or-commit>", "feature/x"):
+        manifest = {**base, "playbook": {**base["playbook"], "revision": revision}}
+        assert validate_manifest(manifest), f"accepted floating revision {revision!r}"
+
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    pinned = {**base, "playbook": {**base["playbook"], "revision": sha}}
+    assert validate_manifest(pinned) == []
+
+    vendor_manifest = {
+        **base,
+        "mode": "vendor",
+        "packages": {
+            "backend": ["cliver-playbook-app-basic"],
+            "frontend": [],
+        },
+        "vendored": [
+            {
+                "package": "cliver-playbook-app-basic",
+                "source_path": "packages/backend/cliver-playbook-app-basic/src/cliver_playbook",
+                "target_path": "vendor/cliver_playbook",
+                "revision": "v0.1.0",
+            }
+        ],
+    }
+    assert validate_manifest(vendor_manifest) == []
+
+    unknown_package = {
+        **vendor_manifest,
+        "vendored": [{**vendor_manifest["vendored"][0], "package": "totally-unknown"}],
+    }
+    assert validate_manifest(unknown_package), "accepted an unknown vendored package"
+
+    floating_vendored = {
+        **vendor_manifest,
+        "vendored": [{**vendor_manifest["vendored"][0], "revision": "main"}],
+    }
+    assert validate_manifest(floating_vendored), "accepted a floating vendored revision"
+
+    mixed_keys = {**base, 1: "x", "z": "extra"}
+    errors = validate_manifest(mixed_keys)
+    assert any("keys must be strings" in error for error in errors)
+
+    print("self-test: OK")
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    if argv[1:] == ["--self-test"]:
+        return _self_test()
+
     if len(argv) != 2:
         print(
-            "usage: validate_project_manifest.py <manifest.yaml>",
+            "usage: validate_project_manifest.py <manifest.yaml> | --self-test",
             file=sys.stderr,
         )
         return 1

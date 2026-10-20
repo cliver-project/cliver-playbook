@@ -27,11 +27,12 @@ separate directory; never assemble by editing the playbook packages.
    playbook README and ADRs: workspace manifests, backend routers via
    `include_router` (never `FastAPI.mount()`), settings layers, and the
    migration chains in dependency order.
-5. For `vendor`, use `scripts/vendor_package.py` and record
-   `vendor/FORKED_FROM.md` from the template in `REUSE.md`. Preserve the
-   `cliver_playbook` namespace; never rename packages by hand. If
-   `scripts/vendor_package.py` is absent, stop and report that vendor mode is
-   not implemented.
+5. For `vendor`, use `scripts/vendor_package.py`, repeating `--package` for
+   every package copied into the shared `vendor/cliver_playbook` tree. The
+   script writes one `vendor/FORKED_FROM.md` section per package; confirm each
+   import resolves under `vendor/`. Preserve the `cliver_playbook` namespace;
+   never rename packages by hand. If `scripts/vendor_package.py` is absent,
+   stop and report that vendor mode is not implemented.
 6. Write `project-manifest.yaml` from the example and validate it:
    ```sh
    uv run python scripts/validate_project_manifest.py project-manifest.yaml

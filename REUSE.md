@@ -48,23 +48,35 @@ it to the playbook package instead of vendoring or copying it.
 playbook revision; it does not copy their source.
 
 - `compose` — install the published packages. Recommended and the default.
-- `vendor` — copy a package's `src/cliver_playbook` subtree and its `alembic/`
-  chain into the project while preserving the `cliver_playbook` namespace.
-  Do not rename the package by hand. The project imports the vendored module
-  path and owns the copy.
+- `vendor` — copy one or more packages' `src/cliver_playbook/app/<name>`
+  subtrees (including each package's `alembic/` chain) into the project while
+  preserving the `cliver_playbook` namespace. Repeat `--package` to vendor
+  several packages into the same `vendor/cliver_playbook` tree. Do not rename
+  the package by hand. The project imports the vendored module path and owns
+  the copy.
 - `generate` — create project-specific domain code only. It is not a way to
   obtain playbook infrastructure.
 
-Do not mix compose and vendor for the same package. A vendored package replaces
-the installed dependency for that import path; the project manifest must say
-which one is in use.
+Do not mix compose and vendor for the same package, and do not install that
+package's distribution from PyPI: the installed copy may win on `sys.path` and
+silently shadow the fork. Verify the import after vendoring:
+
+```sh
+python -c "import cliver_playbook.app.<name> as m; print(m.__file__)"
+```
+
+The path must be under `vendor/`. The project manifest must say which packages
+are vendored.
 
 ## Provenance
 
-Every vendored tree carries `vendor/FORKED_FROM.md` with all of the following:
+`vendor/FORKED_FROM.md` carries one section per vendored package, with all of
+the following:
 
 ```markdown
 # Forked from cliver-playbook
+
+## cliver-playbook-app-<name>
 
 - Source repository: https://github.com/cliver-project/cliver-playbook
 - Revision: vX.Y.Z (commit <sha>)
@@ -73,6 +85,7 @@ Every vendored tree carries `vendor/FORKED_FROM.md` with all of the following:
 - Date: YYYY-MM-DD
 - Local changes: <list, or "none yet">
 - Upgrade policy: no upstream sync; compare against later playbook tags manually.
+- Import check: `cliver_playbook.app.<name>.__file__` resolves under `vendor/`.
 ```
 
 The revision is the exact tag or commit that was copied, never `main`. When a

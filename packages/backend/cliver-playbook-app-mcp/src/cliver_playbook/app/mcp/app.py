@@ -43,7 +43,7 @@ from fastapi import FastAPI
 
 from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.basic.api.routes import ROUTERS as BASIC_ROUTERS
-from cliver_playbook.app.basic.runtime_settings import load_persisted_settings
+from cliver_playbook.app.basic.runtime_settings import settings_lifespan
 from cliver_playbook.app.mcp.api.routes import ROUTERS as MCP_ROUTERS
 from cliver_playbook.app.mcp.api.streamable import MCP_PATH, install_streamable_app
 from cliver_playbook.app.mcp.settings import Settings
@@ -62,15 +62,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     effects — ADR-0016) and entered once for the application's lifetime: it
     holds the task group every session runs in, so its scope is exactly the
     scope of the process serving requests.
+
+    ``settings_lifespan`` owns the surrounding process lifecycle: it overlays
+    the persisted operator settings before the first request and disposes the
+    runtime engine after the session manager has stopped. Composing it here
+    makes the composed app behave like the single-package apps.
     """
-    # Operator overrides take effect before the first request. Loading here
-    # (rather than at import) keeps package imports side-effect free; a
-    # missing table is warned about, not fatal (ADR-0021).
-    await load_persisted_settings()
-    manager = install_streamable_app()
-    async with manager.run():
-        logger.info("MCP session manager running at %s", MCP_PATH)
-        yield
+    async with settings_lifespan(app):
+        manager = install_streamable_app()
+        async with manager.run():
+            logger.info("MCP session manager running at %s", MCP_PATH)
+            yield
 
 
 def configure_runtime(settings: Settings | None = None) -> Settings:
