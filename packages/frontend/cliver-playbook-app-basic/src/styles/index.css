@@ -5,8 +5,11 @@
 /* Scan this package's own sources. Automatic content detection starts at the
    consuming app's root and skips node_modules, so without this line every
    utility used only inside the package (the layout, the CRUD table, the
-   shadcn primitives) would be missing from the built stylesheet. Explicit
-   @source paths are scanned wherever they resolve, symlinks included. */
+   shadcn primitives) would be missing from the built stylesheet. This
+   stylesheet is resolved to its real path before its sources are read, so
+   "../" stays correct when the package is installed through a link. A
+   consuming app's own @source paths must name real directories, though: the
+   scanner silently skips a symlinked package path (verified on 4.3.3). */
 @source "../";
 
 /* Dark variant is driven by the data-theme attribute on <html>, set by the
