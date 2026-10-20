@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish every module
+    runs-on: ubuntu-latest
+    # Must match the environment configured on each PyPI trusted publisher.
+    environment: pypi
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # PyPI trusted publishing (OIDC)
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+          enable-cache: true
+
+      - name: Verify the tag matches every module
+        run: python3 scripts/version.py --check --tag "$GITHUB_REF_NAME"
+
+      - name: Build every backend distribution
+        run: uv build --all-packages --out-dir dist
+
+      - name: Publish to PyPI in dependency order
+        run: |
+          set -euo pipefail
+          for package in basic user rag mcp; do
+            uv publish --trusted-publishing always \
+              --check-url https://pypi.org/simple/ \
+              dist/cliver_playbook_app_${package}-*
+          done
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*

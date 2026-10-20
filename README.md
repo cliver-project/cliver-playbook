@@ -42,12 +42,12 @@ mcp) and doubles as the reference for what a finished project's wiring looks lik
 
 Two supported models, both composing the same way:
 
-- **Install**: `python -m pip install -e ../cliver-playbook-app-basic` (and `-e` the
-  others, dependencies first) into the project's virtualenv, or resolve them through a
-  uv workspace; `workspace:*` on the pnpm side. Packages stay live, fixes land once.
-- **Copy**: copy the chosen packages' sources into the project and drop the dependency
-  on this repository. A self-contained project, at the cost of picking up later changes
-  by hand.
+- **Compose** (default): install the backend packages from PyPI (dependencies first)
+  and reference the frontend packages from the same release tag with pnpm. Packages
+  stay live, fixes land once. See `REUSE.md` and `docs/releasing.md`.
+- **Vendor** (opt-in): copy a package with `scripts/vendor_package.py`, keep the
+  `cliver_playbook` namespace, and record provenance in `vendor/FORKED_FROM.md`.
+  A self-contained project, at the cost of picking up later changes by hand.
 
 Wiring a composed app is deliberately small — there is no per-project glue code to
 maintain:
@@ -68,9 +68,10 @@ const routes: RouteObject[] = [
 createI18n(userTranslations, ragTranslations, mcpTranslations);
 ```
 
-The Claude Code skills that automate the assembly (choose packages → copy or install →
-wire) are the next work item; until they land, the models above are the documented
-path, and the mcp frontend shell is the worked example to copy from.
+The `assemble-project` Claude Code skill automates the assembly (choose a profile →
+plan → wire), and `scripts/assemble_project.py --dry-run` prints the package set. The
+mcp frontend shell remains the worked example. Releases are cut with a `vX.Y.Z` tag;
+see `docs/releasing.md`.
 
 ## Running this repository
 

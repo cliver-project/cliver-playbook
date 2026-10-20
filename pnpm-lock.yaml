@@ -151,10 +151,10 @@ importers:
         specifier: ^1.7.0
         version: 1.20.0
       cliver-playbook-app-basic:
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../cliver-playbook-app-basic
       cliver-playbook-app-user:
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../cliver-playbook-app-user
       lucide-react:
         specifier: ^0.550.0
@@ -246,10 +246,10 @@ importers:
         specifier: ^1.7.0
         version: 1.20.0
       cliver-playbook-app-basic:
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../cliver-playbook-app-basic
       cliver-playbook-app-user:
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../cliver-playbook-app-user
       lucide-react:
         specifier: ^0.550.0
@@ -338,7 +338,7 @@ importers:
         specifier: ^1.7.0
         version: 1.20.0
       cliver-playbook-app-basic:
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../cliver-playbook-app-basic
       react-i18next:
         specifier: ^16.0.0

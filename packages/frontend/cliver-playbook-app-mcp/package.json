@@ -19,8 +19,8 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",
     "axios": "^1.7.0",
-    "cliver-playbook-app-basic": "workspace:*",
-    "cliver-playbook-app-user": "workspace:*",
+    "cliver-playbook-app-basic": "0.1.0",
+    "cliver-playbook-app-user": "0.1.0",
     "lucide-react": "^0.550.0",
     "react-i18next": "^16.0.0",
     "react-router-dom": "^7.18.0",

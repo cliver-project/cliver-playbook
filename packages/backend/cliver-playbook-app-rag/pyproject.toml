@@ -2,13 +2,16 @@
 name = "cliver-playbook-app-rag"
 version = "0.1.0"
 description = "cliver-playbook knowledge base: pluggable RAG (chunker / embedder / retriever / reranker / LLM) over the identity stack"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "Lin Gao" }]
 requires-python = ">=3.12"
 # Real dependency on the identity package (per ADR-0015). The RAG surface
 # resolves agents/users/tokens through the same auth_tokens table the
 # other packages use, so there is no separate rag_tokens table and no
 # separate identity surface to audit.
 dependencies = [
-    "cliver-playbook-app-user",
+    "cliver-playbook-app-user==0.1.0",
     # Web framework. >=0.143 because router inclusion copies plain Starlette
     # routes (rebuilding them from route.endpoint) — the behaviour that
     # lets every RAG router reach the composed app the same way ADR-0017
@@ -55,6 +58,9 @@ dependencies = [
     "numpy>=1.26.0",
     "httpx>=0.27.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/cliver-project/cliver-playbook"
 
 [dependency-groups]
 dev = [

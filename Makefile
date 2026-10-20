@@ -87,8 +87,19 @@ web-ui-check: web-ui-init ## Type-check, lint and build every frontend package a
 	@pnpm -r lint
 	@pnpm -r build
 
+.PHONY: version-check
+version-check: ## Verify every backend and frontend module shares one version
+	python3 scripts/version.py --check
+
+.PHONY: version-set
+version-set: ## Bump every module (usage: make version-set VERSION=0.2.0)
+	@test -n "$(VERSION)" || { echo "usage: make version-set VERSION=x.y.z" >&2; exit 2; }
+	python3 scripts/version.py --set $(VERSION)
+	uv lock
+	pnpm install --lockfile-only
+
 .PHONY: check
-check: backend-lint backend-test web-ui-check ## Everything CI would run
+check: backend-lint backend-test web-ui-check version-check ## Everything CI would run
 
 .PHONY: verify-reference
 verify-reference: ## Migrate a scratch DB, boot the composed app, build the reference frontend

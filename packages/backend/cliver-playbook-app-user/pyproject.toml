@@ -2,6 +2,9 @@
 name = "cliver-playbook-app-user"
 version = "0.1.0"
 description = "cliver-playbook identity: accounts, RBAC, OIDC login, OAuth 2.1 provider for agent clients"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "Lin Gao" }]
 requires-python = ">=3.12"
 # A real dependency on the foundations package (not a copied tree): the whole
 # point of the packaging model is that user imports basic at runtime, so a
@@ -9,7 +12,7 @@ requires-python = ">=3.12"
 # `pip install -e .` satisfies it without redeclaring basic's requirements
 # (ADR-0015).
 dependencies = [
-    "cliver-playbook-app-basic",
+    "cliver-playbook-app-basic==0.1.0",
     # Web framework and server
     "fastapi>=0.143.0",
     # Async ORM in services/routes; Alembic drives the sync psycopg URL that
@@ -30,6 +33,9 @@ dependencies = [
     # classes, metadata builders and route factories (auth/oauth21.py).
     "mcp>=2.2.0,<3",
 ]
+
+[project.urls]
+Repository = "https://github.com/cliver-project/cliver-playbook"
 
 [dependency-groups]
 dev = [

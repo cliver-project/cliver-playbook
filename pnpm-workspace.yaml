@@ -3,3 +3,8 @@
 packages:
   - "packages/frontend/*"
   - "packages/frontend/*/dev"
+
+# The library packages depend on each other by version (not `workspace:*`) so
+# that a consuming project can install them from a git tag. In this workspace,
+# link the local copies when their versions match.
+linkWorkspacePackages: true

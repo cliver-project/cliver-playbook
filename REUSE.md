@@ -82,22 +82,26 @@ the decision to merge or decline it in the same file.
 ## Versioning
 
 - **One version for the whole library.** Every backend distribution and every
-  frontend package shares the same version number. A release either publishes
-  the complete set or nothing.
+  frontend package shares the same version number. Bump all of them with
+  `make version-set VERSION=X.Y.Z`; `make version-check` rejects drift. A
+  release either publishes the complete set or nothing.
 - **Consume by tag or commit.** New projects pin `playbook.revision` to a
   release tag such as `v0.2.0`; they never track `main`. The project manifest
   validator rejects `main`/`HEAD` as the only revision.
 - **Backend packages are published to PyPI.** A `vX.Y.Z` tag triggers the
   release workflow, which verifies that every manifest carries `X.Y.Z` and
-  publishes the four backend distributions.
+  publishes the four backend distributions. See `docs/releasing.md`.
 - **Frontend packages are consumed from the git tag.** They are private
   source packages and are not published to npm. A project references the
   package by repository, tag and path, for example:
   ```json
   "cliver-playbook-app-basic": "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-basic"
   ```
-  pnpm resolves the tag and the monorepo subdirectory in one reference. Pin
-  the tag in `pnpm-lock.yaml` as usual.
+  pnpm resolves the tag and the monorepo subdirectory in one reference; the
+  consuming project also maps every playbook package in
+  `pnpm-workspace.yaml` overrides so sibling dependencies resolve from the
+  same tag (see `docs/releasing.md`). Pin the tag in `pnpm-lock.yaml` as
+  usual.
 - **Editable workspace installs are for playbook development only.** A
   consuming project installs tagged artifacts; the editable `uv`/`pnpm`
   workspace is how maintainers work on the playbook itself.

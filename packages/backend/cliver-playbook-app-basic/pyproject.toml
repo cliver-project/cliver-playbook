@@ -2,6 +2,9 @@
 name = "cliver-playbook-app-basic"
 version = "0.1.0"
 description = "cliver-playbook foundations: layered settings, process runtime, meta + demo Items API, own Alembic chain"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "Lin Gao" }]
 requires-python = ">=3.12"
 dependencies = [
     # Web framework and server
@@ -29,6 +32,9 @@ dependencies = [
     # HTTP client (outbound calls)
     "httpx>=0.28.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/cliver-project/cliver-playbook"
 
 [dependency-groups]
 dev = [
