@@ -101,16 +101,16 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
             errors.append("playbook must be a mapping")
         else:
             _report_unknown_keys(playbook, PLAYBOOK_KEYS, "playbook", errors)
-            if "revision" not in playbook:
+            revision = playbook.get("revision")
+            if revision is None:
                 errors.append("playbook: missing required key 'revision'")
-            elif _require_non_empty_string(
-                playbook["revision"], "playbook.revision", errors
+            elif (
+                _require_non_empty_string(revision, "playbook.revision", errors)
+                and revision.strip().lower() in FLOATING_REVISIONS
             ):
-                if playbook["revision"].strip().lower() in FLOATING_REVISIONS:
-                    errors.append(
-                        "playbook.revision must name a tag or commit, "
-                        f"not {playbook['revision']!r}"
-                    )
+                errors.append(
+                    f"playbook.revision must name a tag or commit, not {revision!r}"
+                )
             if "source" in playbook:
                 _require_non_empty_string(playbook["source"], "playbook.source", errors)
 
