@@ -71,15 +71,23 @@ project:
 
 | PyPI project | Owner | Repository | Workflow | Environment |
 |---|---|---|---|---|
-| `cliver-playbook-app-basic` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi` |
-| `cliver-playbook-app-user` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi` |
-| `cliver-playbook-app-rag` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi` |
-| `cliver-playbook-app-mcp` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi` |
+| `cliver-playbook-app-basic` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-basic` |
+| `cliver-playbook-app-user` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-user` |
+| `cliver-playbook-app-rag` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-rag` |
+| `cliver-playbook-app-mcp` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-mcp` |
 
 The GitHub repository must be named `cliver-playbook` (PyPI matches the
-repository name exactly). Create the `pypi` environment in the repository
-settings; no secrets are stored in it. After the first successful upload, the
-pending publisher becomes the project's normal trusted publisher.
+repository name exactly). Create the four environments in the repository
+settings; no secrets are stored in them.
+
+Each project needs its own environment because PyPI identifies a *pending*
+trusted publisher by the tuple (owner, repository, workflow, environment).
+Registering the same tuple for a second project fails with "A pending trusted
+publisher matching this configuration has already been registered for a
+different project name." Distinct environments make the four pending
+publishers legal; the workflow runs one publish job per environment in
+dependency order. After the first successful upload, each pending publisher
+becomes that project's normal trusted publisher.
 
 ## Frontend packages
 

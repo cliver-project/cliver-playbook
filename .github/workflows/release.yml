@@ -10,14 +10,9 @@ permissions:
   contents: read
 
 jobs:
-  release:
-    name: Publish every module
+  build:
+    name: Build every module
     runs-on: ubuntu-latest
-    # Must match the environment configured on each PyPI trusted publisher.
-    environment: pypi
-    permissions:
-      contents: write # create the GitHub release
-      id-token: write # PyPI trusted publishing (OIDC)
     steps:
       - name: Check out the tagged commit
         uses: actions/checkout@v4
@@ -41,16 +36,123 @@ jobs:
           python3 scripts/check_release_artifacts.py
           --dist dist --version "$GITHUB_REF_NAME"
 
-      - name: Publish to PyPI in dependency order
-        run: |
-          set -euo pipefail
-          for package in basic user rag mcp; do
-            uv publish --trusted-publishing always \
-              --check-url https://pypi.org/simple/ \
-              dist/cliver_playbook_app_${package}-*
-          done
+      - name: Share the distributions between jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
 
+  # PyPI identifies a pending trusted publisher by (owner, repository,
+  # workflow, environment), so one workflow publishing four projects needs a
+  # distinct environment per project. The jobs chain in dependency order.
+  publish-basic:
+    name: Publish basic
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi-basic
+    permissions:
+      id-token: write # PyPI trusted publishing (OIDC)
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+      - name: Download the distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish cliver-playbook-app-basic
+        run: >-
+          uv publish --trusted-publishing always
+          --check-url https://pypi.org/simple/
+          dist/cliver_playbook_app_basic-*
+
+  publish-user:
+    name: Publish user
+    needs: publish-basic
+    runs-on: ubuntu-latest
+    environment: pypi-user
+    permissions:
+      id-token: write
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+      - name: Download the distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish cliver-playbook-app-user
+        run: >-
+          uv publish --trusted-publishing always
+          --check-url https://pypi.org/simple/
+          dist/cliver_playbook_app_user-*
+
+  publish-rag:
+    name: Publish rag
+    needs: publish-user
+    runs-on: ubuntu-latest
+    environment: pypi-rag
+    permissions:
+      id-token: write
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+      - name: Download the distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish cliver-playbook-app-rag
+        run: >-
+          uv publish --trusted-publishing always
+          --check-url https://pypi.org/simple/
+          dist/cliver_playbook_app_rag-*
+
+  publish-mcp:
+    name: Publish mcp
+    needs: publish-rag
+    runs-on: ubuntu-latest
+    environment: pypi-mcp
+    permissions:
+      id-token: write
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+      - name: Download the distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish cliver-playbook-app-mcp
+        run: >-
+          uv publish --trusted-publishing always
+          --check-url https://pypi.org/simple/
+          dist/cliver_playbook_app_mcp-*
+
+  github-release:
+    name: Create the GitHub release
+    needs: publish-mcp
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes dist/*
