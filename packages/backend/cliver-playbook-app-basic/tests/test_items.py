@@ -1,6 +1,12 @@
 """Item CRUD endpoint tests: happy paths, 404s, validation, list ordering."""
 
 
+def test_items_created_at_index_is_declared():
+    from cliver_playbook.app.basic.models.entities import Item
+
+    assert "ix_items_created_at" in {index.name for index in Item.__table__.indexes}
+
+
 async def test_create_and_get_item(client):
     payload = {"name": "Widget", "description": "A demo item", "quantity": 3}
     resp = await client.post("/api/v1/items", json=payload)

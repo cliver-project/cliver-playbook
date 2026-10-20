@@ -13,7 +13,17 @@ items slice.
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, Identity, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    DateTime,
+    Identity,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +34,7 @@ class Item(Base):
     """Demo CRUD entity — replace with real domain entities as the project grows."""
 
     __tablename__ = "items"
+    __table_args__ = (Index("ix_items_created_at", "created_at"),)
 
     id: Mapped[int] = mapped_column(
         BigInteger, Identity(always=True), primary_key=True, autoincrement=True
