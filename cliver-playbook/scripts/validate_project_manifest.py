@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Validate a project manifest describing how a project consumes the playbook.
+
+Usage:
+    uv run python scripts/validate_project_manifest.py <manifest.yaml>
+
+Exit status is 0 when the manifest is valid. Otherwise every problem is
+printed on its own line to stderr and the exit status is 1.
+"""
+
+from __future__ import annotations
+
+import sys
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+PACKAGE_NAMES = {
+    "cliver-playbook-app-basic",
+    "cliver-playbook-app-user",
+    "cliver-playbook-app-rag",
+    "cliver-playbook-app-mcp",
+}
+MODES = {"compose", "vendor", "generate"}
+TOP_LEVEL_KEYS = {
+    "project",
+    "playbook",
+    "mode",
+    "packages",
+    "vendored",
+    "decisions",
+}
+PLAYBOOK_KEYS = {"source", "revision"}
+PACKAGES_KEYS = {"backend", "frontend"}
+VENDORED_ENTRY_KEYS = {"package", "source_path", "target_path", "revision"}
+FLOATING_REVISIONS = {"main", "master", "head", "latest"}
+
+REQUIRED_KEYS = ("project", "playbook", "mode", "packages", "vendored")
+
+
+def _report_unknown_keys(
+    mapping: Mapping[str, Any], allowed: set[str], where: str, errors: list[str]
+) -> None:
+    for key in sorted(set(mapping) - allowed):
+        errors.append(f"{where}: unknown key {key!r}")
+
+
+def _require_non_empty_string(value: Any, where: str, errors: list[str]) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{where} must be a non-empty string")
+        return False
+    return True
+
+
+def _validate_package_list(value: Any, where: str, errors: list[str]) -> None:
+    if not isinstance(value, list):
+        errors.append(f"{where} must be a list of package names")
+        return
+    for index, name in enumerate(value):
+        if not isinstance(name, str) or not name.strip():
+            errors.append(f"{where}[{index}] must be a non-empty string")
+        elif name not in PACKAGE_NAMES:
+            errors.append(f"{where}[{index}]: unknown package {name!r}")
+
+
+def _validate_vendored_entry(
+    entry: Any, index: int, errors: list[str]
+) -> dict[str, Any] | None:
+    where = f"vendored[{index}]"
+    if not isinstance(entry, Mapping):
+        errors.append(f"{where} must be a mapping")
+        return None
+    _report_unknown_keys(entry, VENDORED_ENTRY_KEYS, where, errors)
+    for key in sorted(VENDORED_ENTRY_KEYS):
+        if key not in entry:
+            errors.append(f"{where}: missing required key {key!r}")
+        else:
+            _require_non_empty_string(entry[key], f"{where}.{key}", errors)
+    return dict(entry)
+
+
+def validate_manifest(data: dict[str, Any]) -> list[str]:
+    """Return human-readable errors; an empty list means the manifest is valid."""
+    if not isinstance(data, Mapping):
+        return ["manifest must be a mapping"]
+
+    errors: list[str] = []
+    _report_unknown_keys(data, TOP_LEVEL_KEYS, "manifest", errors)
+    for key in REQUIRED_KEYS:
+        if key not in data:
+            errors.append(f"manifest: missing required key {key!r}")
+
+    if "project" in data:
+        _require_non_empty_string(data["project"], "project", errors)
+
+    if "playbook" in data:
+        playbook = data["playbook"]
+        if not isinstance(playbook, Mapping):
+            errors.append("playbook must be a mapping")
+        else:
+            _report_unknown_keys(playbook, PLAYBOOK_KEYS, "playbook", errors)
+            if "revision" not in playbook:
+                errors.append("playbook: missing required key 'revision'")
+            elif _require_non_empty_string(
+                playbook["revision"], "playbook.revision", errors
+            ):
+                if playbook["revision"].strip().lower() in FLOATING_REVISIONS:
+                    errors.append(
+                        "playbook.revision must name a tag or commit, "
+                        f"not {playbook['revision']!r}"
+                    )
+            if "source" in playbook:
+                _require_non_empty_string(playbook["source"], "playbook.source", errors)
+
+    mode = data.get("mode")
+    if "mode" in data and mode not in MODES:
+        errors.append(f"mode must be one of {sorted(MODES)}, got {mode!r}")
+
+    if "packages" in data:
+        packages = data["packages"]
+        if not isinstance(packages, Mapping):
+            errors.append("packages must be a mapping")
+        else:
+            _report_unknown_keys(packages, PACKAGES_KEYS, "packages", errors)
+            for key in sorted(PACKAGES_KEYS & set(packages)):
+                _validate_package_list(packages[key], f"packages.{key}", errors)
+
+    vendored = data.get("vendored")
+    if "vendored" in data and not isinstance(vendored, list):
+        errors.append("vendored must be a list")
+        vendored = None
+
+    if isinstance(vendored, list):
+        entries = []
+        for index, entry in enumerate(vendored):
+            parsed = _validate_vendored_entry(entry, index, errors)
+            if parsed is not None:
+                entries.append(parsed)
+
+        if mode == "compose" and vendored:
+            errors.append(
+                "mode 'compose' requires an empty 'vendored' list; "
+                "use mode 'vendor' to own a copy"
+            )
+        if mode == "vendor":
+            if not vendored:
+                errors.append("mode 'vendor' requires at least one vendored entry")
+            else:
+                packages_in_use = {
+                    name
+                    for key in ("backend", "frontend")
+                    if isinstance(data.get("packages"), Mapping)
+                    and isinstance(data["packages"].get(key), list)
+                    for name in data["packages"][key]
+                    if isinstance(name, str)
+                }
+                for entry in entries:
+                    package = entry.get("package")
+                    if (
+                        isinstance(package, str)
+                        and package in PACKAGE_NAMES
+                        and package not in packages_in_use
+                    ):
+                        errors.append(
+                            f"vendored package {package!r} is not listed in packages"
+                        )
+
+    if "decisions" in data:
+        decisions = data["decisions"]
+        if not isinstance(decisions, list):
+            errors.append("decisions must be a list")
+        else:
+            for index, decision in enumerate(decisions):
+                _require_non_empty_string(decision, f"decisions[{index}]", errors)
+
+    return errors
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2:
+        print(
+            "usage: validate_project_manifest.py <manifest.yaml>",
+            file=sys.stderr,
+        )
+        return 1
+
+    path = Path(argv[1])
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"{path}: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        print(f"{path}: invalid YAML: {exc}", file=sys.stderr)
+        return 1
+
+    errors = validate_manifest(data)
+    for error in errors:
+        print(error, file=sys.stderr)
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))
