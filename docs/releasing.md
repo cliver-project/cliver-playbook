@@ -89,6 +89,19 @@ publishers legal; the workflow runs one publish job per environment in
 dependency order. After the first successful upload, each pending publisher
 becomes that project's normal trusted publisher.
 
+### First release with four projects
+
+PyPI allows at most three pending trusted publishers per account at once.
+Register `pypi-basic`, `pypi-user` and `pypi-rag` first, then cut the release.
+The workflow builds and publishes those three; `publish-mcp` fails because
+its pending publisher does not exist yet, so no GitHub release is created.
+The three pending publishers have now become normal publishers and no longer
+occupy the pending slots. Register the fourth pending publisher
+(`cliver-playbook-app-mcp`, environment `pypi-mcp`), then re-run the failed
+jobs of the same workflow run: `publish-mcp` creates the project, the
+version's already-published files are skipped by `--check-url`, and the
+GitHub release job runs. Later releases publish all four in one pass.
+
 ## Frontend packages
 
 Frontend packages are not published to npm. They are consumed from the same
