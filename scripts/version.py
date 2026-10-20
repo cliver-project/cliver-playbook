@@ -18,6 +18,7 @@ import json
 import re
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 BACKEND_PACKAGES = ("basic", "user", "rag", "mcp")
@@ -27,7 +28,7 @@ VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$")
 PY_VERSION_LINE = re.compile(r'(?m)^version = "([^"]+)"$')
 PY_VERSION_REPLACE = re.compile(r'(?m)^(version = ")[^"]+(")$')
 PY_PIN = re.compile(r'"(cliver-playbook-app-(?:basic|user|rag|mcp))([^"]*)"')
-PY_PIN_REPLACE = re.compile(r'("cliver-playbook-app-(?:basic|user|rag|mcp))==[^"]+"')
+PY_PIN_REPLACE = re.compile(r'("cliver-playbook-app-(?:basic|user|rag|mcp))==[^"]+(")')
 JSON_VERSION_REPLACE = re.compile(r'(?m)^(\s*"version":\s*")[^"]+(")')
 JSON_DEP_REPLACE = re.compile(
     r'("cliver-playbook-app-(?:basic|user|rag|mcp)":\s*")(?!workspace:)[^"]+(")'
@@ -94,7 +95,13 @@ def check_versions(root: Path, tag: str | None = None) -> list[str]:
         errors.append(f"tag {tag!r} does not match version {version!r}")
 
     for path in _backend_manifests(root):
-        for line in path.read_text(encoding="utf-8").splitlines():
+        text = path.read_text(encoding="utf-8")
+        try:
+            tomllib.loads(text)
+        except tomllib.TOMLDecodeError as exc:
+            errors.append(f"{path.relative_to(root)}: invalid TOML: {exc}")
+            continue
+        for line in text.splitlines():
             if not line.strip().startswith('"'):
                 continue
             for package, specifier in PY_PIN.findall(line):
@@ -131,7 +138,7 @@ def set_version(root: Path, version: str) -> list[str]:
         text, count = PY_VERSION_REPLACE.subn(rf"\g<1>{version}\g<2>", text, count=1)
         if count != 1:
             raise ValueError(f"{path}: no [project] version line found")
-        text = PY_PIN_REPLACE.sub(rf"\g<1>=={version}", text)
+        text = PY_PIN_REPLACE.sub(rf"\g<1>=={version}\g<2>", text)
         path.write_text(text, encoding="utf-8")
         changed.append(path.relative_to(root).as_posix())
 
@@ -203,6 +210,26 @@ def _self_test() -> int:
         assert not check_versions(root, "0.1.0")
         set_version(root, "0.2.0")
         assert set(collect_versions(root).values()) == {"0.2.0"}
+        for name in BACKEND_PACKAGES:
+            manifest = (
+                root
+                / "packages/backend"
+                / f"cliver-playbook-app-{name}"
+                / "pyproject.toml"
+            )
+            data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+            assert data["project"]["dependencies"] == [
+                "cliver-playbook-app-basic==0.2.0"
+            ]
+        for name in FRONTEND_PACKAGES:
+            manifest = (
+                root
+                / "packages/frontend"
+                / f"cliver-playbook-app-{name}"
+                / "package.json"
+            )
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            assert data["dependencies"]["cliver-playbook-app-basic"] == "0.2.0"
         assert not check_versions(root, "0.2.0")
         assert check_versions(root, "0.1.0")
         assert check_versions(root, "v0.2.0")
@@ -215,6 +242,12 @@ def _self_test() -> int:
             ]
             == "workspace:*"
         )
+
+        broken = root / "packages/backend/cliver-playbook-app-basic/pyproject.toml"
+        broken.write_text(
+            '[project]\nversion = "0.2.0"\ndependencies = ["x",\n', encoding="utf-8"
+        )
+        assert any("invalid TOML" in error for error in check_versions(root))
     print("self-test: OK")
     return 0
 
