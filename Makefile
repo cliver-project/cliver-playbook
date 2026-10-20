@@ -90,6 +90,10 @@ web-ui-check: web-ui-init ## Type-check, lint and build every frontend package a
 .PHONY: check
 check: backend-lint backend-test web-ui-check ## Everything CI would run
 
+.PHONY: verify-reference
+verify-reference: ## Migrate a scratch DB, boot the composed app, build the reference frontend
+	./scripts/smoke_reference.sh
+
 ##@ MCP server
 
 # The composed app already serves /mcp in-process. These targets start the MCP

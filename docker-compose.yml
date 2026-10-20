@@ -8,6 +8,10 @@
 # postgres images do not ship the extension. The pgvector image is a drop-in
 # replacement, so an existing named volume keeps its data when the container
 # is recreated against it.
+# Pinned so the project (and its data volume) keeps the same name regardless of
+# the checkout directory, including after the repository was renamed.
+name: cliver-playbook
+
 services:
   db:
     image: pgvector/pgvector:pg16

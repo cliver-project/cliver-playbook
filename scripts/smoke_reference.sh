@@ -31,6 +31,7 @@ trap cleanup EXIT
 
 echo "==> Starting the database container"
 make db-up
+docker compose up -d --wait db >/dev/null
 
 echo "==> Creating scratch database ${DB_NAME}"
 docker compose exec -T db psql -U cliver -d postgres -v ON_ERROR_STOP=1 \
