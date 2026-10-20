@@ -193,6 +193,10 @@ def _changed_paths() -> list[str]:
     return paths
 
 
+def _unmanaged_paths() -> list[str]:
+    return [path for path in _changed_paths() if not _managed_path(path)]
+
+
 def _run(command: list[str]) -> int:
     print(f"==> {' '.join(command)}")
     return subprocess.run(command, check=False, cwd=ROOT).returncode
@@ -276,7 +280,7 @@ def _release(args: argparse.Namespace) -> int:
 
     # Refuse unrelated working-tree changes before the long checks and before
     # any file is rewritten: a release commit contains the version bump only.
-    unmanaged = [path for path in _changed_paths() if not _managed_path(path)]
+    unmanaged = _unmanaged_paths()
     if unmanaged:
         print("working tree has changes outside the version bump:", file=sys.stderr)
         for path in unmanaged:
@@ -308,6 +312,14 @@ def _release(args: argparse.Namespace) -> int:
         print("release version does not match every module:", file=sys.stderr)
         for error in alignment:
             print(f"  {error}", file=sys.stderr)
+        return 1
+
+    # Checks must not have produced tracked changes outside the bump.
+    unmanaged = _unmanaged_paths()
+    if unmanaged:
+        print("checks produced changes outside the version bump:", file=sys.stderr)
+        for path in unmanaged:
+            print(f"  {path}", file=sys.stderr)
         return 1
 
     if _changed_paths():
