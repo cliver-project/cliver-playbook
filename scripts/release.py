@@ -115,22 +115,34 @@ def _retry_status(
     tag_commit: str | None,
     head: str,
     clean: bool,
+    published: bool,
 ) -> tuple[bool, str | None]:
     """Return (is_retry, refusal) for a tag already at the current version.
 
-    Re-running after a failed push is allowed when the tag is on HEAD and the
-    tree is clean. Any other tag at the current version means the version was
-    never bumped. A request for a different version is not a retry and is left
-    to the version decision.
+    Re-running after a failed push is allowed when the tag is on HEAD, the
+    tree is clean, and the tag was never published. A published tag, a tag on
+    another commit, or a dirty tree means the version was not bumped. A
+    request for a different version is not a retry and is left to the version
+    decision.
     """
     if latest != current or (requested is not None and requested != current):
         return False, None
-    if tag_commit == head and clean:
-        return True, None
-    return False, (
-        f"version {current} already has a tag, but it is not a clean retry: "
-        "the tag points at another commit or the tree has pending changes"
-    )
+    if tag_commit != head:
+        return (
+            False,
+            f"tag {current} already exists on another commit; choose a new version",
+        )
+    if not clean:
+        return False, (
+            f"tag {current} is on HEAD but the tree has pending changes; "
+            "commit or stash them first"
+        )
+    if published:
+        return False, (
+            f"version {current} is already released as tag {current}; bump the "
+            "version first (`make version-set VERSION=X.Y.Z`)"
+        )
+    return True, None
 
 
 def _managed_path(path: str) -> bool:
@@ -162,6 +174,12 @@ def _tag_commit(tag: str) -> str | None:
         "rev-parse", "-q", "--verify", f"refs/tags/{tag}^{{commit}}", check=False
     )
     return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _tag_published(tag: str) -> bool:
+    """True when origin already carries the tag; an unreachable origin is not a retry blocker."""
+    result = _git("ls-remote", "--tags", "origin", f"refs/tags/{tag}", check=False)
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def _changed_paths() -> list[str]:
@@ -198,6 +216,11 @@ def _release(args: argparse.Namespace) -> int:
     # A tag at the current version is a retry only when it points at HEAD and
     # the tree is clean (for example, the push failed after tagging). Any other
     # tag at the current version means the version was never bumped.
+    published = (
+        latest == current
+        and (args.version is None or args.version == current)
+        and _tag_published(current)
+    )
     retry, refusal = _retry_status(
         current,
         latest,
@@ -205,6 +228,7 @@ def _release(args: argparse.Namespace) -> int:
         _tag_commit(current),
         _git_output("rev-parse", "HEAD"),
         not _changed_paths(),
+        published,
     )
     if refusal:
         print(refusal, file=sys.stderr)
@@ -351,14 +375,22 @@ def _self_test() -> int:
     version, error = _decide_version("0.1.0", "0.2.0", None)
     assert version is None and "older" in (error or "")
 
-    assert _retry_status("0.1.0", None, None, None, "abc", True) == (False, None)
-    assert _retry_status("0.1.0", "0.1.0", None, "abc", "abc", True) == (True, None)
-    assert _retry_status("0.1.0", "0.1.0", "0.1.0", "abc", "abc", True) == (True, None)
-    retry, refusal = _retry_status("0.1.0", "0.1.0", None, "old", "abc", True)
-    assert not retry and "not a clean retry" in (refusal or "")
-    retry, refusal = _retry_status("0.1.0", "0.1.0", None, "abc", "abc", False)
-    assert not retry and "not a clean retry" in (refusal or "")
-    assert _retry_status("0.1.0", "0.1.0", "0.2.0", "old", "abc", False) == (
+    assert _retry_status("0.1.0", None, None, None, "abc", True, False) == (False, None)
+    assert _retry_status("0.1.0", "0.1.0", None, "abc", "abc", True, False) == (
+        True,
+        None,
+    )
+    assert _retry_status("0.1.0", "0.1.0", "0.1.0", "abc", "abc", True, False) == (
+        True,
+        None,
+    )
+    retry, refusal = _retry_status("0.1.0", "0.1.0", None, "old", "abc", True, False)
+    assert not retry and "another commit" in (refusal or "")
+    retry, refusal = _retry_status("0.1.0", "0.1.0", None, "abc", "abc", False, False)
+    assert not retry and "pending changes" in (refusal or "")
+    retry, refusal = _retry_status("0.1.0", "0.1.0", None, "abc", "abc", True, True)
+    assert not retry and "already released" in (refusal or "")
+    assert _retry_status("0.1.0", "0.1.0", "0.2.0", "old", "abc", False, False) == (
         False,
         None,
     )
