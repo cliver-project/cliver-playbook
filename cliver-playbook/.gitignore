@@ -11,5 +11,8 @@ build/
 # Local configuration and secrets — only .env.example files are committed
 .env
 
+# Claude/Superpowers local design, plan, and note documents
+docs/superpowers/
+
 # Node (frontend packages)
 node_modules/
