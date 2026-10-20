@@ -66,7 +66,7 @@ Every vendored tree carries `vendor/FORKED_FROM.md` with all of the following:
 ```markdown
 # Forked from cliver-playbook
 
-- Source repository: https://github.com/cliver-project/mcp_x
+- Source repository: https://github.com/cliver-project/cliver-playbook
 - Revision: vX.Y.Z (commit <sha>)
 - Source path: packages/backend/cliver-playbook-app-<name>/src/cliver_playbook
 - Target path: vendor/cliver_playbook
@@ -94,7 +94,7 @@ the decision to merge or decline it in the same file.
   source packages and are not published to npm. A project references the
   package by repository, tag and path, for example:
   ```json
-  "cliver-playbook-app-basic": "github:cliver-project/mcp_x#v0.2.0&path:/packages/frontend/cliver-playbook-app-basic"
+  "cliver-playbook-app-basic": "github:cliver-project/cliver-playbook#v0.2.0&path:/packages/frontend/cliver-playbook-app-basic"
   ```
   pnpm resolves the tag and the monorepo subdirectory in one reference. Pin
   the tag in `pnpm-lock.yaml` as usual.

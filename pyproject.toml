@@ -1,50 +1,28 @@
 [project]
-name = "mcp-x"
+name = "cliver-playbook"
 version = "0.1.0"
-description = "A simple MCP server"
-authors = [
-    { name = "Lin Gao", email = "aoingl@gmail.com" }
-]
-requires-python = ">=3.10"
-readme = "README.md"
+description = "Development workspace root for the cliver-playbook packages"
+requires-python = ">=3.12"
+# The workspace root is a development convenience, not a distributable
+# package: `uv sync` here installs every backend package in editable mode
+# (see [tool.uv.sources]) so the whole library is importable from a single
+# virtualenv, exactly as a consuming project would install it.
+# Package order mirrors the dependency chain: basic <- user <- rag <- mcp.
 dependencies = [
-    "click>=8.2.1",
-    "dotenv>=0.9.9",
-    "fastapi>=0.116.1",
-    "fastmcp>=2.10.5",
-    "jinja2>=3.1.6",
-    "pyyaml>=6.0.2",
-    "uvicorn>=0.35.0",
+    "cliver-playbook-app-basic",
+    "cliver-playbook-app-user",
+    "cliver-playbook-app-rag",
+    "cliver-playbook-app-mcp",
 ]
-
-[dependency-groups]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov",
-    "isort>=5.12.0",
-    "mypy>=1.0.0",
-    "ruff>=0.0.270",
-    "black>=25.1.0",
-]
-
-[project.scripts]
-mcp_x = "mcp_x.app:main"
-
-[build-system]
-requires = ["uv_build>=0.7,<0.8"]
-build-backend = "uv_build"
 
 [tool.uv]
-package = true
+package = false
 
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+[tool.uv.sources]
+cliver-playbook-app-basic = { workspace = true }
+cliver-playbook-app-user = { workspace = true }
+cliver-playbook-app-rag = { workspace = true }
+cliver-playbook-app-mcp = { workspace = true }
 
-[tool.ruff]
-line-length = 88
-target-version = "py310"
-select = ["E", "F", "B", "I"]
+[tool.uv.workspace]
+members = ["packages/backend/*"]

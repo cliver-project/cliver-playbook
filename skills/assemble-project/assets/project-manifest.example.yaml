@@ -1,6 +1,6 @@
 project: example-app
 playbook:
-  source: https://github.com/cliver-project/mcp_x
+  source: https://github.com/cliver-project/cliver-playbook
   revision: <tag-or-commit>
 mode: compose
 packages:
