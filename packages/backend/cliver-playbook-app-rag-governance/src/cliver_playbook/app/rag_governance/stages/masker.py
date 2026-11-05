@@ -43,6 +43,18 @@ _PATTERNS: dict[PatternName, re.Pattern[str]] = {
 _DEFAULT_ORDER: tuple[PatternName, ...] = ("phone", "email", "cn_id", "bank_card")
 
 
+def compiled_patterns(
+    names: list[PatternName] | tuple[PatternName, ...] | None = None,
+) -> dict[str, re.Pattern[str]]:
+    """The named sensitive patterns, for the masking-leak evaluator.
+
+    The evaluator must scan with exactly the patterns the masker applies;
+    sharing the compiled table keeps the two from drifting apart.
+    """
+    selected = _DEFAULT_ORDER if names is None else names
+    return {name: _PATTERNS[name] for name in selected if name in _PATTERNS}
+
+
 class MaskerOptions(BaseModel):
     """Which patterns to apply and what replaces them.
 

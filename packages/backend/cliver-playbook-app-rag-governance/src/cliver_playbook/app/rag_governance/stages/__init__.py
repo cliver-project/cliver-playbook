@@ -32,7 +32,11 @@ from cliver_playbook.app.rag_governance.stages.classifier import (
 )
 from cliver_playbook.app.rag_governance.stages.cleaner import PassthroughCleaner
 from cliver_playbook.app.rag_governance.stages.contextualizer import SectionPathContextualizer
-from cliver_playbook.app.rag_governance.stages.masker import MaskerOptions, RegexPiiMasker
+from cliver_playbook.app.rag_governance.stages.masker import (
+    MaskerOptions,
+    RegexPiiMasker,
+    compiled_patterns,
+)
 from cliver_playbook.app.rag_governance.stages.registry import Registry
 from cliver_playbook.app.rag_governance.stages.source import DirectorySource, UploadSource
 
@@ -83,6 +87,7 @@ __all__ = [
     "UploadSource",
     "approval_policies",
     "cleaners",
+    "compiled_patterns",
     "contextualizers",
     "intent_classifiers",
     "maskers",

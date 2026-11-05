@@ -12,6 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from cliver_playbook.app.rag_governance.api.batches import router as batches_router
+from cliver_playbook.app.rag_governance.api.evaluations import router as evaluations_router
 from cliver_playbook.app.rag_governance.api.golden import router as golden_router
 from cliver_playbook.app.rag_governance.api.projects import router as projects_router
 from cliver_playbook.app.rag_governance.api.rules import router as rules_router
@@ -33,4 +34,5 @@ ROUTERS: list[APIRouter] = [
     batches_router,
     golden_router,
     rules_router,
+    evaluations_router,
 ]
