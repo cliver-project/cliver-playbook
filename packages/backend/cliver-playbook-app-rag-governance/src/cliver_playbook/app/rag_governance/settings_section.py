@@ -28,6 +28,7 @@ class _GovernanceRuntimeSettings(BaseModel):
     worker_enabled: bool
     worker_poll_seconds: float = Field(gt=0)
     job_max_attempts: int = Field(ge=1)
+    job_retry_backoff_seconds: float = Field(ge=0)
     default_approval_mode: str
     mock_kingdee_url: str
     max_tool_rows: int = Field(ge=1)
@@ -57,6 +58,14 @@ def _fields() -> tuple[SettingsField, ...]:
             minimum=1,
             description="Failures before a job is marked failed instead of retried.",
             env_var="CLIVER_RAG_GOVERNANCE__JOB_MAX_ATTEMPTS",
+        ),
+        SettingsField(
+            name="job_retry_backoff_seconds",
+            label="Job retry backoff (seconds)",
+            type="number",
+            minimum=0.0,
+            description="Base delay before a failed job is retried; the delay doubles per attempt.",
+            env_var="CLIVER_RAG_GOVERNANCE__JOB_RETRY_BACKOFF_SECONDS",
         ),
         SettingsField(
             name="default_approval_mode",
@@ -90,6 +99,7 @@ def _read(settings: Any) -> dict[str, Any]:
         "worker_enabled": block.worker_enabled,
         "worker_poll_seconds": block.worker_poll_seconds,
         "job_max_attempts": block.job_max_attempts,
+        "job_retry_backoff_seconds": block.job_retry_backoff_seconds,
         "default_approval_mode": block.default_approval_mode,
         "mock_kingdee_url": block.mock_kingdee_url,
         "max_tool_rows": block.max_tool_rows,
@@ -113,6 +123,7 @@ def _apply(settings: Any, values: dict[str, Any]) -> None:
         "worker_enabled",
         "worker_poll_seconds",
         "job_max_attempts",
+        "job_retry_backoff_seconds",
         "default_approval_mode",
         "mock_kingdee_url",
         "max_tool_rows",

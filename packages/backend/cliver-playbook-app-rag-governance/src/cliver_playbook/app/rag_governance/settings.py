@@ -21,6 +21,9 @@ class GovernanceSettings(BaseModel):
     worker_enabled: bool = True
     worker_poll_seconds: float = Field(default=1.0, gt=0)
     job_max_attempts: int = Field(default=3, ge=1)
+    # Retry backoff base in seconds; the delay doubles per attempt. Zero
+    # is a test-only value that makes a retry immediately claimable.
+    job_retry_backoff_seconds: float = Field(default=2.0, ge=0)
     default_approval_mode: str = "manual"
     # Empty means "no mock server configured"; the finance acceptance
     # suite wires the in-process transport instead of this URL.
