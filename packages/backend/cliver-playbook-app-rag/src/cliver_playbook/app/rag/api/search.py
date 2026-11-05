@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
+from cliver_playbook.app.rag.access import resolve_access_scope
 from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
 from cliver_playbook.app.rag.embedding import get_embedder
 from cliver_playbook.app.rag.retrieval import Query, get_retriever
@@ -86,16 +87,19 @@ async def search(
             ) from None
 
     top_k = payload.top_k if payload.top_k is not None else settings.rag.top_k
+    access = await resolve_access_scope(viewer, payload.collection_id, db)
     query = Query(
         text=payload.query,
         top_k=top_k,
         mode=payload.mode,
         embedder=payload.embedder,
+        access=access,
     )
     audit_args = {
         "retriever": retriever_name,
         "mode": payload.mode,
         "embedder": payload.embedder or settings.rag.embedder,
+        "collection_id": payload.collection_id,
     }
     try:
         hits = await retriever.retrieve(query, db=db)

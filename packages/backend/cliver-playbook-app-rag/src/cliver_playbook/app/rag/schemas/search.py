@@ -27,6 +27,10 @@ class SearchRequest(BaseModel):
     mode: Literal["dense", "sparse", "hybrid"] = "hybrid"
     retriever: str | None = None
     embedder: str | None = None
+    # Optional collection (governance project) filter. When set, the
+    # caller's access scope is resolved for that collection; when empty
+    # a governance resolver still applies classification globally.
+    collection_id: str | None = None
 
 
 class HitRead(BaseModel):
@@ -38,6 +42,11 @@ class HitRead(BaseModel):
     text: str
     score: float
     metadata: dict[str, Any] = Field(default_factory=dict)
+    parent_id: str | None = None
+    parent_text: str | None = None
+    document_metadata: dict[str, Any] = Field(default_factory=dict)
+    logical_id: str | None = None
+    classification: int | None = None
 
 
 class SearchResponse(BaseModel):

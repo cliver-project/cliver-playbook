@@ -35,6 +35,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
+from cliver_playbook.app.rag.access import resolve_access_scope
 from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
 from cliver_playbook.app.rag.embedding import get_embedder
 from cliver_playbook.app.rag.llm import get_llm
@@ -124,6 +125,7 @@ async def chat(
         payload.rerank_top_k if payload.rerank_top_k is not None else settings.rag.rerank_top_k
     )
     effective_mode = retriever.effective_mode(payload.mode)
+    access = await resolve_access_scope(viewer, payload.collection_id, db)
     audit_args = {
         "retriever": retriever_name,
         "mode": payload.mode,
@@ -131,6 +133,7 @@ async def chat(
         "embedder": payload.embedder or settings.rag.embedder,
         "reranker": reranker_name,
         "llm": llm_name,
+        "collection_id": payload.collection_id,
     }
 
     try:
@@ -140,6 +143,7 @@ async def chat(
                 top_k=top_k,
                 mode=payload.mode,
                 embedder=payload.embedder,
+                access=access,
             ),
             db=db,
         )

@@ -93,6 +93,7 @@ async def app(settings: Settings) -> AsyncIterator[FastAPI]:
         # fixture independent of connection settings.
         await conn.execute(text("DELETE FROM rag_chunk_embeddings"))
         await conn.execute(text("DELETE FROM rag_chunks"))
+        await conn.execute(text("DELETE FROM rag_chunk_parents"))
         await conn.execute(text("DELETE FROM rag_documents"))
         await conn.execute(text("DELETE FROM app_settings"))
     # Restore the startup configuration: a previous test may have exercised

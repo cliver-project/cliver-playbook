@@ -17,12 +17,22 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from cliver_playbook.app.rag.access import AccessScope
+from cliver_playbook.app.rag.filters import FilterNode
 
 
 class Hit(BaseModel):
-    """One retrieved chunk, ranked within its result list."""
+    """One retrieved chunk, ranked within its result list.
+
+    ``text`` is the original child text. ``parent_text`` is the original
+    parent section the generator should receive (small-to-big); it is
+    None for legacy chunkers that have no parent representation.
+    ``metadata`` is chunk-level metadata, ``document_metadata`` is the
+    document's JSONB metadata.
+    """
 
     chunk_id: str
     document_id: str
@@ -30,6 +40,11 @@ class Hit(BaseModel):
     text: str
     score: float
     metadata: dict[str, Any] = Field(default_factory=dict)
+    parent_id: str | None = None
+    parent_text: str | None = None
+    document_metadata: dict[str, Any] = Field(default_factory=dict)
+    logical_id: str | None = None
+    classification: int | None = None
 
 
 class Query(BaseModel):
@@ -44,12 +59,21 @@ class Query(BaseModel):
     from different embedders live in different spaces (and usually differ
     in dimension), so a query embedded by the wrong model can never
     match them. When omitted, the configured default is used.
+
+    ``filters`` narrows the corpus by structured metadata.
+    ``access`` is the caller's visibility predicate; it is mandatory in
+    the sense that an omitted scope still applies the default
+    (published, not deleted) rule.
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     text: str
     top_k: int = 20
     mode: Literal["dense", "sparse", "hybrid"] = "hybrid"
     embedder: str | None = None
+    filters: FilterNode | None = None
+    access: AccessScope = Field(default_factory=AccessScope)
 
 
 class Retriever(Protocol):

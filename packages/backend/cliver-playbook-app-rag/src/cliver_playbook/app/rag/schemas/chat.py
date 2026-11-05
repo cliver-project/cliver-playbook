@@ -28,6 +28,7 @@ class ChatRequest(BaseModel):
     embedder: str | None = None
     reranker: str | None = None
     llm: str | None = None
+    collection_id: str | None = None
 
 
 class Citation(BaseModel):

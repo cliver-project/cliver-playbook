@@ -7,6 +7,10 @@ row. Reading the chunks per query is O(corpus) and intentionally
 simple — it exists so a developer (or a test run on SQLite) can answer
 queries with no pgvector, and it is not the production default.
 
+The access predicate and the structured filter run in SQL, before BM25
+sees a row. That ordering matters: a document the caller may not see
+must never influence the ranking, even through corpus statistics.
+
 Tokenization is a lower-cased ASCII word scan. That is honest about its
 limits: it works for English-like text, and a CJK corpus should use the
 Postgres full-text leg (which has its own configuration) rather than
@@ -21,7 +25,9 @@ from rank_bm25 import BM25L
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cliver_playbook.app.rag.models.entities import Chunk, Document
+from cliver_playbook.app.rag.access import policy_for
+from cliver_playbook.app.rag.filters import compile_filter
+from cliver_playbook.app.rag.models.entities import Chunk, ChunkParent, Document
 from cliver_playbook.app.rag.retrieval.base import Hit, Query
 
 _WORD = re.compile(r"[a-z0-9]+")
@@ -52,18 +58,29 @@ class Bm25OnlyRetriever:
         # Only indexed documents are searchable: a pending upload has
         # chunks (for the preview) and a failed one may still have
         # chunks, but neither is part of the knowledge base yet.
+        clauses = [
+            Document.status == "indexed",
+            policy_for(query.access).predicate(query.access),
+        ]
+        structured = compile_filter(query.filters)
+        if structured is not None:
+            clauses.append(structured)
+
         rows = (
-            (
-                await db.execute(
-                    select(Chunk)
-                    .join(Document, Document.id == Chunk.document_id)
-                    .where(Document.status == "indexed")
-                    .order_by(Chunk.ordinal)
+            await db.execute(
+                select(
+                    Chunk,
+                    Document.logical_id,
+                    Document.classification,
+                    ChunkParent.text.label("parent_text"),
+                    Document.metadata_json.label("document_metadata"),
                 )
+                .join(Document, Document.id == Chunk.document_id)
+                .outerjoin(ChunkParent, ChunkParent.id == Chunk.parent_id)
+                .where(*clauses)
+                .order_by(Chunk.ordinal)
             )
-            .scalars()
-            .all()
-        )
+        ).all()
         if not rows:
             return []
 
@@ -78,7 +95,14 @@ class Bm25OnlyRetriever:
         # An empty document set would make the scorer divide by zero;
         # the guard above covers it. Chunks whose text has no tokens
         # still need an entry, otherwise scores misalign with rows.
-        corpus = [_tokenize(row.text) for row in rows]
+        #
+        # BM25 reads the retrieval representation: the contextual
+        # ``search_text`` when the governance pipeline produced one,
+        # else the original chunk text (v1 uploads).
+        corpus = [
+            _tokenize(chunk.search_text or chunk.text)
+            for chunk, _logical_id, _classification, _parent_text, _doc_metadata in rows
+        ]
         bm25 = BM25L(corpus)
         scores = bm25.get_scores(query_tokens)
 
@@ -89,14 +113,20 @@ class Bm25OnlyRetriever:
                 # Non-matching documents score exactly zero; a
                 # zero-scored row is noise, not a low-confidence hit.
                 break
+            chunk, logical_id, classification, parent_text, document_metadata = row
             hits.append(
                 Hit(
-                    chunk_id=row.id,
-                    document_id=row.document_id,
-                    ordinal=row.ordinal,
-                    text=row.text,
+                    chunk_id=chunk.id,
+                    document_id=chunk.document_id,
+                    ordinal=chunk.ordinal,
+                    text=chunk.text,
                     score=float(score),
-                    metadata=row.metadata_json or {},
+                    metadata=chunk.metadata_json or {},
+                    parent_id=chunk.parent_id,
+                    parent_text=parent_text,
+                    document_metadata=document_metadata or {},
+                    logical_id=logical_id,
+                    classification=classification,
                 )
             )
             if len(hits) >= query.top_k:

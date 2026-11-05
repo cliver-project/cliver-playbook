@@ -57,6 +57,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
+from cliver_playbook.app.rag.access import resolve_access_scope
 from cliver_playbook.app.rag.audit import fingerprint, write_rag_audit
 from cliver_playbook.app.rag.chunking import Document as SourceDocument
 from cliver_playbook.app.rag.chunking import get_chunker
@@ -731,11 +732,13 @@ async def index_document(
 
 @router.get("", response_model=DocumentList)
 async def list_documents(
+    collection_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    _viewer: Viewer = _READ,
+    viewer: Viewer = _READ,
 ) -> DocumentList:
-    """Every document in the shared knowledge base, newest first."""
-    rows = await document_service.list_documents(db)
+    """Visible documents, newest first, optionally one collection."""
+    scope = await resolve_access_scope(viewer, collection_id, db)
+    rows = await document_service.list_documents(db, scope)
     return DocumentList(items=[DocumentRead.model_validate(row) for row in rows])
 
 
@@ -743,10 +746,11 @@ async def list_documents(
 async def get_document(
     document_id: str,
     db: AsyncSession = Depends(get_db),
-    _viewer: Viewer = _READ,
+    viewer: Viewer = _READ,
 ) -> DocumentRead:
-    """One document's metadata (status, stage choices, counters)."""
-    doc = await document_service.get_document(db, document_id)
+    """One visible document's metadata (status, stage choices, counters)."""
+    scope = await resolve_access_scope(viewer, None, db)
+    doc = await document_service.get_document(db, document_id, scope)
     if doc is None:
         raise HTTPException(status_code=404, detail="document not found")
     return DocumentRead.model_validate(doc)
@@ -756,13 +760,14 @@ async def get_document(
 async def get_document_chunks(
     document_id: str,
     db: AsyncSession = Depends(get_db),
-    _viewer: Viewer = _READ,
+    viewer: Viewer = _READ,
 ) -> ChunkList:
-    """A document's chunks in ordinal order, with their metadata."""
-    doc = await document_service.get_document(db, document_id)
+    """A visible document's chunks in ordinal order, with their metadata."""
+    scope = await resolve_access_scope(viewer, None, db)
+    doc = await document_service.get_document(db, document_id, scope)
     if doc is None:
         raise HTTPException(status_code=404, detail="document not found")
-    rows = await document_service.list_chunks(db, document_id)
+    rows = await document_service.list_chunks(db, document_id, scope)
     return ChunkList(
         items=[
             ChunkRead(
