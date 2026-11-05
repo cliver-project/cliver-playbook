@@ -34,11 +34,13 @@ from cliver_playbook.app.rag_governance.stages.cleaner import PassthroughCleaner
 from cliver_playbook.app.rag_governance.stages.contextualizer import SectionPathContextualizer
 from cliver_playbook.app.rag_governance.stages.masker import MaskerOptions, RegexPiiMasker
 from cliver_playbook.app.rag_governance.stages.registry import Registry
+from cliver_playbook.app.rag_governance.stages.source import DirectorySource, UploadSource
 
 cleaners: Registry[Cleaner] = Registry("cleaner")
 maskers: Registry[Masker] = Registry("masker")
 type_classifiers: Registry[TypeClassifier] = Registry("document type classifier")
 contextualizers: Registry[Contextualizer] = Registry("contextualizer")
+sources: Registry[Source] = Registry("source")
 intent_classifiers: Registry[IntentClassifier] = Registry("intent classifier")
 approval_policies: Registry[ApprovalPolicy] = Registry("approval policy")
 
@@ -47,6 +49,8 @@ maskers.register(RegexPiiMasker.name, RegexPiiMasker)
 type_classifiers.register(ByMimeClassifier.name, ByMimeClassifier)
 type_classifiers.register(ByExtensionClassifier.name, ByExtensionClassifier)
 contextualizers.register(SectionPathContextualizer.name, SectionPathContextualizer)
+sources.register(UploadSource.name, UploadSource)
+sources.register(DirectorySource.name, DirectorySource)
 approval_policies.register(ManualApprovalPolicy.name, ManualApprovalPolicy)
 approval_policies.register(AutoApprovalPolicy.name, AutoApprovalPolicy)
 approval_policies.register(HybridApprovalPolicy.name, HybridApprovalPolicy)
@@ -60,6 +64,7 @@ __all__ = [
     "CleanedText",
     "Cleaner",
     "Contextualizer",
+    "DirectorySource",
     "Evaluator",
     "HybridApprovalPolicy",
     "IntentClassifier",
@@ -75,10 +80,12 @@ __all__ = [
     "Source",
     "SourceDocument",
     "TypeClassifier",
+    "UploadSource",
     "approval_policies",
     "cleaners",
     "contextualizers",
     "intent_classifiers",
     "maskers",
+    "sources",
     "type_classifiers",
 ]
