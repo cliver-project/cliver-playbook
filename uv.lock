@@ -17,6 +17,7 @@ members = [
     "cliver-playbook-app-basic",
     "cliver-playbook-app-mcp",
     "cliver-playbook-app-rag",
+    "cliver-playbook-app-rag-governance",
     "cliver-playbook-app-user",
 ]
 
@@ -673,6 +674,7 @@ dependencies = [
     { name = "cliver-playbook-app-basic" },
     { name = "cliver-playbook-app-mcp" },
     { name = "cliver-playbook-app-rag" },
+    { name = "cliver-playbook-app-rag-governance" },
     { name = "cliver-playbook-app-user" },
 ]
 
@@ -681,6 +683,7 @@ requires-dist = [
     { name = "cliver-playbook-app-basic", editable = "packages/backend/cliver-playbook-app-basic" },
     { name = "cliver-playbook-app-mcp", editable = "packages/backend/cliver-playbook-app-mcp" },
     { name = "cliver-playbook-app-rag", editable = "packages/backend/cliver-playbook-app-rag" },
+    { name = "cliver-playbook-app-rag-governance", editable = "packages/backend/cliver-playbook-app-rag-governance" },
     { name = "cliver-playbook-app-user", editable = "packages/backend/cliver-playbook-app-user" },
 ]
 
@@ -835,6 +838,66 @@ requires-dist = [
     { name = "unstructured", extras = ["pdf"], specifier = ">=0.16.0" },
     { name = "uvicorn", specifier = ">=0.31.1" },
 ]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "aiosqlite", specifier = ">=0.20.0" },
+    { name = "anyio", specifier = ">=4.4.0" },
+    { name = "pytest", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", specifier = ">=0.24.0" },
+    { name = "ruff", specifier = ">=0.8.0" },
+]
+
+[[package]]
+name = "cliver-playbook-app-rag-governance"
+version = "0.1.0"
+source = { editable = "packages/backend/cliver-playbook-app-rag-governance" }
+dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "cliver-playbook-app-rag" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy" },
+    { name = "tzdata" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+mcp-client = [
+    { name = "mcp" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "aiosqlite" },
+    { name = "anyio" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.16.0" },
+    { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "cliver-playbook-app-rag", editable = "packages/backend/cliver-playbook-app-rag" },
+    { name = "fastapi", specifier = ">=0.143.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "mcp", marker = "extra == 'mcp-client'", specifier = ">=2.2.0,<3" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pydantic-settings", specifier = ">=2.16.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "sqlalchemy", specifier = ">=2.0.36" },
+    { name = "tzdata", specifier = ">=2024.1" },
+    { name = "uvicorn", specifier = ">=0.31.1" },
+]
+provides-extras = ["mcp-client"]
 
 [package.metadata.requires-dev]
 dev = [

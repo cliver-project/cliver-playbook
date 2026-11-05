@@ -1,0 +1,73 @@
+[project]
+name = "cliver-playbook-app-rag-governance"
+version = "0.1.0"
+description = "cliver-playbook knowledge-base governance: projects, golden datasets, rules, evaluation, approval and governed tools"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Lin Gao" }]
+requires-python = ">=3.12"
+# Governance is a layer on top of the RAG package, not a fork of it:
+# documents, chunks, embeddings and the retriever seam stay owned by
+# `rag`. The dependency chain is basic <- user <- rag <- rag-governance.
+dependencies = [
+    "cliver-playbook-app-rag==0.1.0",
+    "fastapi>=0.143.0",
+    "sqlalchemy>=2.0.36",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.16.0",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.0",
+    "alembic>=1.16.0",
+    "uvicorn>=0.31.1",
+    # The mock Kingdee server and the optional MCP client both speak
+    # HTTP; the in-process transport uses the same shapes.
+    "httpx>=0.27.0",
+    "pyyaml>=6.0",
+    # IANA timezone data for `as_of` handling on platforms whose system
+    # tz database is incomplete (the finance fixtures use Asia/Shanghai).
+    "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+# The MCP SDK is deliberately optional: core governance imports with no
+# MCP package installed, and a deployment that talks to a live ERP opts
+# in explicitly. The mock server does not need the SDK.
+mcp-client = ["mcp>=2.2.0,<3"]
+
+[project.urls]
+Repository = "https://github.com/cliver-project/cliver-playbook"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "anyio>=4.4.0",
+    "ruff>=0.8.0",
+    "aiosqlite>=0.20.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Same PEP 420 namespace reasoning as every other cliver-playbook
+# distribution: this wheel contributes one subtree of `cliver_playbook.app`.
+packages = ["src/cliver_playbook"]
+# Editable installs get a `.pth`; never `dev-mode-exact`, which would
+# shadow the sibling packages' namespace portions.
+dev-mode-dirs = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cliver_playbook"]
