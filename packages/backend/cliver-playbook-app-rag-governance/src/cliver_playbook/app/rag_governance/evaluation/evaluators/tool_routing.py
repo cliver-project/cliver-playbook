@@ -26,13 +26,6 @@ from cliver_playbook.app.rag_governance.evaluation.report import (
 from cliver_playbook.app.rag_governance.golden.schema import GoldenCase
 
 
-def _same_instant(first, second) -> bool:
-    try:
-        return first.astimezone(UTC) == second.astimezone(UTC)
-    except (AttributeError, ValueError):
-        return first == second
-
-
 class ToolRoutingEvaluator:
     name = "tool-routing"
     hard_gate = False
@@ -99,10 +92,15 @@ class ToolRoutingEvaluator:
             for call in observation.tool_calls:
                 if call.as_of is None:
                     soft.append(f"tool {call.name!r} did not receive as_of")
-                elif not _same_instant(call.as_of, case.as_of):
+                elif call.as_of.astimezone(UTC) > case.as_of.astimezone(UTC):
+                    # The observed value is the result's data cutoff, not
+                    # the injected reference time: a closed-period report
+                    # is legitimately older than the instant the question
+                    # is asked. Freshness bounds how old it may be; here
+                    # the only structural error is data from the future.
                     soft.append(
-                        f"tool {call.name!r} received as_of {call.as_of.isoformat()}, "
-                        f"expected {case.as_of.isoformat()}"
+                        f"tool {call.name!r} result is dated {call.as_of.isoformat()}, "
+                        f"after the reference time {case.as_of.isoformat()}"
                     )
 
         violations = [*soft, *hard]

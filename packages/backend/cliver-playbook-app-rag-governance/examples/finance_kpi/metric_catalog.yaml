@@ -1,0 +1,42 @@
+# Account-range to metric mapping for the finance KPI scenario.
+#
+# The catalog is configuration, not code: changing a range is a project
+# configuration change and must pass the confirmed golden set like a rule
+# change. `finance_kpi_snapshot` refuses a report row whose account is not
+# mapped, so a stale mapping cannot silently produce a plausible number.
+version: 1
+currency: CNY
+display_unit: 万元
+display_precision: 0
+warning_threshold: "0.10"
+metrics:
+  revenue:
+    label: 营业收入
+    accounts: ["6001-6051"]
+  budget_revenue:
+    label: 预算收入
+    accounts: ["9001-9001"]
+  cost_of_revenue:
+    label: 营业成本
+    accounts: ["6401-6403"]
+  net_profit:
+    label: 净利润
+    accounts: ["4103-4103"]
+  receivables:
+    label: 应收账款
+    accounts: ["1122-1122"]
+  payables:
+    label: 应付账款
+    accounts: ["2202-2202"]
+  current_assets:
+    label: 流动资产
+    accounts: ["1001-1011"]
+  current_liabilities:
+    label: 流动负债
+    accounts: ["2001-2011"]
+  total_assets:
+    label: 资产总额
+    accounts: ["1000-1000"]
+  total_liabilities:
+    label: 负债总额
+    accounts: ["2000-2000"]

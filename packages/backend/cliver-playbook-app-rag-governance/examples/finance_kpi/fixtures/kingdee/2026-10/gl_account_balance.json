@@ -1,0 +1,13 @@
+[
+  {"account": "6001", "metric": "revenue", "amount": "60000000"},
+  {"account": "6051", "metric": "revenue", "amount": "26500000"},
+  {"account": "9001", "metric": "budget_revenue", "amount": "89175258"},
+  {"account": "6401", "metric": "cost_of_revenue", "amount": "70757000"},
+  {"account": "4103", "metric": "net_profit", "amount": "5200000"},
+  {"account": "1122", "metric": "receivables", "amount": "61000000"},
+  {"account": "2202", "metric": "payables", "amount": "43000000"},
+  {"account": "1001", "metric": "current_assets", "amount": "81000000"},
+  {"account": "2001", "metric": "current_liabilities", "amount": "43000000"},
+  {"account": "1000", "metric": "total_assets", "amount": "100000000"},
+  {"account": "2000", "metric": "total_liabilities", "amount": "58000000"}
+]

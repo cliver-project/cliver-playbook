@@ -1,0 +1,19 @@
+{
+  "period": "2026-10",
+  "as_of": "2026-10-31T23:59:59+08:00",
+  "currency": "CNY",
+  "revenue": "86500000",
+  "budget_revenue": "89175258",
+  "budget_attainment": "0.97",
+  "gross_profit": "15743000",
+  "gross_margin": "0.182",
+  "net_profit": "5200000",
+  "receivables": "61000000",
+  "payables": "43000000",
+  "current_assets": "81000000",
+  "current_liabilities": "43000000",
+  "working_capital": "38000000",
+  "total_assets": "100000000",
+  "total_liabilities": "58000000",
+  "debt_ratio": "0.58"
+}

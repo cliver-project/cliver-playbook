@@ -288,6 +288,43 @@ async def test_tool_arguments_and_as_of_are_checked() -> None:
     assert any("2026-08" in violation for violation in result.violations)
 
 
+async def test_tool_result_cutoff_may_precede_the_injected_reference_time() -> None:
+    reference = datetime(2026, 11, 1, tzinfo=SHANGHAI)
+    case = _case(expected_tools=["kingdee.profit_report"], as_of=reference)
+    observation = QueryObservation(
+        strategy="tools",
+        tool_calls=(
+            ObservedToolCall(
+                name="kingdee.profit_report",
+                as_of=reference - timedelta(seconds=1),
+            ),
+        ),
+    )
+
+    result = await ToolRoutingEvaluator().evaluate(case, _ctx(observation=observation))
+
+    assert result.passed
+
+
+async def test_tool_result_dated_after_the_reference_time_is_rejected() -> None:
+    reference = datetime(2026, 11, 1, tzinfo=SHANGHAI)
+    case = _case(expected_tools=["kingdee.profit_report"], as_of=reference)
+    observation = QueryObservation(
+        strategy="tools",
+        tool_calls=(
+            ObservedToolCall(
+                name="kingdee.profit_report",
+                as_of=reference + timedelta(seconds=1),
+            ),
+        ),
+    )
+
+    result = await ToolRoutingEvaluator().evaluate(case, _ctx(observation=observation))
+
+    assert not result.passed
+    assert any("after the reference time" in violation for violation in result.violations)
+
+
 async def test_masking_leak_scans_the_whole_trace() -> None:
     observation = QueryObservation(
         answer="Call 13800138000 for the report",
