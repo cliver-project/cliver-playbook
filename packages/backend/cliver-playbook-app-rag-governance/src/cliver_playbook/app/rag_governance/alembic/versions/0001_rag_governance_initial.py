@@ -171,7 +171,7 @@ def upgrade() -> None:
 
     op.create_table(
         "gov_golden_cases",
-        sa.Column("id", sa.String(64), primary_key=True),
+        sa.Column("id", sa.String(64), nullable=False),
         sa.Column(
             "golden_set_id",
             sa.String(36),
@@ -182,6 +182,9 @@ def upgrade() -> None:
         sa.Column("payload_json", postgresql.JSONB, nullable=False),
         sa.Column("status", sa.String(16), nullable=False, server_default="candidate"),
         *_timestamps(),
+        # A case id is unique within its set. Forking a confirmed set
+        # keeps the readable ids, so the set must be part of the key.
+        sa.PrimaryKeyConstraint("id", "golden_set_id"),
     )
     op.create_index("ix_gov_golden_cases_golden_set_id", "gov_golden_cases", ["golden_set_id"])
 

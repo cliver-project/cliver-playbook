@@ -280,9 +280,12 @@ class GovGoldenCase(GovernanceBase):
     """One case row; ``payload_json`` is the full ``GoldenCase``.
 
     The case id is short and readable (``case-0001``) because it
-    appears in evaluation reports and review comments. The payload is
-    validated by the golden schema at write time; the columns here are
-    only the ones the server filters and orders by.
+    appears in evaluation reports and review comments. It is unique
+    *within its set*, not globally: forking a confirmed set copies the
+    same ids into the next version, and both versions must remain
+    addressable. The composite primary key carries that scoping. The
+    payload is validated by the golden schema at write time; the
+    columns here are only the ones the server filters and orders by.
     """
 
     __tablename__ = "gov_golden_cases"
@@ -291,6 +294,7 @@ class GovGoldenCase(GovernanceBase):
     golden_set_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("gov_golden_sets.id", ondelete="CASCADE"),
+        primary_key=True,
         nullable=False,
         index=True,
     )

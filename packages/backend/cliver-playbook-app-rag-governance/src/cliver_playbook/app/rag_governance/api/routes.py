@@ -12,6 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from cliver_playbook.app.rag_governance.api.batches import router as batches_router
+from cliver_playbook.app.rag_governance.api.golden import router as golden_router
 from cliver_playbook.app.rag_governance.api.projects import router as projects_router
 from cliver_playbook.app.rag_governance.api.sources import router as sources_router
 
@@ -24,4 +25,10 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-ROUTERS: list[APIRouter] = [router, projects_router, sources_router, batches_router]
+ROUTERS: list[APIRouter] = [
+    router,
+    projects_router,
+    sources_router,
+    batches_router,
+    golden_router,
+]
