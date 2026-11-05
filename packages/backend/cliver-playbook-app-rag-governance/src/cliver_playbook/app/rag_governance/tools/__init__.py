@@ -15,6 +15,12 @@ from cliver_playbook.app.rag_governance.tools.base import (
     ToolSpec,
 )
 from cliver_playbook.app.rag_governance.tools.http_openapi import HttpOpenApiTool
+from cliver_playbook.app.rag_governance.tools.mcp_tool import (
+    McpTool,
+    McpToolClient,
+    McpTransport,
+    ToolContractError,
+)
 from cliver_playbook.app.rag_governance.tools.registry import (
     RestrictedToolInvoker,
     ToolRegistry,
@@ -24,10 +30,14 @@ from cliver_playbook.app.rag_governance.tools.registry import (
 __all__ = [
     "AuditSink",
     "HttpOpenApiTool",
+    "McpTool",
+    "McpToolClient",
+    "McpTransport",
     "RestrictedToolInvoker",
     "Tool",
     "ToolCaps",
     "ToolContext",
+    "ToolContractError",
     "ToolDeniedError",
     "ToolRegistry",
     "ToolResult",

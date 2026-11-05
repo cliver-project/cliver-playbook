@@ -1,0 +1,136 @@
+{
+  "_source": "One normalized success and error envelope per allowlisted tool. The normalized envelope is the governance adapter's view of the upstream FastMCP text-content result; field names mirror the mock.",
+  "contract_version": "0.2.0",
+  "kingdee_query_report": {
+    "success": {
+      "tool": "kingdee_query_report",
+      "period": "2026-10",
+      "as_of": "2026-10-31T23:59:59+08:00",
+      "isError": false,
+      "error": null,
+      "error_message": null,
+      "data": [],
+      "row_count": 0
+    },
+    "error": {
+      "tool": "kingdee_query_report",
+      "period": "2025-01",
+      "as_of": null,
+      "isError": true,
+      "error": "not_found",
+      "error_message": "no fixture for period '2025-01'",
+      "data": [],
+      "row_count": 0
+    }
+  },
+  "kingdee_query_bills": {
+    "success": {
+      "tool": "kingdee_query_bills",
+      "period": "2026-10",
+      "as_of": "2026-10-31T23:59:59+08:00",
+      "isError": false,
+      "error": null,
+      "error_message": null,
+      "data": [],
+      "row_count": 0
+    },
+    "error": {
+      "tool": "kingdee_query_bills",
+      "period": "2025-01",
+      "as_of": null,
+      "isError": true,
+      "error": "not_found",
+      "error_message": "no fixture for period '2025-01'",
+      "data": [],
+      "row_count": 0
+    }
+  },
+  "kingdee_query_receipts": {
+    "success": {
+      "tool": "kingdee_query_receipts",
+      "period": "2026-10",
+      "as_of": "2026-10-31T23:59:59+08:00",
+      "isError": false,
+      "error": null,
+      "error_message": null,
+      "data": [],
+      "row_count": 0
+    },
+    "error": {
+      "tool": "kingdee_query_receipts",
+      "period": "2025-01",
+      "as_of": null,
+      "isError": true,
+      "error": "not_found",
+      "error_message": "no fixture for period '2025-01'",
+      "data": [],
+      "row_count": 0
+    }
+  },
+  "kingdee_query_partners": {
+    "success": {
+      "tool": "kingdee_query_partners",
+      "period": "2026-10",
+      "as_of": "2026-10-31T23:59:59+08:00",
+      "isError": false,
+      "error": null,
+      "error_message": null,
+      "data": [],
+      "row_count": 0
+    },
+    "error": {
+      "tool": "kingdee_query_partners",
+      "period": "2025-01",
+      "as_of": null,
+      "isError": true,
+      "error": "not_found",
+      "error_message": "no fixture for period '2025-01'",
+      "data": [],
+      "row_count": 0
+    }
+  },
+  "kingdee_get_fields": {
+    "success": {
+      "tool": "kingdee_get_fields",
+      "period": "2026-10",
+      "as_of": "2026-10-31T23:59:59+08:00",
+      "isError": false,
+      "error": null,
+      "error_message": null,
+      "data": [],
+      "row_count": 0
+    },
+    "error": {
+      "tool": "kingdee_get_fields",
+      "period": "2025-01",
+      "as_of": null,
+      "isError": true,
+      "error": "not_found",
+      "error_message": "no fixture for period '2025-01'",
+      "data": [],
+      "row_count": 0
+    }
+  },
+  "kingdee_list_forms": {
+    "success": {
+      "tool": "kingdee_list_forms",
+      "period": "2026-10",
+      "as_of": "2026-10-31T23:59:59+08:00",
+      "isError": false,
+      "error": null,
+      "error_message": null,
+      "data": [],
+      "row_count": 0
+    },
+    "error": {
+      "tool": "kingdee_list_forms",
+      "period": "2025-01",
+      "as_of": null,
+      "isError": true,
+      "error": "not_found",
+      "error_message": "no fixture for period '2025-01'",
+      "data": [],
+      "row_count": 0
+    }
+  }
+}

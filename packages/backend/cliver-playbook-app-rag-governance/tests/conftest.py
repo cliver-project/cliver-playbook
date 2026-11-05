@@ -18,7 +18,10 @@ updated.
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -31,8 +34,12 @@ from cliver_playbook.app.rag.models import Base as RagBase
 from cliver_playbook.app.rag_governance.app import create_app
 from cliver_playbook.app.rag_governance.models import GovernanceBase
 from cliver_playbook.app.rag_governance.settings import Settings
+from cliver_playbook.app.rag_governance.testing.mock_kingdee import MockKingdeeServer
 from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
 from cliver_playbook.app.user.auth.permissions import permission_codes
+
+KINGDEE_CONTRACT = Path(__file__).parent / "fixtures" / "kingdee" / "contract"
+KINGDEE_PERIOD_END = "2026-10-31T23:59:59+08:00"
 
 # Every governance permission, resolved from the live catalog so a new
 # code does not silently start failing an unrelated API test.
@@ -107,3 +114,98 @@ async def raw_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     """An HTTP client with no authentication override (real gate)."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+@pytest.fixture()
+def mock_kingdee_server(tmp_path: Path) -> MockKingdeeServer:
+    """One deterministic closed period: 2026-10, four fixture files."""
+    period = tmp_path / "kingdee" / "2026-10"
+    period.mkdir(parents=True)
+    _write_json(
+        period / "period.json",
+        {
+            "period": "2026-10",
+            "period_end": KINGDEE_PERIOD_END,
+            "closed": True,
+            "currency": "CNY",
+        },
+    )
+    _write_json(
+        period / "gl_account_balance.json",
+        [
+            {
+                "FBALANCEID": "1001",
+                "FBALANCENAME": "库存现金",
+                "FDEBIT": 0.0,
+                "FCREDIT": 0.0,
+                "FENDDEBIT": 125000.0,
+                "FENDCREDIT": 0.0,
+            },
+            {
+                "FBALANCEID": "1122",
+                "FBALANCENAME": "应收账款",
+                "FDEBIT": 8650000.0,
+                "FCREDIT": 0.0,
+                "FENDDEBIT": 8650000.0,
+                "FENDCREDIT": 0.0,
+            },
+            {
+                "FBALANCEID": "2202",
+                "FBALANCENAME": "应付账款",
+                "FDEBIT": 0.0,
+                "FCREDIT": 4320000.0,
+                "FENDDEBIT": 0.0,
+                "FENDCREDIT": 4320000.0,
+            },
+        ],
+    )
+    _write_json(
+        period / "ar_aging_rows.json",
+        [
+            {"FCUSTOMERID": "C001", "FAGINGBUCKET": "0-30", "FENDAMOUNTFOR": 1200000.0},
+            {"FCUSTOMERID": "C002", "FAGINGBUCKET": "31-60", "FENDAMOUNTFOR": 450000.0},
+        ],
+    )
+    _write_json(
+        period / "receipts.json",
+        [
+            {
+                "FID": "R001",
+                "FBillNo": "SK202610001",
+                "FDATE": "2026-10-18",
+                "FCUSTOMERID.FName": "华力电子",
+                "FALLAMOUNTFOR": 3000000.0,
+            }
+        ],
+    )
+    _write_json(
+        period / "partners_BD_Customer.json",
+        [{"FNumber": "C001", "FName": "华力电子", "FContact": "王经理"}],
+    )
+    _write_json(
+        period / "partners_BD_Supplier.json",
+        [{"FNumber": "S001", "FName": "华南材料", "FContact": "李经理"}],
+    )
+    _write_json(
+        period / "fields_GL_RPT_AccountBalance.json",
+        {
+            "form_id": "GL_RPT_AccountBalance",
+            "fields": ["FBALANCEID", "FBALANCENAME", "FDEBIT", "FCREDIT"],
+        },
+    )
+    _write_json(
+        period / "bills_PUR_PurchaseOrder.json",
+        [{"FID": "P001", "FBillNo": "CGDD202610001", "FDocumentStatus": "C"}],
+    )
+    _write_json(
+        period / "forms.json",
+        [
+            {"form_id": "PUR_PurchaseOrder", "name": "Purchase Order"},
+            {"form_id": "GL_RPT_AccountBalance", "name": "Account Balance Report"},
+        ],
+    )
+    return MockKingdeeServer(tmp_path / "kingdee")

@@ -1,0 +1,173 @@
+{
+  "_source": "Captured from the pinned WaHaiLong/KingdeeMCP v0.2.0 FastMCP tools/list shapes (curated read-only subset). The mock does not invent envelope fields the upstream tool does not produce.",
+  "contract_version": "0.2.0",
+  "tools": [
+    {
+      "name": "kingdee_query_report",
+      "description": "Query a general-ledger or financial report through the Kingdee GetSysReportData endpoint (for example GL_RPT_AccountBalance or GL_AgingSchedule). The inner data object carries FieldKeys, Model filters, StartRow and Limit exactly as the upstream tool expects.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "form_id": {
+            "type": "string",
+            "description": "Report form id, e.g. GL_RPT_AccountBalance."
+          },
+          "data": {
+            "type": "object",
+            "description": "Inner GetSysReportData model object.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "form_id",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kingdee_query_bills",
+      "description": "Query any Kingdee bill list (purchase orders, sale orders, stock bills).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "form_id": {
+            "type": "string",
+            "description": "Bill form id."
+          },
+          "filter_string": {
+            "type": "string",
+            "default": ""
+          },
+          "field_keys": {
+            "type": "string",
+            "default": "FID,FBillNo,FDate,FDocumentStatus"
+          },
+          "order_string": {
+            "type": "string",
+            "default": "FID DESC"
+          },
+          "start_row": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": [
+          "form_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kingdee_query_receipts",
+      "description": "Query audited receivable receipts (AR_Receivable).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filter_string": {
+            "type": "string",
+            "default": "FDocumentStatus='C'"
+          },
+          "field_keys": {
+            "type": "string"
+          },
+          "start_row": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kingdee_query_partners",
+      "description": "Query customer or supplier master data.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "partner_type": {
+            "type": "string",
+            "enum": [
+              "BD_Customer",
+              "BD_Supplier"
+            ]
+          },
+          "filter_string": {
+            "type": "string",
+            "default": ""
+          },
+          "field_keys": {
+            "type": "string"
+          },
+          "start_row": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": [
+          "partner_type"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kingdee_get_fields",
+      "description": "List the fields of a Kingdee form.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "form_id": {
+            "type": "string"
+          },
+          "entry_key": {
+            "type": "string",
+            "default": ""
+          },
+          "verbose": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "form_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kingdee_list_forms",
+      "description": "Search the available Kingdee form ids.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}
