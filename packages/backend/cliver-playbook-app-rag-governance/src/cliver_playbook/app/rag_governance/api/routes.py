@@ -16,6 +16,7 @@ from cliver_playbook.app.rag_governance.api.batches import router as batches_rou
 from cliver_playbook.app.rag_governance.api.evaluations import router as evaluations_router
 from cliver_playbook.app.rag_governance.api.golden import router as golden_router
 from cliver_playbook.app.rag_governance.api.projects import router as projects_router
+from cliver_playbook.app.rag_governance.api.query import router as query_router
 from cliver_playbook.app.rag_governance.api.rules import router as rules_router
 from cliver_playbook.app.rag_governance.api.sources import router as sources_router
 
@@ -37,4 +38,5 @@ ROUTERS: list[APIRouter] = [
     rules_router,
     evaluations_router,
     approvals_router,
+    query_router,
 ]
