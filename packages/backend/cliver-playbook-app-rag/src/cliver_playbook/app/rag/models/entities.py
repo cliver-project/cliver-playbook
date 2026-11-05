@@ -28,7 +28,7 @@ from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -56,6 +56,28 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String(32), default="pending")
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Governance lineage. A plain upload leaves these NULL and keeps the
+    # v1 behaviour; a governance pipeline sets a stable logical id, the
+    # collection (project) it belongs to, its classification level, and
+    # the pipeline run that produced it. `published=false` is the
+    # staging flag that isolates an unapproved version from retrieval.
+    logical_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    classification: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    collection_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
+    published: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true", index=True
+    )
+    pipeline_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -68,6 +90,28 @@ class Document(Base):
     )
 
 
+class ChunkParent(Base):
+    """An original parent section, kept verbatim for generation.
+
+    Children carry a short contextualised ``search_text`` for retrieval;
+    the generator is given the parent this row holds, not the child and
+    not an LLM summary. That is the small-to-big contract: the vector
+    index searches a compact representation while the answer stays
+    grounded in the source text.
+    """
+
+    __tablename__ = "rag_chunk_parents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    document_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("rag_documents.id", ondelete="CASCADE"), index=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Chunk(Base):
     __tablename__ = "rag_chunks"
 
@@ -77,6 +121,10 @@ class Chunk(Base):
     )
     ordinal: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
+    # The retrieval representation: an LLM-generated/contextual prefix
+    # plus the child text. It is deliberately separate from ``text`` so
+    # the generator can still receive the original parent.
+    search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     token_count: Mapped[int] = mapped_column(Integer)
     # Stored as JSONB on PG; on SQLite the dialect falls back to JSON
     # text. The column name is `metadata` (not `metadata_json` in the
@@ -84,13 +132,16 @@ class Chunk(Base):
     # `metadata_json` Python attribute name was chosen to avoid
     # clashing with SQLAlchemy's DeclarativeBase.metadata class attr.
     metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
-    parent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The parent section this child belongs to. Null for the legacy
+    # fixed-size chunkers, which have no parent representation.
+    parent_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("rag_chunk_parents.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     document: Mapped[Document] = relationship(back_populates="chunks")
-    embedding: Mapped[ChunkEmbedding | None] = relationship(
+    embeddings: Mapped[list[ChunkEmbedding]] = relationship(
         back_populates="chunk",
-        uselist=False,
         cascade="all, delete-orphan",
     )
 
@@ -103,6 +154,11 @@ class ChunkEmbedding(Base):
         ForeignKey("rag_chunks.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    # One chunk may be embedded by more than one model over its life
+    # (a project pins one embedding model, but a model migration
+    # re-embeds without deleting the old vectors first). The pair is
+    # the key, so re-indexing the same model is an upsert.
+    embedder_version: Mapped[str] = mapped_column(String(64), primary_key=True)
     # pgvector's `Vector` without a fixed dimension: the column holds
     # vectors from whichever embedder the document selected. The
     # per-row `dim` column records the dimension and lets the HNSW
@@ -112,6 +168,5 @@ class ChunkEmbedding(Base):
     embedding: Mapped[list[float]] = mapped_column(Vector())
     dim: Mapped[int] = mapped_column(Integer)
     sparse_lexical: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    embedder_version: Mapped[str] = mapped_column(String(64))
 
-    chunk: Mapped[Chunk] = relationship(back_populates="embedding")
+    chunk: Mapped[Chunk] = relationship(back_populates="embeddings")

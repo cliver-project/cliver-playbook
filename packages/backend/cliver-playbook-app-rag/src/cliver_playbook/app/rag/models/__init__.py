@@ -10,6 +10,6 @@ process runtime.
 from __future__ import annotations
 
 from cliver_playbook.app.rag.models.base import Base
-from cliver_playbook.app.rag.models.entities import Chunk, ChunkEmbedding, Document
+from cliver_playbook.app.rag.models.entities import Chunk, ChunkEmbedding, ChunkParent, Document
 
-__all__ = ["Base", "Chunk", "ChunkEmbedding", "Document"]
+__all__ = ["Base", "Chunk", "ChunkEmbedding", "ChunkParent", "Document"]

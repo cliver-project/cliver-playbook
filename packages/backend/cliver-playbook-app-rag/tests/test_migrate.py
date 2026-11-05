@@ -29,3 +29,14 @@ def test_offline_migration_renders_the_rag_schema(capsys) -> None:
     assert "CREATE TABLE rag_chunk_embeddings" in sql
     assert "rag_chunk_embeddings_hnsw_1024_idx" in sql
     assert "alembic_version_rag" in sql
+
+
+def test_offline_migration_renders_governance_primitives(capsys) -> None:
+    run_migrations_offline("postgresql+psycopg://user:pass@127.0.0.1:5432/offline")
+
+    sql = capsys.readouterr().out
+    assert "CREATE TABLE rag_chunk_parents" in sql
+    assert "logical_id" in sql
+    assert "search_text" in sql
+    assert "PRIMARY KEY (chunk_id, embedder_version)" in sql
+    assert "WHERE published" in sql
