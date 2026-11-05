@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from cliver_playbook.app.rag_governance.api.batches import router as batches_router
 from cliver_playbook.app.rag_governance.api.golden import router as golden_router
 from cliver_playbook.app.rag_governance.api.projects import router as projects_router
+from cliver_playbook.app.rag_governance.api.rules import router as rules_router
 from cliver_playbook.app.rag_governance.api.sources import router as sources_router
 
 router = APIRouter(prefix="/api/v1/rag-governance", tags=["rag-governance"])
@@ -31,4 +32,5 @@ ROUTERS: list[APIRouter] = [
     sources_router,
     batches_router,
     golden_router,
+    rules_router,
 ]
