@@ -36,10 +36,8 @@ def idp(monkeypatch):
     import cliver_playbook.app.user.api.auth as auth_api
     from cliver_playbook.app.user.auth import oidc
 
-    monkeypatch.setattr(
-        oidc,
-        "_open_client",
-        lambda: httpx.AsyncClient(transport=httpx.MockTransport(_idp_handler())),
+    oidc.set_http_client_factory(
+        lambda: httpx.AsyncClient(transport=httpx.MockTransport(_idp_handler()))
     )
     monkeypatch.setattr(auth_api, "build_provider_registry", _provider)
     monkeypatch.setattr(oidc, "_discovery_cache", {})
@@ -197,18 +195,14 @@ async def test_link_start_unknown_provider_404(idp, client, db):
     assert resp.status_code == 404
 
 
-async def test_link_start_idp_down_502(monkeypatch, idp, client, db):
+async def test_link_start_idp_down_502(idp, client, db):
     """A direct API call (no redirect chain to steer): IdP unavailability is
     an honest 502, not an SPA error redirect."""
 
     def broken(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503)
 
-    monkeypatch.setattr(
-        idp,
-        "_open_client",
-        lambda: httpx.AsyncClient(transport=httpx.MockTransport(broken)),
-    )
+    idp.set_http_client_factory(lambda: httpx.AsyncClient(transport=httpx.MockTransport(broken)))
     await seed_admin(db)
     token = await login(client, "admin", TEST_ADMIN_PASSWORD)
     resp = await client.post("/api/v1/auth/identities/default/link", headers=_auth(token))

@@ -3,9 +3,9 @@ flow, identity re-linking, auto-provision, state tampering, and both
 provider endpoint shapes (discovery vs explicit).
 
 The IdPs never exist — every outbound call (discovery, token, userinfo) is
-served by an httpx.MockTransport installed through the `_open_client` seam,
-so the whole flow runs with zero network. Two mock IdP shapes share one
-transport, dispatched by request host:
+served by an httpx.MockTransport installed through the public
+`set_http_client_factory` seam, so the whole flow runs with zero network.
+Two mock IdP shapes share one transport, dispatched by request host:
 
 - idp.example.com     — standards-shaped OIDC (discovery document, "sub");
 - hub.example.com /
@@ -118,10 +118,8 @@ def idp(monkeypatch):
     import cliver_playbook.app.user.api.auth as auth_api
     from cliver_playbook.app.user.auth import oidc
 
-    monkeypatch.setattr(
-        oidc,
-        "_open_client",
-        lambda: httpx.AsyncClient(transport=httpx.MockTransport(_idp_handler())),
+    oidc.set_http_client_factory(
+        lambda: httpx.AsyncClient(transport=httpx.MockTransport(_idp_handler()))
     )
     monkeypatch.setattr(auth_api, "build_provider_registry", _provider)
     # Per-test isolation from the module-level discovery cache.
@@ -441,35 +439,29 @@ async def test_missing_cookie_rejected(idp, client):
     assert _frag_params(callback.headers["location"]).get("error") == "state_mismatch"
 
 
-async def test_login_idp_error_redirects(monkeypatch, idp, client):
+async def test_login_idp_error_redirects(idp, client):
     """Unreachable IdP at login: 302 to the SPA error page, never a bare 500."""
 
     def broken(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500)
 
-    monkeypatch.setattr(
-        idp,
-        "_open_client",
-        lambda: httpx.AsyncClient(transport=httpx.MockTransport(broken)),
-    )
+    idp.set_http_client_factory(lambda: httpx.AsyncClient(transport=httpx.MockTransport(broken)))
     resp = await client.get("/api/v1/auth/oauth/default/login")
     assert resp.status_code == 302
     assert resp.headers["location"].startswith(f"{FRONTEND}/auth/callback#")
     assert _frag_params(resp.headers["location"]).get("error") == "idp_error"
 
 
-async def test_callback_idp_error_audited(monkeypatch, idp, client, db):
+async def test_callback_idp_error_audited(idp, client, db):
     """Token-endpoint 500 -> #error=idp_error plus an audit row, not a 500."""
     from sqlalchemy import select
 
     from cliver_playbook.app.user.models.entities import AuditLog
 
-    monkeypatch.setattr(
-        idp,
-        "_open_client",
+    idp.set_http_client_factory(
         lambda: httpx.AsyncClient(
             transport=httpx.MockTransport(_idp_handler(token_response=httpx.Response(500)))
-        ),
+        )
     )
     await seed_admin(db)
     location = await _run_callback(client, "mockhub")
@@ -489,11 +481,9 @@ async def test_callback_idp_error_audited(monkeypatch, idp, client, db):
     assert row.error == "idp_error"
 
 
-async def test_callback_malformed_token_json(monkeypatch, idp, client, db):
+async def test_callback_malformed_token_json(idp, client, db):
     """A non-JSON token reply (JSONDecodeError is a ValueError) -> idp_error."""
-    monkeypatch.setattr(
-        idp,
-        "_open_client",
+    idp.set_http_client_factory(
         lambda: httpx.AsyncClient(
             transport=httpx.MockTransport(
                 _idp_handler(
@@ -511,14 +501,12 @@ async def test_callback_malformed_token_json(monkeypatch, idp, client, db):
     assert _frag_params(location).get("error") == "idp_error"
 
 
-async def test_callback_missing_subject_claim(monkeypatch, idp, client, db):
+async def test_callback_missing_subject_claim(idp, client, db):
     """userinfo without the configured subject claim -> #error=no_subject."""
-    monkeypatch.setattr(
-        idp,
-        "_open_client",
+    idp.set_http_client_factory(
         lambda: httpx.AsyncClient(
             transport=httpx.MockTransport(_idp_handler(hub_user={"login": "nosub"}))
-        ),
+        )
     )
     await seed_admin(db)
     location = await _run_callback(client, "mockhub")
@@ -716,11 +704,7 @@ async def test_builtin_wechat_adapter_login_and_callback(monkeypatch, idp, clien
         return httpx.Response(404)
 
     _no_discovery(monkeypatch, idp)
-    monkeypatch.setattr(
-        idp,
-        "_open_client",
-        lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
-    )
+    idp.set_http_client_factory(lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     monkeypatch.setattr(
         auth_api,
         "build_provider_registry",

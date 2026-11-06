@@ -31,8 +31,14 @@ Design choices:
   code-for-identity exchange (`build_authorize_redirect` / `complete_login`).
 - **Discovery cached 1h** per issuer — the document is static in practice, and
   this keeps the login path at two IdP round-trips (token + userinfo).
-- The HTTP entry points accept an injected `httpx.AsyncClient` — tests drive
-  the whole flow with `httpx.MockTransport` and zero network.
+- **One injectable outbound client.** All IdP HTTP calls go through a
+  process-wide factory installed with `set_http_client_factory`; the default
+  creates a short-lived `httpx.AsyncClient` whose timeout comes from
+  `oidc.http_timeout_seconds`. Deployments install a factory for a proxy,
+  private CA, transport retries, or a shared connection pool; tests install
+  `httpx.MockTransport` through the same public seam, with zero network.
+  Every HTTP entry point also accepts an explicit `client=` that it never
+  closes, for callers that already own a client.
 """
 
 import base64
@@ -42,6 +48,8 @@ import json
 import re
 import secrets
 import time
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 from urllib.parse import quote_plus, urlencode
 
@@ -200,10 +208,64 @@ def state_cookie_name_for(provider_key: str) -> str:
 
 _discovery_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
+# A factory returns an async context manager that yields the client to use.
+# Returning a bare AsyncClient gives ownership to this module (closed after
+# the call); returning a custom context manager lets the caller keep a shared
+# client open.
+HttpClientFactory = Callable[[], AbstractAsyncContextManager[httpx.AsyncClient]]
 
-def _open_client() -> httpx.AsyncClient:
-    """Default outbound client. Tests swap this for MockTransport injection."""
-    return httpx.AsyncClient(timeout=10.0)
+_http_client_factory: HttpClientFactory | None = None
+
+
+def _default_http_client_factory() -> httpx.AsyncClient:
+    return httpx.AsyncClient(timeout=get_settings().oidc.http_timeout_seconds)
+
+
+def set_http_client_factory(factory: HttpClientFactory | None) -> None:
+    """Install the process-wide outbound client factory; ``None`` restores default.
+
+    The factory is called for every IdP request that does not receive an
+    explicit ``client=``. It must return an async context manager yielding an
+    ``httpx.AsyncClient``:
+
+    - return ``httpx.AsyncClient(...)`` directly to have this module close it
+      after the call;
+    - wrap a long-lived client in ``contextlib.asynccontextmanager`` and yield
+      it to keep one connection pool (and its proxy/CA/retry configuration)
+      shared across calls, closing it at application shutdown.
+
+    Install it once at startup, before the first OAuth request. The process
+    runtime — settings included — is already process-wide, so this seam has
+    the same scope.
+    """
+    if factory is not None and not callable(factory):
+        raise TypeError("http_client_factory must be callable")
+    global _http_client_factory
+    _http_client_factory = factory
+
+
+def get_http_client_factory() -> HttpClientFactory:
+    """The installed factory, or the settings-backed default."""
+    if _http_client_factory is not None:
+        return _http_client_factory
+    return _default_http_client_factory
+
+
+@asynccontextmanager
+async def _client_context(
+    client: httpx.AsyncClient | None,
+) -> AsyncIterator[httpx.AsyncClient]:
+    """Yield an explicit client (caller-owned) or a factory-provided one.
+
+    An explicit ``client=`` is never closed here. Without one, the active
+    factory's context manager owns the lifetime: a bare ``AsyncClient`` is
+    closed on exit, while a shared-client context manager keeps it open.
+    """
+    if client is not None:
+        yield client
+        return
+    async with get_http_client_factory()() as provided:
+        yield provided
 
 
 async def discover(issuer: str, *, client: httpx.AsyncClient | None = None) -> dict[str, Any]:
@@ -214,16 +276,10 @@ async def discover(issuer: str, *, client: httpx.AsyncClient | None = None) -> d
         return cached[1]
 
     url = issuer.rstrip("/") + "/.well-known/openid-configuration"
-    close = client is None
-    if close:
-        client = _open_client()
-    try:
-        resp = await client.get(url)
+    async with _client_context(client) as active_client:
+        resp = await active_client.get(url)
         resp.raise_for_status()
         document = resp.json()
-    finally:
-        if close:
-            await client.aclose()
     _discovery_cache[issuer] = (now + _DISCOVERY_TTL_SECONDS, document)
     return document
 
@@ -303,20 +359,14 @@ async def exchange_code(
     data, headers = _token_request(
         provider, code=code, code_verifier=code_verifier, redirect_uri=redirect_uri
     )
-    close = client is None
-    if close:
-        client = _open_client()
-    try:
-        resp = await client.post(
+    async with _client_context(client) as active_client:
+        resp = await active_client.post(
             discovery["token_endpoint"],
             data=data,
             headers=headers,
         )
         resp.raise_for_status()
         return resp.json()
-    finally:
-        if close:
-            await client.aclose()
 
 
 async def fetch_userinfo(
@@ -326,19 +376,13 @@ async def fetch_userinfo(
     client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     """Fetch the end-user claims from the userinfo endpoint."""
-    close = client is None
-    if close:
-        client = _open_client()
-    try:
-        resp = await client.get(
+    async with _client_context(client) as active_client:
+        resp = await active_client.get(
             discovery["userinfo_endpoint"],
             headers={"Authorization": f"Bearer {access_token}"},
         )
         resp.raise_for_status()
         return resp.json()
-    finally:
-        if close:
-            await client.aclose()
 
 
 def build_authorize_url(
@@ -407,17 +451,14 @@ async def complete_login(
     payload in the same ``Identity`` shape, letting account linking and
     provisioning depend on one contract.
     """
-    close = client is None
-    if close:
-        client = _open_client()
-    try:
+    async with _client_context(client) as active_client:
         if config.adapter:
             identity = await get_adapter(config.adapter).complete(
                 config,
                 code=code,
                 code_verifier=code_verifier,
                 redirect_uri=redirect_uri,
-                client=client,
+                client=active_client,
             )
             # The identity column is String(255); truncate once here so the
             # lookup and the stored subject always byte-match.
@@ -426,26 +467,23 @@ async def complete_login(
                 claims=identity.claims,
             )
 
-        discovery = await endpoints_for(config, client=client)
+        discovery = await endpoints_for(config, client=active_client)
         token_response = await exchange_code(
             config,
             discovery,
             code=code,
             code_verifier=code_verifier,
             redirect_uri=redirect_uri,
-            client=client,
+            client=active_client,
         )
         if not isinstance(token_response, dict):
             raise TypeError("token response is not a JSON object")
         access_token = str(token_response.get("access_token", "") or "")
-        userinfo = await fetch_userinfo(discovery, access_token, client=client)
+        userinfo = await fetch_userinfo(discovery, access_token, client=active_client)
         if not isinstance(userinfo, dict):
             raise TypeError("userinfo response is not a JSON object")
         subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
         return Identity(subject=subject, claims=userinfo)
-    finally:
-        if close:
-            await client.aclose()
 
 
 # ---------------------------------------------------------------------------

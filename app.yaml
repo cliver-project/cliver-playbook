@@ -75,6 +75,11 @@ oidc:
   # development IdP on a loopback or private network. Never enable in
   # production: the token exchange carries the client credentials.
   allow_insecure_endpoints: false
+  # Timeout (seconds) for the default outbound HTTP client used by discovery,
+  # token and userinfo calls. A deployment that needs a proxy, private CA,
+  # transport retries or a shared connection pool installs a custom factory
+  # (cliver_playbook.app.user.auth.oidc.set_http_client_factory) instead.
+  http_timeout_seconds: 10.0
   providers:
     # Per provider, `token_endpoint_auth_method` selects where the token
     # request carries the client credentials: client_secret_post (default) |

@@ -56,6 +56,42 @@ Enabled providers must use `https` issuer and endpoint URLs.
 escape hatch for a plain-http IdP on a loopback or private network; never
 enable it in production.
 
+Outbound IdP traffic (discovery, token, userinfo) goes through one
+process-wide client factory,
+`cliver_playbook.app.user.auth.oidc.set_http_client_factory`. The default
+creates a short-lived `httpx.AsyncClient` per flow with
+`oidc.http_timeout_seconds` (10 s). Install a factory to send IdP calls
+through a proxy or a private CA, add transport retries, or reuse a shared
+connection pool; `set_http_client_factory(None)` restores the default. The
+factory returns an async context manager yielding an `httpx.AsyncClient`:
+return the client directly to have it closed after the call, or wrap a
+long-lived client in `contextlib.asynccontextmanager` to keep it open.
+
+```python
+from contextlib import asynccontextmanager
+
+import httpx
+
+from cliver_playbook.app.user.auth.oidc import set_http_client_factory
+
+shared = httpx.AsyncClient(
+    proxy="http://egress.internal:3128",
+    verify="/etc/ssl/private-ca.pem",
+)
+
+
+@asynccontextmanager
+async def shared_client():
+    yield shared  # close it yourself at application shutdown
+
+
+set_http_client_factory(shared_client)
+```
+
+The low-level helpers also accept an explicit `client=`; that client belongs
+to the caller and is never closed by this package. Tests install an
+`httpx.MockTransport` through the same public factory.
+
 ## Install
 
 ```bash

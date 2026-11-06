@@ -111,6 +111,16 @@ async def reset_database() -> None:
             await conn.commit()
 
 
+@pytest.fixture(autouse=True)
+def reset_http_client_factory():
+    """Every test starts and ends on the default outbound HTTP client factory."""
+    from cliver_playbook.app.user.auth import oidc
+
+    oidc.set_http_client_factory(None)
+    yield
+    oidc.set_http_client_factory(None)
+
+
 @pytest.fixture
 async def client():
     """ASGI HTTP client bound to the application — no network, no server."""

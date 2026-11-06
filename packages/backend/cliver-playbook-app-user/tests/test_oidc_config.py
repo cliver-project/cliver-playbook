@@ -105,6 +105,15 @@ def test_scopes_accepts_yaml_list_or_string(yaml_file):
     assert _settings().oidc.providers["acme"].scopes == "openid profile"
 
 
+def test_http_timeout_defaults_and_must_be_positive(yaml_file):
+    """The default outbound client's timeout is settings-controlled."""
+    yaml_file("oidc:\n  providers: {}\n")
+    assert _settings().oidc.http_timeout_seconds == 10.0
+    yaml_file("oidc:\n  http_timeout_seconds: 0\n  providers: {}\n")
+    with pytest.raises(ValidationError, match="greater than 0"):
+        _settings()
+
+
 def test_adapter_provider_needs_credentials_but_no_endpoints(yaml_file):
     """An adapter owns the protocol: no issuer and no endpoint URLs required."""
     yaml_file(

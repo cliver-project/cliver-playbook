@@ -189,6 +189,10 @@ class OidcSettings(BaseModel):
     # opt-in permits plain http, intended for a local development IdP on a
     # loopback or private network. Never enable it in production.
     allow_insecure_endpoints: bool = False
+    # Timeout (seconds) for the default outbound HTTP client used by discovery,
+    # token and userinfo calls. A custom factory installed with
+    # `oidc.set_http_client_factory` owns its own client configuration.
+    http_timeout_seconds: float = Field(default=10.0, gt=0)
     providers: dict[str, OidcProviderSettings] = Field(default_factory=dict)
 
     @field_validator("providers", mode="before")
