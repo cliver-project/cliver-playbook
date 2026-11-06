@@ -18,7 +18,11 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from cliver_playbook.app.user.auth.oidc import sign_state_blob, state_cookie_name, verify_state_blob
+from cliver_playbook.app.user.auth.oidc import (
+    sign_state_blob,
+    state_cookie_name_for,
+    verify_state_blob,
+)
 from cliver_playbook.app.user.models.entities import AuditLog, OauthIdentity, User
 from cliver_playbook.app.user.settings import get_settings
 
@@ -142,7 +146,7 @@ async def test_link_blob_without_userid_rejected(idp, client, db):
     callback = await client.get(
         "/api/v1/auth/oauth/default/callback",
         params={"code": "xyz", "state": "s3"},
-        headers={"Cookie": f"{state_cookie_name}={blob}"},
+        headers={"Cookie": f"{state_cookie_name_for('default')}={blob}"},
     )
     assert callback.status_code == 302
     assert _frag_params(callback.headers["location"]).get("error") == "state_mismatch"
@@ -165,13 +169,25 @@ async def test_link_start_shape_and_cookie(idp, client, db):
     assert params["code_challenge_method"] == "S256"
     assert params["redirect_uri"].endswith("/api/v1/auth/oauth/default/callback")
     set_cookie = resp.headers["set-cookie"]
-    assert "cliver_oauth_state=" in set_cookie and "HttpOnly" in set_cookie
+    assert "cliver_oauth_state_default=" in set_cookie and "HttpOnly" in set_cookie
     # The signed blob pins the linking user.
-    blob = set_cookie.split("cliver_oauth_state=", 1)[1].split(";", 1)[0]
+    blob = set_cookie.split("cliver_oauth_state_default=", 1)[1].split(";", 1)[0]
     data = verify_state_blob(blob, provider_key="default", state=params["state"])
     assert data is not None
     assert data["mode"] == "link"
     assert data["user_id"] == admin_id
+    # Plain-HTTP dev settings: no Secure, or the cookie would be dropped.
+    assert "Secure" not in set_cookie
+
+
+async def test_link_start_cookie_is_secure_with_https(monkeypatch, idp, client, db):
+    monkeypatch.setattr(get_settings(), "web_base_url", "https://app.example.com")
+    await seed_admin(db)
+    token = await login(client, "admin", TEST_ADMIN_PASSWORD)
+    resp = await client.post("/api/v1/auth/identities/default/link", headers=_auth(token))
+    assert resp.status_code == 200
+    attributes = {part.strip().lower() for part in resp.headers["set-cookie"].split(";")[1:]}
+    assert "secure" in attributes
 
 
 async def test_link_start_unknown_provider_404(idp, client, db):

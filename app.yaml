@@ -65,6 +65,11 @@ oidc:
   # redirect URI <base>/api/v1/auth/oauth/<key>/callback.
   # Empty -> derived from the incoming request.
   redirect_base: ""
+  # Secure attribute on the short-lived OAuth state cookie. Unset -> derived
+  # from the scheme of redirect_base (backend) or web_base_url (SPA), so an
+  # HTTPS deployment sets it automatically. Pin it when TLS terminates in
+  # front of a backend whose configured URLs cannot reveal the public scheme.
+  # cookie_secure: true
   providers:
     google:
       enabled: false

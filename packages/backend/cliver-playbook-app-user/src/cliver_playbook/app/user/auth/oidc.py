@@ -39,6 +39,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 from typing import Any
@@ -170,7 +171,20 @@ def verify_state_blob(blob: str, *, provider_key: str, state: str) -> dict[str, 
         return None
 
 
-state_cookie_name = _STATE_COOKIE
+_COOKIE_SUFFIX_RE = re.compile(r"[^a-z0-9_-]")
+
+
+def state_cookie_name_for(provider_key: str) -> str:
+    """One state cookie per provider, so concurrent logins cannot collide.
+
+    With a single shared name, starting a login in a second tab overwrites
+    the first tab's signed state blob and the first callback fails with
+    ``state_mismatch``. Configured keys already match the cookie-safe
+    charset; the callback path segment is attacker-controlled, so sanitize
+    defensively rather than letting Starlette raise ``CookieError``.
+    """
+    suffix = _COOKIE_SUFFIX_RE.sub("_", provider_key.lower())[:32]
+    return f"{_STATE_COOKIE}_{suffix or 'unknown'}"
 
 
 # ---------------------------------------------------------------------------

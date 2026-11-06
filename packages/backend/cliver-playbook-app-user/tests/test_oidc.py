@@ -169,9 +169,79 @@ async def test_login_redirect_shape(idp, client):
     assert "state" in params
     # redirect_uri points at our callback on this backend (request-derived).
     assert params["redirect_uri"].endswith("/api/v1/auth/oauth/default/callback")
-    # The state blob rides in an HttpOnly cookie.
+    # The state blob rides in an HttpOnly cookie named for this provider.
     set_cookie = resp.headers["set-cookie"]
-    assert "cliver_oauth_state=" in set_cookie and "HttpOnly" in set_cookie
+    assert "cliver_oauth_state_default=" in set_cookie and "HttpOnly" in set_cookie
+
+
+async def test_login_state_cookie_is_named_per_provider(idp, client):
+    """Two tabs may start logins for different providers without one state
+    cookie overwriting the other."""
+    default = await client.get("/api/v1/auth/oauth/default/login")
+    hub = await client.get("/api/v1/auth/oauth/mockhub/login")
+    assert default.headers["set-cookie"].startswith("cliver_oauth_state_default=")
+    assert hub.headers["set-cookie"].startswith("cliver_oauth_state_mockhub=")
+
+
+async def test_concurrent_provider_logins_keep_separate_state(idp, client):
+    """Start the hub flow, then the default flow, then finish the hub flow.
+
+    The browser jar keeps one cookie per name: with a shared name, the second
+    login would overwrite the first tab's state and the hub callback would
+    fail with state_mismatch.
+    """
+    hub = await client.get("/api/v1/auth/oauth/mockhub/login")
+    hub_state = {k: v[0] for k, v in parse_qs(urlparse(hub.headers["location"]).query).items()}[
+        "state"
+    ]
+    await client.get("/api/v1/auth/oauth/default/login")
+
+    callback = await client.get(
+        "/api/v1/auth/oauth/mockhub/callback",
+        params={"code": "xyz", "state": hub_state},
+    )
+    assert _frag_params(callback.headers["location"])["token"]
+
+
+@pytest.mark.parametrize(
+    ("web_base_url", "redirect_base", "cookie_secure", "expected"),
+    [
+        # Dev default: plain HTTP.
+        ("http://127.0.0.1:5173", "", None, False),
+        # Production SPA over HTTPS.
+        ("https://app.example.com", "", None, True),
+        # The backend callback is the cookie's origin; its scheme wins.
+        ("http://127.0.0.1:5173", "https://api.example.com", None, True),
+        # Explicit setting overrides both derivations.
+        ("http://127.0.0.1:5173", "", True, True),
+        ("https://app.example.com", "", False, False),
+    ],
+)
+async def test_state_cookie_secure_flag(
+    monkeypatch, idp, client, web_base_url, redirect_base, cookie_secure, expected
+):
+    from cliver_playbook.app.user.settings import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "web_base_url", web_base_url)
+    monkeypatch.setattr(settings.oidc, "redirect_base", redirect_base)
+    monkeypatch.setattr(settings.oidc, "cookie_secure", cookie_secure)
+
+    resp = await client.get("/api/v1/auth/oauth/default/login")
+    attributes = {part.strip().lower() for part in resp.headers["set-cookie"].split(";")[1:]}
+    assert ("secure" in attributes) is expected
+
+
+@pytest.mark.parametrize("provider", ["bad%3Bname", "%E4%B8%AD"])
+async def test_unknown_provider_with_unsafe_path_does_not_500(idp, client, provider):
+    """The callback path segment is attacker-controlled. Deleting a cookie
+    named after it would raise CookieError for ';' or non-ASCII; an unknown
+    provider must simply fail closed."""
+    resp = await client.get(
+        f"/api/v1/auth/oauth/{provider}/callback", params={"error": "access_denied"}
+    )
+    assert resp.status_code == 302
+    assert _frag_params(resp.headers["location"]).get("error") == "unknown_provider"
 
 
 async def test_explicit_login_skips_discovery(monkeypatch, idp, client):

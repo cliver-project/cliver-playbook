@@ -36,7 +36,7 @@ from cliver_playbook.app.user.auth.oidc import (
     find_linked_user,
     make_pkce_pair,
     sign_state_blob,
-    state_cookie_name,
+    state_cookie_name_for,
     verify_state_blob,
 )
 from cliver_playbook.app.user.auth.passwords import ahash_password, averify_password, needs_rehash
@@ -285,6 +285,21 @@ def _redirect_uri(request: Request, provider_key: str) -> str:
     return f"{base}/api/v1/auth/oauth/{provider_key}/callback"
 
 
+def _state_cookie_secure() -> bool:
+    """Secure attribute for the short-lived OAuth state cookie.
+
+    An explicit ``oidc.cookie_secure`` wins. Otherwise derive it from the
+    backend's public origin (``redirect_base``) or, when that is unset, the
+    SPA origin; both share the deployment's scheme in the common same-origin
+    case. Plain-HTTP dev therefore stays usable, HTTPS never sends the state
+    in clear text.
+    """
+    settings = get_settings()
+    if settings.oidc.cookie_secure is not None:
+        return settings.oidc.cookie_secure
+    return (settings.oidc.redirect_base or settings.web_base_url).startswith("https://")
+
+
 @router.get("/oauth/{provider}/login")
 async def oauth_login(provider: str, request: Request) -> RedirectResponse:
     registry = build_provider_registry()
@@ -315,11 +330,12 @@ async def oauth_login(provider: str, request: Request) -> RedirectResponse:
         )
     response = RedirectResponse(url, status_code=status.HTTP_302_FOUND)
     response.set_cookie(
-        state_cookie_name,
+        state_cookie_name_for(provider),
         sign_state_blob(provider, state, verifier),
         max_age=600,
         httponly=True,
         samesite="lax",
+        secure=_state_cookie_secure(),
     )
     return response
 
@@ -347,7 +363,10 @@ async def oauth_callback(
     def _fail(reason: str) -> RedirectResponse:
         target = f"{frontend}/auth/callback#{urlencode({'error': reason})}"
         redirect = RedirectResponse(target, status_code=status.HTTP_302_FOUND)
-        redirect.delete_cookie(state_cookie_name)
+        # An unknown provider never set a cookie; deleting one anyway would
+        # let an attacker-controlled path expire a real provider's state.
+        if config is not None:
+            redirect.delete_cookie(state_cookie_name_for(provider), secure=_state_cookie_secure())
         return redirect
 
     if config is None:
@@ -355,7 +374,7 @@ async def oauth_callback(
     if error or not code:
         return _fail(error or "missing_code")
 
-    blob = request.cookies.get(state_cookie_name, "")
+    blob = request.cookies.get(state_cookie_name_for(provider), "")
     data = verify_state_blob(blob, provider_key=provider, state=state)
     if data is None:
         await write_audit(
@@ -477,7 +496,7 @@ async def oauth_callback(
 
     target = f"{frontend}/auth/callback#{urlencode({'token': token, 'must_change_password': str(user.must_change_password).lower()})}"
     redirect = RedirectResponse(target, status_code=status.HTTP_302_FOUND)
-    redirect.delete_cookie(state_cookie_name)
+    redirect.delete_cookie(state_cookie_name_for(provider), secure=_state_cookie_secure())
     return redirect
 
 
@@ -615,11 +634,12 @@ async def start_identity_link(
         raise HTTPException(status_code=502, detail="Identity provider is unavailable")
     response = JSONResponse(content=IdentityLinkStart(redirect_url=url).model_dump())
     response.set_cookie(
-        state_cookie_name,
+        state_cookie_name_for(provider),
         sign_state_blob(provider, state, verifier, mode="link", user_id=viewer.user_id),
         max_age=600,
         httponly=True,
         samesite="lax",
+        secure=_state_cookie_secure(),
     )
     return response
 
@@ -695,7 +715,7 @@ async def _complete_identity_link(
         redirect = RedirectResponse(
             f"{frontend}/profile#{fragment}", status_code=status.HTTP_302_FOUND
         )
-        redirect.delete_cookie(state_cookie_name)
+        redirect.delete_cookie(state_cookie_name_for(provider), secure=_state_cookie_secure())
         return redirect
 
     user = await users_service.get_user(db, user_id)

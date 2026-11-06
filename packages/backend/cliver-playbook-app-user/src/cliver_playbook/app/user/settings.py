@@ -138,6 +138,11 @@ class OidcSettings(BaseModel):
     # the incoming request; set it when running behind a proxy that rewrites
     # Host.
     redirect_base: str = ""  # e.g. http://127.0.0.1:8000
+    # Secure attribute on the short-lived OAuth state cookie. None -> derive
+    # from the scheme of redirect_base (the backend's public origin) or, when
+    # that is empty, web_base_url. Override when TLS terminates in front of a
+    # backend whose configured URLs cannot reveal the public scheme.
+    cookie_secure: bool | None = None
     providers: dict[str, OidcProviderSettings] = Field(default_factory=dict)
 
     @field_validator("providers", mode="before")
