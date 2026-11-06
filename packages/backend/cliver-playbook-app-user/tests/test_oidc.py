@@ -262,6 +262,82 @@ async def test_second_login_links_same_user(idp, client, db):
     assert count == 1  # same IdP identity -> same local user, no duplicates
 
 
+async def test_first_login_race_defers_to_winner(monkeypatch, idp, client, db):
+    """Both racers miss the lookup; the loser's identity insert then hits the
+    unique (provider, subject) constraint and must continue as the winner's
+    user, not surface a 500."""
+    from sqlalchemy import func, select
+
+    import cliver_playbook.app.user.api.auth as auth_api
+    from cliver_playbook.app.user.auth import oidc
+    from cliver_playbook.app.user.models.entities import OauthIdentity, User
+
+    await seed_admin(db)
+    winner = User(username="race-winner", password_hash="unused")
+    db.add(winner)
+    await db.flush()
+    db.add(OauthIdentity(provider="default", subject="idp-user-1", user_id=winner.id))
+    await db.commit()
+
+    real_find = oidc.find_linked_user
+    calls = {"n": 0}
+
+    async def stale_then_real(db_, provider_key, subject):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return None  # the lookup ran before the winner's row committed
+        return await real_find(db_, provider_key, subject)
+
+    monkeypatch.setattr(auth_api, "find_linked_user", stale_then_real)
+
+    location = await _run_callback(client)
+    frag = _frag_params(location)
+    assert frag["token"]  # the loser logs in as the winner; no 500
+
+    me = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {frag['token']}"})
+    assert me.json()["user"]["username"] == "race-winner"
+    assert await db.scalar(select(func.count()).select_from(User)) == 2  # admin + winner
+    assert await db.scalar(select(func.count()).select_from(OauthIdentity)) == 1
+
+
+async def test_first_login_race_without_visible_winner_fails_cleanly(monkeypatch, idp, client, db):
+    """If the post-rollback lookup still finds nothing (a non-identity
+    constraint conflict), the callback lands on the SPA error page instead of
+    raising."""
+    from sqlalchemy import select
+
+    import cliver_playbook.app.user.api.auth as auth_api
+    from cliver_playbook.app.user.models.entities import AuditLog, OauthIdentity, User
+
+    await seed_admin(db)
+    other = User(username="race-ghost", password_hash="unused")
+    db.add(other)
+    await db.flush()
+    db.add(OauthIdentity(provider="default", subject="idp-user-1", user_id=other.id))
+    await db.commit()
+
+    async def always_missing(db_, provider_key, subject):
+        return None
+
+    monkeypatch.setattr(auth_api, "find_linked_user", always_missing)
+
+    location = await _run_callback(client)
+    assert _frag_params(location).get("error") == "idp_error"
+
+    row = (
+        (
+            await db.execute(
+                select(AuditLog).where(
+                    AuditLog.event == "auth.oauth.callback", AuditLog.ok.is_(False)
+                )
+            )
+        )
+        .scalars()
+        .one()
+    )
+    assert row.error == "identity race without a winner"
+
+
 async def test_auto_provision_disabled_rejects(monkeypatch, idp, client, db):
     import cliver_playbook.app.user.api.auth as auth_api
 

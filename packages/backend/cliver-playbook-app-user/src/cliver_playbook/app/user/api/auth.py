@@ -430,7 +430,30 @@ async def oauth_callback(
             )
             await db.commit()
             return _fail("not_allowed")
-        user_id = await _provision_user(db, config, provider, identity)
+        try:
+            user_id = await _provision_user(db, config, provider, identity)
+        except IntegrityError:
+            # Two concurrent first logins both missed the lookup above. The
+            # unique (provider, subject) constraint lets exactly one writer
+            # win; the loser's transaction — its User row included — is rolled
+            # back, and the winner's identity is now visible. Continue as that
+            # user instead of surfacing a 500.
+            await db.rollback()
+            user_id = await find_linked_user(db, provider, subject)
+            if user_id is None:
+                # The conflict was not an identity race (for example a
+                # username collision) or the winner vanished. Fail closed on
+                # the SPA error page rather than a bare 500.
+                await write_audit(
+                    db,
+                    event="auth.oauth.callback",
+                    username=identity.email[:100],
+                    ok=False,
+                    error="identity race without a winner",
+                    request=request,
+                )
+                await db.commit()
+                return _fail("idp_error")
 
     user = await users_service.get_user(db, user_id)
     if user is None or not user.is_active:
