@@ -82,7 +82,8 @@ Provider buttons can carry brand metadata: `label` is the default text,
 `/api/v1/auth/identities` returns the same `provider_label`/`labels` pair on
 each linked row (including disabled presets), so the "linked accounts" card
 resolves the active language too. The SPA renders the configured icon, or a
-colored initial badge when only `brand_color` is set. Keep `label` to the
+colored initial badge when only `brand_color` is set; the badge initial comes
+from the localized label (微 in Chinese, W in English). Keep `label` to the
 brand name (e.g. `WeChat`, not `WeChat login`) when the localized
 "Continue with …" button template is used.
 

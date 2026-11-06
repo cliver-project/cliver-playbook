@@ -328,22 +328,23 @@ export default function ProfilePage() {
 
           {connectable.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {connectable.map((provider) => (
-                <Button
-                  key={provider.key}
-                  variant="outline"
-                  size="sm"
-                  disabled={link.isPending}
-                  onClick={() => link.mutate(provider.key)}
-                >
-                  <ProviderIcon provider={provider} />
-                  {link.isPending
-                    ? t("common.pending")
-                    : t("profile.linkedAccounts.connect", {
-                        provider: providerLabel(provider, language),
-                      })}
-                </Button>
-              ))}
+              {connectable.map((provider) => {
+                const label = providerLabel(provider, language);
+                return (
+                  <Button
+                    key={provider.key}
+                    variant="outline"
+                    size="sm"
+                    disabled={link.isPending}
+                    onClick={() => link.mutate(provider.key)}
+                  >
+                    <ProviderIcon provider={provider} label={label} />
+                    {link.isPending
+                      ? t("common.pending")
+                      : t("profile.linkedAccounts.connect", { provider: label })}
+                  </Button>
+                );
+              })}
             </div>
           ) : null}
         </CardContent>

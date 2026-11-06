@@ -93,19 +93,22 @@ export default function LoginPage() {
             <div className="bg-border h-px flex-1" />
           </div>
           <div className="grid gap-2">
-            {providers.data.map((provider) => (
-              <Button
-                key={provider.key}
-                type="button"
-                variant="outline"
-                className="justify-start"
-                // Full tab navigation: OIDC is a redirect dance across origins.
-                onClick={() => window.location.assign(oauthLoginUrl(provider.key))}
-              >
-                <ProviderIcon provider={provider} />
-                {t("auth.ssoWith", { provider: providerLabel(provider, language) })}
-              </Button>
-            ))}
+            {providers.data.map((provider) => {
+              const label = providerLabel(provider, language);
+              return (
+                <Button
+                  key={provider.key}
+                  type="button"
+                  variant="outline"
+                  className="justify-start"
+                  // Full tab navigation: OIDC is a redirect dance across origins.
+                  onClick={() => window.location.assign(oauthLoginUrl(provider.key))}
+                >
+                  <ProviderIcon provider={provider} label={label} />
+                  {t("auth.ssoWith", { provider: label })}
+                </Button>
+              );
+            })}
           </div>
         </>
       ) : null}

@@ -38,12 +38,18 @@ export function providerLabel(provider: ProviderLabelSource, language: string): 
  * Provider brand mark: the configured image when present, otherwise a
  * brand-colored initial badge. Renders nothing when the provider carries no
  * brand metadata, leaving the plain outline button.
+ *
+ * Pass the already-localized `label` so the fallback initial matches the
+ * visible button text (for example 微 in Chinese and W in English), rather
+ * than always using the default-language label.
  */
 export function ProviderIcon({
   provider,
+  label,
   className,
 }: {
   provider: OAuthProviderButton;
+  label?: string;
   className?: string;
 }) {
   if (provider.icon) {
@@ -66,7 +72,7 @@ export function ProviderIcon({
       )}
       style={{ backgroundColor: provider.brand_color }}
     >
-      {(provider.label || provider.key).charAt(0).toUpperCase()}
+      {(label || provider.label || provider.key).charAt(0).toUpperCase()}
     </span>
   );
 }
