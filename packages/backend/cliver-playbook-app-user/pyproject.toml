@@ -1,7 +1,7 @@
 [project]
 name = "cliver-playbook-app-user"
 version = "0.1.0"
-description = "cliver-playbook identity: accounts, RBAC, OIDC login, OAuth 2.1 provider for agent clients"
+description = "cliver-playbook identity: accounts, RBAC, OIDC login and provider adapters, OAuth 2.1 provider for agent clients"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -35,6 +35,11 @@ dependencies = [
     "mcp>=2.2.0,<3",
 ]
 
+[project.optional-dependencies]
+# RSA2 request signing for the built-in `alipay` provider adapter. Imported
+# lazily by the adapter, so projects that never enable Alipay do not need it.
+alipay = ["cryptography>=44.0.0"]
+
 [project.urls]
 Repository = "https://github.com/cliver-project/cliver-playbook"
 
@@ -44,6 +49,9 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "anyio>=4.4.0",
     "ruff>=0.8.0",
+    # Signing tests for the built-in Alipay adapter (the optional extra is not
+    # installed by the workspace dev environment by default).
+    "cryptography>=44.0.0",
 ]
 
 [build-system]

@@ -22,7 +22,7 @@ proven otherwise.
 | Health, version, demo Items API | Reuse | Include `basic.ROUTERS`; ignore or keep the demo Items surface. |
 | Accounts, sessions, password policy | Reuse | Include `user.ROUTERS`; configure policy fields. |
 | RBAC | Reuse + configure | Register project permission codes; assign them to roles. |
-| OIDC login | Configure | Add providers to `oidc.providers.<key>`; no code change. |
+| OIDC login | Configure | Add providers to `oidc.providers.<key>`; no code change. WeChat/Alipay use the built-in `adapter`; a proprietary protocol needs a registered `ProviderAdapter` (a project code change). |
 | OAuth 2.1 provider for agents | Reuse + configure | `oauth21_*` settings; routes are added by `mount_oauth_routes`. |
 | Audit log | Reuse | Call `write_audit` from project services; never create another log table. |
 | Runtime settings UI | Reuse + create | Register one project `SettingsSection`; the admin page renders it. |

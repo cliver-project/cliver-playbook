@@ -91,6 +91,29 @@ oidc:
       scopes: read:user user:email
       auto_provision: true
       default_role: user
+    wechat:
+      enabled: false
+      label: WeChat
+      # Built-in protocol adapter (Open Platform QR-connect). Adapters own
+      # the wire protocol end to end, so no issuer or endpoint URLs are set;
+      # the app secret goes only to WeChat, never to a playbook token URL.
+      adapter: wechat
+      client_id: ""
+      client_secret: ""
+      auto_provision: true
+      default_role: user
+    alipay:
+      enabled: false
+      label: Alipay
+      # Built-in protocol adapter (RSA2-signed OpenAPI gateway). client_secret
+      # is the application PRIVATE KEY (PEM or bare Base64); it signs requests
+      # locally and is never transmitted. Requires the `alipay` extra:
+      #   pip install "cliver-playbook-app-user[alipay]"
+      adapter: alipay
+      client_id: ""
+      client_secret: ""
+      auto_provision: true
+      default_role: user
 
 # --- RAG pipeline (knowledge base, cliver-playbook-app-rag) -----------------
 #

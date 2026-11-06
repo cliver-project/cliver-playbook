@@ -56,9 +56,15 @@ class OidcProviderSettings(BaseModel):
     - explicit: `authorize_url`/`token_url`/`userinfo_url` set -> for OAuth2
       services without discovery (e.g. GitHub).
 
+    `adapter` selects a registered non-OAuth2 protocol adapter (built-ins:
+    ``wechat`` and ``alipay``; projects may register their own). When set, the
+    adapter owns the authorize URL and the whole code-for-identity exchange, so
+    neither `issuer` nor the three endpoint URLs are required or used.
+
     `subject_claim` names the userinfo field carrying the provider-side
     stable user id: "sub" for standard OIDC, "id" for GitHub-style APIs
-    returning a numeric account id.
+    returning a numeric account id. Adapters choose their own subject, so this
+    field is ignored when `adapter` is set.
 
     Defaults keep disabled/empty presets harmless: the bundled app.yaml ships
     provider presets with `enabled: false`, and the credential/endpoint
@@ -74,6 +80,8 @@ class OidcProviderSettings(BaseModel):
     authorize_url: str = ""
     token_url: str = ""
     userinfo_url: str = ""
+    # Registered protocol adapter name (empty -> standard OAuth2/OIDC flow).
+    adapter: str = ""
     # Space-separated string (what the IdP authorize URL expects on the wire).
     scopes: str = "openid profile email"
     subject_claim: str = "sub"
@@ -109,10 +117,15 @@ class OidcProviderSettings(BaseModel):
         ]
         if missing:
             raise ValueError(f"enabled provider is missing {', '.join(missing)}")
+        # An adapter owns the wire protocol end to end, so the standard
+        # discovery/explicit-endpoint shape does not apply.
+        if self.adapter:
+            return self
         if not self.issuer and not (self.authorize_url and self.token_url and self.userinfo_url):
             raise ValueError(
-                "enabled provider needs either `issuer` (OIDC discovery) or all of "
-                "authorize_url/token_url/userinfo_url (explicit endpoints)"
+                "enabled provider needs either `issuer` (OIDC discovery), all of "
+                "authorize_url/token_url/userinfo_url (explicit endpoints), or an "
+                "`adapter`"
             )
         return self
 

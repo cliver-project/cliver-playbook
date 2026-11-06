@@ -19,7 +19,9 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
+from cliver_playbook.app.user.auth.adapters import register_adapter
 from cliver_playbook.app.user.auth.oidc import ProviderConfig
+from cliver_playbook.app.user.auth.provider import Identity, ProviderAdapterError
 
 from .helpers import seed_admin
 
@@ -374,3 +376,236 @@ async def test_callback_missing_subject_claim(monkeypatch, idp, client, db):
     await seed_admin(db)
     location = await _run_callback(client, "mockhub")
     assert _frag_params(location).get("error") == "no_subject"
+
+
+# ---------------------------------------------------------------------------
+# Adapter-backed providers
+# ---------------------------------------------------------------------------
+
+
+class _DirectAdapter:
+    """A project adapter that needs no HTTP: proves the extension point and
+    that the standard discovery/token/userinfo path is fully bypassed."""
+
+    def authorize_url(
+        self,
+        config,
+        *,
+        state,
+        redirect_uri,
+        code_challenge="",
+        code_challenge_method="S256",
+    ):
+        return f"https://adapter.example/authorize?state={state}&redirect_uri={redirect_uri}"
+
+    async def complete(self, config, *, code, code_verifier, redirect_uri, client):
+        assert code == "adapter-code"
+        return Identity(
+            subject="adapter-subject",
+            claims={
+                "name": "Adapter User",
+                "email": "adapter@example.com",
+                "phone_number": "+44-20-0000-0000",
+            },
+        )
+
+
+class _BrokenAdapter:
+    def authorize_url(
+        self,
+        config,
+        *,
+        state,
+        redirect_uri,
+        code_challenge="",
+        code_challenge_method="S256",
+    ):
+        raise ProviderAdapterError("upstream rejected the authorize request")
+
+    async def complete(self, config, *, code, code_verifier, redirect_uri, client):
+        raise ProviderAdapterError("upstream rejected the code")
+
+
+class _BrokenCompleteAdapter(_DirectAdapter):
+    """Authorize works; the callback's exchange does not."""
+
+    async def complete(self, config, *, code, code_verifier, redirect_uri, client):
+        raise ProviderAdapterError("upstream rejected the code")
+
+
+def _adapter_provider(key: str, adapter: str) -> dict[str, ProviderConfig]:
+    return {
+        key: ProviderConfig(
+            key=key,
+            # Deliberately non-empty: the adapter must bypass discovery.
+            issuer="https://never.example.com",
+            client_id="adapter-client",
+            client_secret="adapter-secret",
+            scopes="",
+            adapter=adapter,
+        )
+    }
+
+
+async def test_adapter_provider_full_login_flow(monkeypatch, idp, client, db):
+    """Adapter-backed login: redirect, callback, provisioning, and no
+    discovery or standard token/userinfo call."""
+    from sqlalchemy import select
+
+    import cliver_playbook.app.user.api.auth as auth_api
+    from cliver_playbook.app.user.models.entities import OauthIdentity
+
+    register_adapter("test-direct", _DirectAdapter())
+    _no_discovery(monkeypatch, idp)
+    monkeypatch.setattr(
+        auth_api, "build_provider_registry", lambda: _adapter_provider("direct", "test-direct")
+    )
+    await seed_admin(db)
+
+    login = await client.get("/api/v1/auth/oauth/direct/login")
+    assert login.status_code == 302
+    assert login.headers["location"].startswith("https://adapter.example/authorize?")
+    state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+    cookie = login.headers["set-cookie"].split(";")[0]
+
+    callback = await client.get(
+        "/api/v1/auth/oauth/direct/callback",
+        params={"code": "adapter-code", "state": state},
+        headers={"Cookie": cookie},
+    )
+    frag = _frag_params(callback.headers["location"])
+    assert frag["token"]
+
+    me = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {frag['token']}"})
+    assert me.json()["user"]["display_name"] == "Adapter User"
+    assert me.json()["user"]["phone"] == "+44-20-0000-0000"
+
+    identity = (await db.execute(select(OauthIdentity))).scalars().one()
+    assert identity.provider == "direct"
+    assert identity.subject == "adapter-subject"
+    assert identity.email == "adapter@example.com"
+
+
+async def test_adapter_authorize_error_redirects_to_spa(monkeypatch, idp, client):
+    import cliver_playbook.app.user.api.auth as auth_api
+
+    register_adapter("test-broken-authorize", _BrokenAdapter())
+    monkeypatch.setattr(
+        auth_api,
+        "build_provider_registry",
+        lambda: _adapter_provider("broken", "test-broken-authorize"),
+    )
+
+    resp = await client.get("/api/v1/auth/oauth/broken/login")
+    assert resp.status_code == 302
+    assert resp.headers["location"].startswith(f"{FRONTEND}/auth/callback#")
+    assert _frag_params(resp.headers["location"]).get("error") == "idp_error"
+
+
+async def test_adapter_callback_error_audits_and_redirects(monkeypatch, idp, client, db):
+    from sqlalchemy import select
+
+    import cliver_playbook.app.user.api.auth as auth_api
+    from cliver_playbook.app.user.models.entities import AuditLog
+
+    register_adapter("test-broken-callback", _BrokenCompleteAdapter())
+    monkeypatch.setattr(
+        auth_api,
+        "build_provider_registry",
+        lambda: _adapter_provider("broken2", "test-broken-callback"),
+    )
+    await seed_admin(db)
+
+    login = await client.get("/api/v1/auth/oauth/broken2/login")
+    state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+    cookie = login.headers["set-cookie"].split(";")[0]
+    callback = await client.get(
+        "/api/v1/auth/oauth/broken2/callback",
+        params={"code": "c", "state": state},
+        headers={"Cookie": cookie},
+    )
+    assert _frag_params(callback.headers["location"]).get("error") == "idp_error"
+
+    row = (
+        (
+            await db.execute(
+                select(AuditLog).where(
+                    AuditLog.event == "auth.oauth.callback", AuditLog.ok.is_(False)
+                )
+            )
+        )
+        .scalars()
+        .one()
+    )
+    assert row.error == "idp_error"
+
+
+async def test_builtin_wechat_adapter_login_and_callback(monkeypatch, idp, client, db):
+    """The bundled `wechat` adapter drives the real QR-connect wire protocol
+    (GET token exchange, GET userinfo) with no discovery and no standard
+    token-endpoint form post."""
+    from sqlalchemy import select
+
+    import cliver_playbook.app.user.api.auth as auth_api
+    from cliver_playbook.app.user.models.entities import OauthIdentity
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        if request.url.path == "/sns/oauth2/access_token":
+            assert request.url.params["appid"] == "wx-app"
+            assert request.url.params["secret"] == "wx-secret"
+            assert request.url.params["code"] == "wx-code"
+            return httpx.Response(200, json={"access_token": "at-wx", "openid": "wx-openid"})
+        if request.url.path == "/sns/userinfo":
+            assert request.url.params["access_token"] == "at-wx"
+            return httpx.Response(
+                200,
+                json={
+                    "openid": "wx-openid",
+                    "nickname": "微信用户",
+                    "headimgurl": "https://img.example/wx.png",
+                },
+            )
+        return httpx.Response(404)
+
+    _no_discovery(monkeypatch, idp)
+    monkeypatch.setattr(
+        idp,
+        "_open_client",
+        lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    monkeypatch.setattr(
+        auth_api,
+        "build_provider_registry",
+        lambda: {
+            "wechat": ProviderConfig(
+                key="wechat",
+                issuer="",
+                client_id="wx-app",
+                client_secret="wx-secret",
+                scopes="",
+                adapter="wechat",
+            )
+        },
+    )
+    await seed_admin(db)
+
+    login = await client.get("/api/v1/auth/oauth/wechat/login")
+    location = login.headers["location"]
+    assert location.startswith("https://open.weixin.qq.com/connect/qrconnect?")
+    assert location.endswith("#wechat_redirect")
+    state = parse_qs(urlparse(location).query)["state"][0]
+    cookie = login.headers["set-cookie"].split(";")[0]
+
+    callback = await client.get(
+        "/api/v1/auth/oauth/wechat/callback",
+        params={"code": "wx-code", "state": state},
+        headers={"Cookie": cookie},
+    )
+    frag = _frag_params(callback.headers["location"])
+    assert frag["token"]
+
+    identity = (await db.execute(select(OauthIdentity))).scalars().one()
+    assert identity.provider == "wechat"
+    assert identity.subject == "wx-openid"
+    assert identity.display_name == "微信用户"

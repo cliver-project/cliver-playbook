@@ -228,6 +228,40 @@ async def test_full_link_flow(idp, client, db):
     assert audit.target == "oidc:default"
 
 
+async def test_adapter_provider_link_attaches_identity(monkeypatch, idp, client, db):
+    """The link callback consumes the adapter's Identity exactly like a
+    standard provider's userinfo payload."""
+    import cliver_playbook.app.user.api.auth as auth_api
+    from cliver_playbook.app.user.auth.adapters import register_adapter
+    from cliver_playbook.app.user.auth.provider import Identity
+
+    from .test_oidc import _adapter_provider, _DirectAdapter
+
+    class _LinkAdapter(_DirectAdapter):
+        async def complete(self, config, *, code, code_verifier, redirect_uri, client):
+            return Identity(
+                subject="linked-subject",
+                claims={"name": "Linked User", "email": "linked@example.com"},
+            )
+
+    register_adapter("test-link-adapter", _LinkAdapter())
+    monkeypatch.setattr(
+        auth_api,
+        "build_provider_registry",
+        lambda: _adapter_provider("direct", "test-link-adapter"),
+    )
+    await seed_admin(db)
+    token = await login(client, "admin", TEST_ADMIN_PASSWORD)
+
+    location = await _link_flow(client, token, "direct")
+    assert _frag_params(location).get("linked") == "direct"
+    row = (await db.execute(select(OauthIdentity))).scalars().one()
+    assert row.provider == "direct"
+    assert row.subject == "linked-subject"
+    assert row.display_name == "Linked User"
+    assert row.email == "linked@example.com"
+
+
 async def test_link_is_idempotent(idp, client, db):
     await seed_admin(db)
     token = await login(client, "admin", TEST_ADMIN_PASSWORD)

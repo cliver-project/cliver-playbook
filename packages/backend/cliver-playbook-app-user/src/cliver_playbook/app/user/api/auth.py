@@ -30,11 +30,9 @@ from cliver_playbook.app.user.auth.oauth21 import (
     verify_login_blob,
 )
 from cliver_playbook.app.user.auth.oidc import (
-    build_authorize_url,
+    build_authorize_redirect,
     build_provider_registry,
-    endpoints_for,
-    exchange_code,
-    fetch_userinfo,
+    complete_login,
     find_linked_user,
     make_pkce_pair,
     sign_state_blob,
@@ -42,6 +40,7 @@ from cliver_playbook.app.user.auth.oidc import (
     verify_state_blob,
 )
 from cliver_playbook.app.user.auth.passwords import ahash_password, averify_password, needs_rehash
+from cliver_playbook.app.user.auth.provider import Identity, ProviderAdapterError
 from cliver_playbook.app.user.auth.tokens import (
     issue_web_token,
     revoke_all_for_user,
@@ -296,24 +295,24 @@ async def oauth_login(provider: str, request: Request) -> RedirectResponse:
     state = secrets.token_hex(16)
     verifier, challenge = make_pkce_pair()
     try:
-        document = await endpoints_for(config)
-    except (httpx.HTTPError, ValueError):
+        # Adapter-backed providers build the URL synchronously; standard
+        # providers resolve discovery here. Both can fail on a runtime IdP
+        # condition, which must land on the SPA error page, never a 500.
+        url = await build_authorize_redirect(
+            config,
+            state=state,
+            code_challenge=challenge,
+            redirect_uri=_redirect_uri(request, provider),
+        )
+    except (httpx.HTTPError, ValueError, ProviderAdapterError):
         # Unreachable or malformed IdP (discovery is the only outbound call
-        # here) is a runtime condition, not a server bug: land on the SPA's
-        # error page like any other login failure instead of a bare 500.
+        # for standard providers) is a runtime condition, not a server bug.
         # ValueError covers malformed JSON from the IdP.
         frontend = get_settings().web_base_url.rstrip("/")
         return RedirectResponse(
             f"{frontend}/auth/callback#{urlencode({'error': 'idp_error'})}",
             status_code=status.HTTP_302_FOUND,
         )
-    url = build_authorize_url(
-        config,
-        document,
-        state=state,
-        code_challenge=challenge,
-        redirect_uri=_redirect_uri(request, provider),
-    )
     response = RedirectResponse(url, status_code=status.HTTP_302_FOUND)
     response.set_cookie(
         state_cookie_name,
@@ -371,26 +370,18 @@ async def oauth_callback(
     verifier = str(data["verifier"])
 
     try:
-        document = await endpoints_for(config)
-        token_response = await exchange_code(
+        identity = await complete_login(
             config,
-            document,
             code=code,
             code_verifier=verifier,
             redirect_uri=_redirect_uri(request, provider),
         )
-        if not isinstance(token_response, dict):
-            raise TypeError("token response is not a JSON object")
-        access_token = str(token_response.get("access_token", "") or "")
-        userinfo = await fetch_userinfo(document, access_token)
-        if not isinstance(userinfo, dict):
-            raise TypeError("userinfo response is not a JSON object")
-    except (httpx.HTTPError, ValueError, TypeError):
+    except (httpx.HTTPError, ValueError, TypeError, ProviderAdapterError):
         # IdP unreachable, error status (raise_for_status -> HTTPStatusError,
         # an HTTPError subclass), nonsense payload (resp.json() ->
-        # JSONDecodeError, a ValueError subclass) or wrong payload shape
-        # (TypeError above). Runtime condition -> audited SPA error
-        # redirect, never a bare 500.
+        # JSONDecodeError, a ValueError subclass), wrong payload shape
+        # (TypeError), or an adapter-reported provider error. Runtime
+        # condition -> audited SPA error redirect, never a bare 500.
         await write_audit(
             db,
             event="auth.oauth.callback",
@@ -401,10 +392,11 @@ async def oauth_callback(
         await db.commit()
         return _fail("idp_error")
 
-    # The stable provider-side user id lives in a configurable claim: "sub"
-    # for standard OIDC, "id" (numeric, stringified here) for GitHub-style
-    # APIs. `or ""` coerces null claims; [:255] matches the column width.
-    subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
+    # The stable provider-side user id: the configured claim for standard
+    # providers ("sub" for OIDC, "id" for GitHub-style APIs), or whatever
+    # the adapter chose. `complete_login` already truncated it to the
+    # oauth_identities.subject column width.
+    subject = identity.subject
     if not subject:
         return _fail("no_subject")
 
@@ -420,8 +412,7 @@ async def oauth_callback(
             db,
             request=request,
             provider=provider,
-            userinfo=userinfo,
-            subject=subject,
+            identity=identity,
             user_id=link_user_id,
             frontend=frontend,
         )
@@ -432,14 +423,14 @@ async def oauth_callback(
             await write_audit(
                 db,
                 event="auth.oauth.callback",
-                username=str(userinfo.get("email", ""))[:100],
+                username=identity.email[:100],
                 ok=False,
                 error="identity not linked and auto-provision disabled",
                 request=request,
             )
             await db.commit()
             return _fail("not_allowed")
-        user_id = await _provision_user(db, config, provider, userinfo)
+        user_id = await _provision_user(db, config, provider, identity)
 
     user = await users_service.get_user(db, user_id)
     if user is None or not user.is_active:
@@ -467,15 +458,14 @@ async def oauth_callback(
     return redirect
 
 
-async def _provision_user(db: AsyncSession, config, provider_key: str, userinfo: dict) -> int:
+async def _provision_user(db: AsyncSession, config, provider_key: str, identity: Identity) -> int:
     """Create a local account + identity link for a first-time SSO user."""
-    # Same claim mapping as the callback's identity lookup — the subject
-    # stored here must byte-match what the next login will look up.
-    subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
-    email = str(userinfo.get("email", "") or "")
-    display_name = str(
-        userinfo.get("name") or userinfo.get("preferred_username") or email or subject[:32]
-    )[:128]
+    # The subject on the Identity is already normalized (adapter or claim
+    # lookup) and truncated to the column width, so the value stored here
+    # byte-matches what the next login will look up.
+    subject = identity.subject
+    email = identity.email
+    display_name = identity.display_name[:128]
     # Deterministic, collision-tolerant username from the identity itself.
     base = email.split("@")[0][:32] if email else f"{provider_key}_{subject[:16]}"
     digest = hashlib.sha256(f"{provider_key}:{subject}".encode()).hexdigest()[:6]
@@ -486,7 +476,7 @@ async def _provision_user(db: AsyncSession, config, provider_key: str, userinfo:
     ).scalar_one_or_none()
 
     # Standard OIDC contact claim; most IdPs omit it, so "" → None is normal.
-    phone = str(userinfo.get("phone_number", "") or "")[:32]
+    phone = identity.phone_number[:32]
 
     user = User(
         username=username,
@@ -590,18 +580,16 @@ async def start_identity_link(
     state = secrets.token_hex(16)
     verifier, challenge = make_pkce_pair()
     try:
-        document = await endpoints_for(config)
-    except (httpx.HTTPError, ValueError):
+        url = await build_authorize_redirect(
+            config,
+            state=state,
+            code_challenge=challenge,
+            # Same callback URL as a login: the IdP sees one registered
+            # redirect URI per provider, the mode lives in the signed cookie.
+            redirect_uri=_redirect_uri(request, provider),
+        )
+    except (httpx.HTTPError, ValueError, ProviderAdapterError):
         raise HTTPException(status_code=502, detail="Identity provider is unavailable")
-    url = build_authorize_url(
-        config,
-        document,
-        state=state,
-        code_challenge=challenge,
-        # Same callback URL as a login: the IdP sees one registered redirect
-        # URI per provider, the mode lives in the signed cookie, not the URL.
-        redirect_uri=_redirect_uri(request, provider),
-    )
     response = JSONResponse(content=IdentityLinkStart(redirect_url=url).model_dump())
     response.set_cookie(
         state_cookie_name,
@@ -668,8 +656,7 @@ async def _complete_identity_link(
     *,
     request: Request,
     provider: str,
-    userinfo: dict,
-    subject: str,
+    identity: Identity,
     user_id: int,
     frontend: str,
 ) -> RedirectResponse:
@@ -696,7 +683,7 @@ async def _complete_identity_link(
     # would trigger a lazy refresh outside async context.
     username = user.username
 
-    existing_user_id = await find_linked_user(db, provider, subject)
+    existing_user_id = await find_linked_user(db, provider, identity.subject)
     if existing_user_id == user.id:
         return _done(f"linked={quote(provider)}")  # idempotent re-link
     if existing_user_id is not None:
@@ -717,14 +704,12 @@ async def _complete_identity_link(
 
     # Snapshot columns (same shape as login-time provisioning), truncated to
     # their column widths; nullable IdP emails coerce to "".
-    email = str(userinfo.get("email", "") or "")[:255]
-    display_name = str(
-        userinfo.get("name") or userinfo.get("preferred_username") or email or subject[:32]
-    )[:128]
+    email = identity.email[:255]
+    display_name = identity.display_name[:128]
     db.add(
         OauthIdentity(
             provider=provider,
-            subject=subject,
+            subject=identity.subject,
             user_id=user.id,
             email=email,
             display_name=display_name,

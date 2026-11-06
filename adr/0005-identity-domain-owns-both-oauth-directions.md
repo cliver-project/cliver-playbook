@@ -3,7 +3,7 @@
 **Status:** Accepted (2026-10-15; write-up 2026-10-17 — the code cites this ADR from
 `auth/oauth21.py`, `auth/oidc.py`, the settings and the models). Amended 2026-10-15
 (multi-provider OIDC login), 2026-10-16 (linked accounts), 2026-10-16 (root mount,
-after the package split).
+after the package split), 2026-11-06 (provider adapters, ADR-0024).
 **Context:** The app sits on both sides of OAuth: agents (MCP clients, CLIs) need to
 obtain a credential *from* it, and people sign in *through* external identity
 providers. Both concern the same subjects — users, credentials, revocation, audit —
@@ -47,7 +47,10 @@ libraries exist).
    provider's stable identifier when it is not `sub` (numeric ids included — the
    stored subject is a string). Adding a provider is a config change; the login page
    renders one button per enabled provider from the labels in that block. Presets
-   ship disabled: enabling a provider is a deployment decision.
+   ship disabled: enabling a provider is a deployment decision. Amendment
+   2026-11-06 (ADR-0024): a third shape selects a registered protocol adapter for
+   providers that are not OAuth2-shaped (WeChat, Alipay); the adapter owns the
+   authorize URL and the code-for-identity exchange.
 
 6. **Identities are linkable, and the last credential is protected** (amendment
    2026-10-16). A signed blob carries `mode=login|link` (plus the user id when

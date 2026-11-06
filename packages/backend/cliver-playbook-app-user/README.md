@@ -15,7 +15,7 @@ and contributes its own `ROUTERS`, migration chain and self-application.
 |---|---|---|
 | Settings | `settings.py` | `Settings(basic.Settings)`: secret key, login policy, OIDC registry, OAuth 2.1 knobs. |
 | Routers | `api/routes.py` | `ROUTERS: list[APIRouter]` — `/api/v1/auth` + `/api/v1/admin`, including the section-agnostic settings surface (ADR-0015/0021). |
-| Identity | `auth/` | Passwords, tokens, permissions catalog with the `*` superuser wildcard, RBAC dependencies, OIDC client, OAuth 2.1 provider, audit writer. |
+| Identity | `auth/` | Passwords, tokens, permissions catalog with the `*` superuser wildcard, RBAC dependencies, OIDC client, provider adapters, OAuth 2.1 provider, audit writer. |
 | Runtime settings | `settings_section.py`, `api/admin_settings.py` | This package's identity-policy section plus the generic describe/update/reset HTTP layer delegated to each owning package (ADR-0021). |
 | Domain | `api/`, `services/`, `schemas/`, `models/entities.py` | Endpoints + service layer; tables: users, roles, user_roles, role_permissions, oauth_identities, oauth_clients, oauth_codes, oauth_refresh_tokens, auth_tokens, audit_logs. |
 | Migrations | `alembic/` | Own chain, version table `alembic_version_user`; seeds the admin/user roles and the initial admin account, and pins the admin role to `*`. |
@@ -25,6 +25,25 @@ The OAuth 2.1 provider (`auth/oauth21.py`) adds root-level routes
 (`/.well-known/*`, token, registration, revocation) that are not part of
 `ROUTERS`: they come from the MCP SDK at call time, so `create_app` adds them
 through `mount_oauth_routes(app)`.
+
+## Provider adapters
+
+Standard OIDC/OAuth2 providers are pure configuration: discovery
+(`issuer`) or explicit endpoints (`authorize_url` / `token_url` /
+`userinfo_url`). Providers whose wire protocol is not OAuth2 select a
+registered adapter with `oidc.providers.<key>.adapter` (ADR-0024). `wechat`
+(Open Platform QR-connect) and `alipay` (RSA2-signed gateway) are built in;
+a project can register its own with
+`cliver_playbook.app.user.auth.adapters.register_adapter` before the first
+request. Adapters own the authorize URL and the code-for-identity exchange,
+so no endpoint URLs are needed and upstream tokens never pass through a
+playbook HTTP endpoint.
+
+The Alipay adapter needs the optional RSA dependency:
+
+```bash
+python -m pip install -e ".[alipay]"   # cryptography
+```
 
 ## Install
 

@@ -22,11 +22,13 @@ Design choices:
   same trade the backend-for-frontend pattern usually makes.
 - **Registry-shaped, settings-driven.** The provider registry is built from
   the nested `oidc.providers` settings block; adding an identity provider is
-  a configuration change, never a code change. Each provider is either
-  discovery-based (`issuer`) or explicit-endpoint (`authorize_url` /
-  `token_url` / `userinfo_url`, for OAuth2 services with no discovery
-  document); `endpoints_for` normalizes both into one discovery-shaped dict
-  so the flow code is identical for either shape.
+  a configuration change. Each provider is discovery-based (`issuer`),
+  explicit-endpoint (`authorize_url` / `token_url` / `userinfo_url`, for OAuth2
+  services with no discovery document), or adapter-backed (`adapter`, for
+  non-OAuth2 protocols — built-ins: `wechat`, `alipay`; projects may register
+  their own, ADR-0024). `endpoints_for` normalizes the first two into one
+  discovery-shaped dict; an adapter owns both the authorize URL and the
+  code-for-identity exchange (`build_authorize_redirect` / `complete_login`).
 - **Discovery cached 1h** per issuer — the document is static in practice, and
   this keeps the login path at two IdP round-trips (token + userinfo).
 - The HTTP entry points accept an injected `httpx.AsyncClient` — tests drive
@@ -39,7 +41,6 @@ import hmac
 import json
 import secrets
 import time
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
 
@@ -47,41 +48,13 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cliver_playbook.app.user.auth.adapters import adapter_names, get_adapter
+from cliver_playbook.app.user.auth.provider import Identity, ProviderConfig
 from cliver_playbook.app.user.settings import get_settings
 
 _STATE_COOKIE = "cliver_oauth_state"
 _STATE_TTL_SECONDS = 600
 _DISCOVERY_TTL_SECONDS = 3600
-
-
-@dataclass(frozen=True)
-class ProviderConfig:
-    """One registered external IdP.
-
-    Two complementary endpoint shapes (the settings model enforces that an
-    enabled provider has exactly one of them):
-    - `issuer` set: the three endpoints come from OIDC discovery;
-    - explicit `authorize_url`/`token_url`/`userinfo_url`: for plain OAuth2
-      services without a discovery document (e.g. GitHub).
-
-    `subject_claim` names the userinfo field carrying the provider-side
-    stable user id: "sub" for standard OIDC, "id" for GitHub-style APIs
-    returning a numeric account id. `label` is the UI button text; empty
-    means the edge falls back to `key.title()`.
-    """
-
-    key: str  # URL segment + oauth_identities.provider value
-    issuer: str
-    client_id: str
-    client_secret: str
-    scopes: str
-    auto_provision: bool = True
-    default_role: str = "user"
-    label: str = ""
-    subject_claim: str = "sub"
-    authorize_url: str = ""
-    token_url: str = ""
-    userinfo_url: str = ""
 
 
 def build_provider_registry() -> dict[str, ProviderConfig]:
@@ -94,10 +67,16 @@ def build_provider_registry() -> dict[str, ProviderConfig]:
     oauth_identities.provider column values.
     """
     settings = get_settings()
+    available_adapters = adapter_names()
     registry: dict[str, ProviderConfig] = {}
     for key, provider in settings.oidc.providers.items():
         if not provider.enabled:
             continue
+        if provider.adapter and provider.adapter not in available_adapters:
+            raise ValueError(
+                f"provider {key!r} uses unknown adapter {provider.adapter!r}; "
+                f"registered adapters: {', '.join(sorted(available_adapters)) or '(none)'}"
+            )
         registry[key] = ProviderConfig(
             key=key,
             issuer=provider.issuer.rstrip("/"),
@@ -111,6 +90,7 @@ def build_provider_registry() -> dict[str, ProviderConfig]:
             authorize_url=provider.authorize_url,
             token_url=provider.token_url,
             userinfo_url=provider.userinfo_url,
+            adapter=provider.adapter,
         )
     return registry
 
@@ -322,6 +302,93 @@ def build_authorize_url(
         "code_challenge_method": "S256",
     }
     return f"{discovery['authorization_endpoint']}?{urlencode(params)}"
+
+
+async def build_authorize_redirect(
+    config: ProviderConfig,
+    *,
+    state: str,
+    code_challenge: str,
+    redirect_uri: str,
+    client: httpx.AsyncClient | None = None,
+) -> str:
+    """The provider's authorize URL, whichever protocol it speaks.
+
+    Adapter-backed providers build the URL synchronously (no discovery call);
+    standard providers resolve their endpoints and use the OAuth2 shape.
+    """
+    if config.adapter:
+        return get_adapter(config.adapter).authorize_url(
+            config,
+            state=state,
+            redirect_uri=redirect_uri,
+            code_challenge=code_challenge,
+        )
+    discovery = await endpoints_for(config, client=client)
+    return build_authorize_url(
+        config,
+        discovery,
+        state=state,
+        code_challenge=code_challenge,
+        redirect_uri=redirect_uri,
+    )
+
+
+async def complete_login(
+    config: ProviderConfig,
+    *,
+    code: str,
+    code_verifier: str,
+    redirect_uri: str,
+    client: httpx.AsyncClient | None = None,
+) -> Identity:
+    """Exchange the one-time code for the provider-verified identity.
+
+    Adapter-backed providers perform the whole exchange inside the adapter, so
+    the upstream access token never reaches this module. The standard path
+    keeps the existing two-call flow (token + userinfo) and wraps the userinfo
+    payload in the same ``Identity`` shape, letting account linking and
+    provisioning depend on one contract.
+    """
+    close = client is None
+    if close:
+        client = _open_client()
+    try:
+        if config.adapter:
+            identity = await get_adapter(config.adapter).complete(
+                config,
+                code=code,
+                code_verifier=code_verifier,
+                redirect_uri=redirect_uri,
+                client=client,
+            )
+            # The identity column is String(255); truncate once here so the
+            # lookup and the stored subject always byte-match.
+            return Identity(
+                subject=str(identity.subject or "")[:255],
+                claims=identity.claims,
+            )
+
+        discovery = await endpoints_for(config, client=client)
+        token_response = await exchange_code(
+            config,
+            discovery,
+            code=code,
+            code_verifier=code_verifier,
+            redirect_uri=redirect_uri,
+            client=client,
+        )
+        if not isinstance(token_response, dict):
+            raise TypeError("token response is not a JSON object")
+        access_token = str(token_response.get("access_token", "") or "")
+        userinfo = await fetch_userinfo(discovery, access_token, client=client)
+        if not isinstance(userinfo, dict):
+            raise TypeError("userinfo response is not a JSON object")
+        subject = str(userinfo.get(config.subject_claim, "") or "")[:255]
+        return Identity(subject=subject, claims=userinfo)
+    finally:
+        if close:
+            await client.aclose()
 
 
 # ---------------------------------------------------------------------------

@@ -925,9 +925,15 @@ dependencies = [
     { name = "sqlalchemy" },
 ]
 
+[package.optional-dependencies]
+alipay = [
+    { name = "cryptography" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "anyio" },
+    { name = "cryptography" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -937,6 +943,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "cliver-playbook-app-basic", editable = "packages/backend/cliver-playbook-app-basic" },
+    { name = "cryptography", marker = "extra == 'alipay'", specifier = ">=44.0.0" },
     { name = "email-validator", specifier = ">=2.1.0" },
     { name = "fastapi", specifier = ">=0.143.0" },
     { name = "httpx", specifier = ">=0.28.0" },
@@ -946,10 +953,12 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.16,<3" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
 ]
+provides-extras = ["alipay"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "anyio", specifier = ">=4.4.0" },
+    { name = "cryptography", specifier = ">=44.0.0" },
     { name = "pytest", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "ruff", specifier = ">=0.8.0" },

@@ -85,3 +85,61 @@ def test_scopes_accepts_yaml_list_or_string(yaml_file):
     assert _settings().oidc.providers["acme"].scopes == "read:user user:email"
     yaml_file("oidc:\n  providers:\n    acme:\n      scopes: openid profile\n")
     assert _settings().oidc.providers["acme"].scopes == "openid profile"
+
+
+def test_adapter_provider_needs_credentials_but_no_endpoints(yaml_file):
+    """An adapter owns the protocol: no issuer and no endpoint URLs required."""
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    wechat:\n"
+        "      enabled: true\n"
+        "      adapter: wechat\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+    )
+    settings = _settings()
+    assert settings.oidc.providers["wechat"].adapter == "wechat"
+
+
+def test_adapter_provider_still_requires_credentials(yaml_file):
+    yaml_file("oidc:\n  providers:\n    wechat:\n      enabled: true\n      adapter: wechat\n")
+    with pytest.raises(ValidationError, match="client_id"):
+        _settings()
+
+
+def test_provider_registry_copies_adapter(yaml_file, monkeypatch):
+    from cliver_playbook.app.user.auth import oidc
+
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    wechat:\n"
+        "      enabled: true\n"
+        "      adapter: wechat\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+    )
+    settings = _settings()
+    monkeypatch.setattr(oidc, "get_settings", lambda: settings)
+    registry = oidc.build_provider_registry()
+    assert registry["wechat"].adapter == "wechat"
+
+
+def test_provider_registry_rejects_unknown_adapter(yaml_file, monkeypatch):
+    from cliver_playbook.app.user.auth import oidc
+
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    bad:\n"
+        "      enabled: true\n"
+        "      adapter: no-such-adapter\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+        "      issuer: https://idp.example.com\n"
+    )
+    settings = _settings()
+    monkeypatch.setattr(oidc, "get_settings", lambda: settings)
+    with pytest.raises(ValueError, match="unknown adapter"):
+        oidc.build_provider_registry()
