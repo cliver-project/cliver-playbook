@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.basic.api.routes import ROUTERS as BASIC_ROUTERS
 from cliver_playbook.app.basic.runtime_settings import settings_lifespan
+from cliver_playbook.app.basic.version import package_version
 from cliver_playbook.app.rag.api.routes import ROUTERS as RAG_ROUTERS
 from cliver_playbook.app.rag_governance.api.routes import ROUTERS as GOVERNANCE_ROUTERS
 from cliver_playbook.app.rag_governance.query.facade import RuleToolPlanner
@@ -32,7 +33,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     runtime.configure(resolved)
 
     logging.basicConfig(level=resolved.log_level.upper())
-    app = FastAPI(title=resolved.app_name, version="0.1.0", lifespan=settings_lifespan)
+    app = FastAPI(
+        title=resolved.app_name,
+        version=package_version("cliver-playbook-app-rag-governance"),
+        lifespan=settings_lifespan,
+    )
     # The query facade's tool seam. A scenario registers its composite
     # tools on this registry at composition time; core governance
     # registers none.
