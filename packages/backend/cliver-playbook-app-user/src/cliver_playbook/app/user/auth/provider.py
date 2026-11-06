@@ -19,6 +19,20 @@ from typing import Any, Protocol
 
 import httpx
 
+# Token-request form fields the flow itself controls. `token_extra_params`
+# may not set them: an override could silently replace the code or the client
+# authentication fields.
+TOKEN_REQUEST_RESERVED = frozenset(
+    {
+        "grant_type",
+        "code",
+        "redirect_uri",
+        "code_verifier",
+        "client_id",
+        "client_secret",
+    }
+)
+
 
 @dataclass(frozen=True)
 class ProviderConfig:
@@ -39,6 +53,12 @@ class ProviderConfig:
     returning a numeric account id. Adapters choose their own subject, so this
     field is ignored when `adapter` is set.
 
+    `token_endpoint_auth_method` decides where the standard token request
+    carries the client credentials: the form body (``client_secret_post``,
+    the default), an HTTP Basic header (``client_secret_basic``), or neither
+    (``none``, a public client). `token_extra_params` adds provider-specific
+    form fields. Both are ignored when `adapter` is set.
+
     `label` is the UI button text; empty means the edge falls back to
     `key.title()`.
     """
@@ -56,6 +76,11 @@ class ProviderConfig:
     token_url: str = ""
     userinfo_url: str = ""
     adapter: str = ""
+    # How the token request authenticates the client (RFC 6749 section 2.3):
+    # "client_secret_post", "client_secret_basic", or "none".
+    token_endpoint_auth_method: str = "client_secret_post"
+    # Provider-specific form fields added to the token request.
+    token_extra_params: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

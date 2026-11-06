@@ -35,6 +35,24 @@ def _settings(**kwargs) -> Settings:
     return Settings(**kwargs)
 
 
+def _enabled_provider(extra: str = "", *, oidc_extra: str = "") -> str:
+    """YAML for one enabled ``acme`` provider with credentials.
+
+    ``extra`` appends provider fields (indented six spaces); ``oidc_extra``
+    appends fields directly under the ``oidc:`` block.
+    """
+    return (
+        "oidc:\n"
+        f"{oidc_extra}"
+        "  providers:\n"
+        "    acme:\n"
+        "      enabled: true\n"
+        "      client_id: x\n"
+        "      client_secret: y\n"
+        f"{extra}"
+    )
+
+
 def test_enabled_provider_requires_credentials_and_endpoints(yaml_file):
     # Enabled but bare: missing client credentials.
     yaml_file("oidc:\n  providers:\n    acme:\n      enabled: true\n")
@@ -143,3 +161,139 @@ def test_provider_registry_rejects_unknown_adapter(yaml_file, monkeypatch):
     monkeypatch.setattr(oidc, "get_settings", lambda: settings)
     with pytest.raises(ValueError, match="unknown adapter"):
         oidc.build_provider_registry()
+
+
+def test_token_endpoint_auth_defaults_and_public_client(yaml_file):
+    yaml_file(_enabled_provider("      issuer: https://idp.example.com\n"))
+    provider = _settings().oidc.providers["acme"]
+    assert provider.token_endpoint_auth_method == "client_secret_post"
+    assert provider.token_extra_params == {}
+
+    # A public client authenticates with `none`: no secret is required.
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    acme:\n"
+        "      enabled: true\n"
+        "      client_id: x\n"
+        "      token_endpoint_auth_method: none\n"
+        "      issuer: https://idp.example.com\n"
+    )
+    provider = _settings().oidc.providers["acme"]
+    assert provider.token_endpoint_auth_method == "none"
+    assert provider.client_secret == ""
+
+
+def test_client_secret_required_unless_auth_method_is_none(yaml_file):
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    acme:\n"
+        "      enabled: true\n"
+        "      client_id: x\n"
+        "      token_endpoint_auth_method: client_secret_basic\n"
+        "      issuer: https://idp.example.com\n"
+    )
+    with pytest.raises(ValidationError, match="client_secret"):
+        _settings()
+
+
+def test_token_endpoint_auth_method_is_validated(yaml_file):
+    yaml_file(
+        _enabled_provider(
+            "      issuer: https://idp.example.com\n"
+            "      token_endpoint_auth_method: private_key_jwt\n"
+        )
+    )
+    with pytest.raises(ValidationError, match="token_endpoint_auth_method"):
+        _settings()
+
+
+def test_token_extra_params_cannot_override_protocol_fields(yaml_file):
+    yaml_file(
+        _enabled_provider(
+            "      issuer: https://idp.example.com\n"
+            "      token_extra_params:\n"
+            "        grant_type: password\n"
+        )
+    )
+    with pytest.raises(ValidationError, match="token_extra_params"):
+        _settings()
+
+
+def test_enabled_endpoint_urls_require_https(yaml_file):
+    yaml_file(_enabled_provider("      issuer: http://idp.example.com\n"))
+    with pytest.raises(ValidationError, match="must use https"):
+        _settings()
+
+    # Explicit-endpoint providers go through the same check.
+    yaml_file(
+        _enabled_provider(
+            "      authorize_url: https://idp.example.com/authorize\n"
+            "      token_url: http://idp.example.com/token\n"
+            "      userinfo_url: https://idp.example.com/userinfo\n"
+        )
+    )
+    with pytest.raises(ValidationError, match="must use https"):
+        _settings()
+
+
+def test_insecure_endpoints_require_explicit_opt_in(yaml_file):
+    yaml_file(
+        _enabled_provider(
+            "      issuer: http://127.0.0.1:9000\n",
+            oidc_extra="  allow_insecure_endpoints: true\n",
+        )
+    )
+    assert _settings().oidc.providers["acme"].issuer == "http://127.0.0.1:9000"
+
+
+def test_endpoint_urls_must_be_absolute_http(yaml_file):
+    for issuer in ("idp.example.com", "ftp://idp.example.com"):
+        yaml_file(_enabled_provider(f"      issuer: {issuer}\n"))
+        with pytest.raises(ValidationError, match="absolute http"):
+            _settings()
+
+
+def test_disabled_provider_may_keep_http_preset(yaml_file):
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    acme:\n"
+        "      enabled: false\n"
+        "      issuer: http://idp.example.com\n"
+    )
+    assert _settings().oidc.providers["acme"].enabled is False
+
+
+def test_adapter_provider_ignores_unused_endpoint_urls(yaml_file):
+    """The adapter owns the wire protocol; issuer/endpoint fields are unused."""
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    wechat:\n"
+        "      enabled: true\n"
+        "      adapter: wechat\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+        "      issuer: http://unused.example.com\n"
+    )
+    assert _settings().oidc.providers["wechat"].adapter == "wechat"
+
+
+def test_provider_registry_copies_token_request_settings(yaml_file, monkeypatch):
+    from cliver_playbook.app.user.auth import oidc
+
+    yaml_file(
+        _enabled_provider(
+            "      issuer: https://idp.example.com\n"
+            "      token_endpoint_auth_method: client_secret_basic\n"
+            "      token_extra_params:\n"
+            "        audience: https://api.example.com\n"
+        )
+    )
+    settings = _settings()
+    monkeypatch.setattr(oidc, "get_settings", lambda: settings)
+    config = oidc.build_provider_registry()["acme"]
+    assert config.token_endpoint_auth_method == "client_secret_basic"
+    assert config.token_extra_params == {"audience": "https://api.example.com"}

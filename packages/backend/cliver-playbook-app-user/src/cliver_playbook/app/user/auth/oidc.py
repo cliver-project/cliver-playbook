@@ -43,14 +43,18 @@ import re
 import secrets
 import time
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote_plus, urlencode
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.user.auth.adapters import adapter_names, get_adapter
-from cliver_playbook.app.user.auth.provider import Identity, ProviderConfig
+from cliver_playbook.app.user.auth.provider import (
+    TOKEN_REQUEST_RESERVED,
+    Identity,
+    ProviderConfig,
+)
 from cliver_playbook.app.user.settings import get_settings
 
 _STATE_COOKIE = "cliver_oauth_state"
@@ -92,6 +96,8 @@ def build_provider_registry() -> dict[str, ProviderConfig]:
             token_url=provider.token_url,
             userinfo_url=provider.userinfo_url,
             adapter=provider.adapter,
+            token_endpoint_auth_method=provider.token_endpoint_auth_method,
+            token_extra_params=dict(provider.token_extra_params),
         )
     return registry
 
@@ -243,6 +249,47 @@ async def endpoints_for(
     }
 
 
+def _token_request(
+    provider: ProviderConfig, *, code: str, code_verifier: str, redirect_uri: str
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Build the token request's form body and headers.
+
+    The configured auth method decides where the client credentials travel.
+    `client_secret_basic` form-urlencodes both parts before Base64 (RFC 6749
+    section 2.3.1); `none` is a public client, so it sends its client_id but
+    never a secret. Extra params are provider extensions and cannot replace a
+    protocol field (the settings model rejects that too, but a programmatically
+    built ProviderConfig must not silently bypass it).
+    """
+    overridden = TOKEN_REQUEST_RESERVED.intersection(provider.token_extra_params)
+    if overridden:
+        raise ValueError(
+            "token_extra_params may not set protocol fields: " + ", ".join(sorted(overridden))
+        )
+
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "code_verifier": code_verifier,
+    }
+    headers = {"Accept": "application/json"}
+    method = provider.token_endpoint_auth_method
+    if method == "client_secret_post":
+        data["client_id"] = provider.client_id
+        data["client_secret"] = provider.client_secret
+    elif method == "client_secret_basic":
+        credentials = f"{quote_plus(provider.client_id)}:{quote_plus(provider.client_secret)}"
+        encoded = base64.b64encode(credentials.encode("ascii")).decode("ascii")
+        headers["Authorization"] = f"Basic {encoded}"
+    elif method == "none":
+        data["client_id"] = provider.client_id
+    else:
+        raise ValueError(f"unsupported token_endpoint_auth_method {method!r}")
+    data.update(provider.token_extra_params)
+    return data, headers
+
+
 async def exchange_code(
     provider: ProviderConfig,
     discovery: dict[str, Any],
@@ -253,21 +300,17 @@ async def exchange_code(
     client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     """Exchange the one-time code for tokens at the IdP token endpoint."""
+    data, headers = _token_request(
+        provider, code=code, code_verifier=code_verifier, redirect_uri=redirect_uri
+    )
     close = client is None
     if close:
         client = _open_client()
     try:
         resp = await client.post(
             discovery["token_endpoint"],
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-                "client_id": provider.client_id,
-                "client_secret": provider.client_secret,
-                "code_verifier": code_verifier,
-            },
-            headers={"Accept": "application/json"},
+            data=data,
+            headers=headers,
         )
         resp.raise_for_status()
         return resp.json()

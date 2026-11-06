@@ -27,12 +27,14 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from cliver_playbook.app.basic.runtime import lazy_settings
 from cliver_playbook.app.basic.settings import Settings as BasicSettings
+from cliver_playbook.app.user.auth.provider import TOKEN_REQUEST_RESERVED
 
 # Provider registry keys double as URL path segments
 # (/api/v1/auth/oauth/<key>/login|callback) and as oauth_identities.provider
@@ -45,6 +47,27 @@ _PROVIDER_KEY_RE = re.compile(f"^{_PROVIDER_KEY_PATTERN}$")
 # hand-off). Rejected prophylactically: a provider segment and a fixed-route
 # segment are indistinguishable in the URL space.
 _RESERVED_PROVIDER_KEYS = frozenset({"providers", "authorize", "callback", "login"})
+
+
+def _check_endpoint_url(
+    provider_key: str, field_name: str, value: str, *, allow_insecure: bool
+) -> None:
+    """Reject endpoint URLs that would send credentials in clear text.
+
+    An enabled provider's issuer and explicit endpoint URLs must be absolute
+    http(s) URLs; https is required unless the deployment explicitly opted
+    into insecure endpoints for a local development IdP.
+    """
+    if not value:
+        return
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError(f"provider {provider_key!r} {field_name} must be an absolute http(s) URL")
+    if parsed.scheme == "http" and not allow_insecure:
+        raise ValueError(
+            f"provider {provider_key!r} {field_name} must use https; set "
+            "oidc.allow_insecure_endpoints: true only for local development"
+        )
 
 
 class OidcProviderSettings(BaseModel):
@@ -76,6 +99,16 @@ class OidcProviderSettings(BaseModel):
     label: str = ""
     client_id: str = ""
     client_secret: str = ""
+    # Token-request client authentication (RFC 6749 section 2.3):
+    # "client_secret_post" (form body, the historical default),
+    # "client_secret_basic" (HTTP Basic header), or "none" (public client:
+    # only client_id is sent; no secret is required).
+    token_endpoint_auth_method: Literal["client_secret_post", "client_secret_basic", "none"] = (
+        "client_secret_post"
+    )
+    # Extra form fields for the token request. Protocol fields are rejected so
+    # a typo cannot silently replace the code or the client authentication.
+    token_extra_params: dict[str, str] = Field(default_factory=dict)
     issuer: str = ""
     authorize_url: str = ""
     token_url: str = ""
@@ -100,6 +133,18 @@ class OidcProviderSettings(BaseModel):
             return " ".join(str(v) for v in value)
         return value
 
+    @field_validator("token_extra_params")
+    @classmethod
+    def _check_token_extra_params(cls, value: dict[str, str]) -> dict[str, str]:
+        reserved = sorted(TOKEN_REQUEST_RESERVED.intersection(value))
+        if reserved:
+            raise ValueError(
+                "token_extra_params may not set protocol fields: " + ", ".join(reserved)
+            )
+        if any(not key.strip() for key in value):
+            raise ValueError("token_extra_params keys must be non-empty")
+        return value
+
     @model_validator(mode="after")
     def _check_credentials_and_endpoints(self) -> OidcProviderSettings:
         # Fail at startup, not at first login: an enabled provider without
@@ -107,14 +152,11 @@ class OidcProviderSettings(BaseModel):
         # ValidationError carries the providers.<key> path, naming the culprit.
         if not self.enabled:
             return self
-        missing = [
-            name
-            for name, value in (
-                ("client_id", self.client_id),
-                ("client_secret", self.client_secret),
-            )
-            if not value
-        ]
+        missing = [] if self.client_id else ["client_id"]
+        # A public client (auth method "none") has no secret to send. Adapters
+        # always need one: WeChat's app secret, Alipay's private key.
+        if (self.adapter or self.token_endpoint_auth_method != "none") and not self.client_secret:
+            missing.append("client_secret")
         if missing:
             raise ValueError(f"enabled provider is missing {', '.join(missing)}")
         # An adapter owns the wire protocol end to end, so the standard
@@ -143,6 +185,10 @@ class OidcSettings(BaseModel):
     # that is empty, web_base_url. Override when TLS terminates in front of a
     # backend whose configured URLs cannot reveal the public scheme.
     cookie_secure: bool | None = None
+    # Enabled providers must reach their endpoints over https. This explicit
+    # opt-in permits plain http, intended for a local development IdP on a
+    # loopback or private network. Never enable it in production.
+    allow_insecure_endpoints: bool = False
     providers: dict[str, OidcProviderSettings] = Field(default_factory=dict)
 
     @field_validator("providers", mode="before")
@@ -181,6 +227,17 @@ class OidcSettings(BaseModel):
                 raise ValueError(
                     f"provider key {key!r} is reserved (collides with the fixed auth routes)"
                 )
+            provider = self.providers[key]
+            # An adapter owns the wire protocol; the standard endpoint fields
+            # are documented as unused, so do not reject their contents.
+            if provider.enabled and not provider.adapter:
+                for field_name in ("issuer", "authorize_url", "token_url", "userinfo_url"):
+                    _check_endpoint_url(
+                        key,
+                        field_name,
+                        getattr(provider, field_name),
+                        allow_insecure=self.allow_insecure_endpoints,
+                    )
         return self
 
 

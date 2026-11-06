@@ -14,13 +14,14 @@ transport, dispatched by request host:
                         as the stable subject, and a nullable email.
 """
 
+import base64
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
 
 from cliver_playbook.app.user.auth.adapters import register_adapter
-from cliver_playbook.app.user.auth.oidc import ProviderConfig
+from cliver_playbook.app.user.auth.oidc import ProviderConfig, exchange_code
 from cliver_playbook.app.user.auth.provider import Identity, ProviderAdapterError
 
 from .helpers import seed_admin
@@ -755,3 +756,97 @@ async def test_builtin_wechat_adapter_login_and_callback(monkeypatch, idp, clien
     assert identity.provider == "wechat"
     assert identity.subject == "wx-openid"
     assert identity.display_name == "微信用户"
+
+
+# ---------------------------------------------------------------------------
+# Token-endpoint client authentication
+# ---------------------------------------------------------------------------
+
+
+def _token_config(**overrides) -> ProviderConfig:
+    values = {
+        "key": "acme",
+        "issuer": "",
+        "client_id": "client-id",
+        "client_secret": "s3cret",
+        "scopes": "",
+        "token_endpoint_auth_method": "client_secret_post",
+    }
+    values.update(overrides)
+    return ProviderConfig(**values)
+
+
+async def _capture_token_request(config: ProviderConfig) -> dict:
+    """Run exchange_code against a mock endpoint and return what it sent."""
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["headers"] = request.headers
+        captured["form"] = {k: v[0] for k, v in parse_qs(request.content.decode()).items()}
+        return httpx.Response(200, json={"access_token": "at_test"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await exchange_code(
+            config,
+            {"token_endpoint": "https://idp.example.com/token"},
+            code="code-1",
+            code_verifier="verifier-1",
+            redirect_uri="https://app.example.com/auth/callback",
+            client=client,
+        )
+    return captured
+
+
+async def test_token_exchange_posts_client_credentials_by_default():
+    captured = await _capture_token_request(_token_config())
+    form = captured["form"]
+    assert form["grant_type"] == "authorization_code"
+    assert form["code"] == "code-1"
+    assert form["code_verifier"] == "verifier-1"
+    assert form["client_id"] == "client-id"
+    assert form["client_secret"] == "s3cret"
+    assert "authorization" not in captured["headers"]
+
+
+async def test_token_exchange_client_secret_basic_encodes_credentials():
+    captured = await _capture_token_request(
+        _token_config(
+            client_id="a b",
+            client_secret="s:e?",
+            token_endpoint_auth_method="client_secret_basic",
+        )
+    )
+    # RFC 6749 section 2.3.1: form-urlencode each part before Base64.
+    form = captured["form"]
+    assert "client_id" not in form and "client_secret" not in form
+    scheme, value = captured["headers"]["authorization"].split(" ", 1)
+    assert scheme == "Basic"
+    assert base64.b64decode(value).decode() == "a+b:s%3Ae%3F"
+
+
+async def test_token_exchange_public_client_omits_secret():
+    captured = await _capture_token_request(_token_config(token_endpoint_auth_method="none"))
+    form = captured["form"]
+    assert form["client_id"] == "client-id"
+    assert "client_secret" not in form
+    assert "authorization" not in captured["headers"]
+
+
+async def test_token_exchange_merges_extra_params():
+    captured = await _capture_token_request(
+        _token_config(
+            token_extra_params={
+                "audience": "https://api.example.com",
+                "resource": "urn:example:api",
+            }
+        )
+    )
+    form = captured["form"]
+    assert form["audience"] == "https://api.example.com"
+    assert form["resource"] == "urn:example:api"
+    assert form["grant_type"] == "authorization_code"
+
+
+async def test_token_exchange_rejects_reserved_extra_params():
+    with pytest.raises(ValueError, match="grant_type"):
+        await _capture_token_request(_token_config(token_extra_params={"grant_type": "password"}))

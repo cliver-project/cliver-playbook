@@ -45,6 +45,17 @@ The Alipay adapter needs the optional RSA dependency:
 python -m pip install -e ".[alipay]"   # cryptography
 ```
 
+Standard providers choose how the token exchange authenticates the client:
+`oidc.providers.<key>.token_endpoint_auth_method` is `client_secret_post`
+(the default, credentials in the form body), `client_secret_basic` (an HTTP
+Basic header), or `none` (a public client: only `client_id` is sent, and
+`client_secret` may be empty). `token_extra_params` adds provider-specific
+form fields; protocol fields such as `code` and `client_secret` are rejected.
+Enabled providers must use `https` issuer and endpoint URLs.
+`oidc.allow_insecure_endpoints: true` is the explicit local-development
+escape hatch for a plain-http IdP on a loopback or private network; never
+enable it in production.
+
 ## Install
 
 ```bash

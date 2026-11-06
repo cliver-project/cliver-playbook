@@ -70,7 +70,18 @@ oidc:
   # HTTPS deployment sets it automatically. Pin it when TLS terminates in
   # front of a backend whose configured URLs cannot reveal the public scheme.
   # cookie_secure: true
+  # Enabled providers must use https for their issuer and endpoint URLs.
+  # Plain http is accepted only with this explicit opt-in, for a local
+  # development IdP on a loopback or private network. Never enable in
+  # production: the token exchange carries the client credentials.
+  allow_insecure_endpoints: false
   providers:
+    # Per provider, `token_endpoint_auth_method` selects where the token
+    # request carries the client credentials: client_secret_post (default) |
+    # client_secret_basic | none. `none` is a public client and needs no
+    # client_secret. `token_extra_params: {key: value}` adds provider-specific
+    # form fields; protocol fields (code, grant_type, redirect_uri, code_verifier,
+    # client_id, client_secret) are rejected.
     google:
       enabled: false
       label: Google
