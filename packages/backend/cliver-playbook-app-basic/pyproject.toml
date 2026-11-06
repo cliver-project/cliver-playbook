@@ -1,6 +1,6 @@
 [project]
 name = "cliver-playbook-app-basic"
-version = "0.1.0"
+version = "0.2.0"
 description = "cliver-playbook foundations: layered settings, process runtime, meta + demo Items API, own Alembic chain"
 readme = "README.md"
 license = "Apache-2.0"

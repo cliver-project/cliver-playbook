@@ -1,6 +1,6 @@
 {
   "name": "cliver-playbook-app-rag",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "RAG frontend package: knowledge-base documents, stage selection during ingestion, and grounded chat over the uploaded corpus.",
@@ -19,8 +19,8 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",
     "axios": "^1.7.0",
-    "cliver-playbook-app-basic": "0.1.0",
-    "cliver-playbook-app-user": "0.1.0",
+    "cliver-playbook-app-basic": "0.2.0",
+    "cliver-playbook-app-user": "0.2.0",
     "lucide-react": "^0.550.0",
     "react-i18next": "^16.0.0",
     "react-router-dom": "^7.18.0",
