@@ -34,10 +34,12 @@ Standard OIDC/OAuth2 providers are pure configuration: discovery
 registered adapter with `oidc.providers.<key>.adapter` (ADR-0024). `wechat`
 (Open Platform QR-connect) and `alipay` (RSA2-signed gateway) are built in;
 a project can register its own with
-`cliver_playbook.app.user.auth.adapters.register_adapter` before the first
-request. Adapters own the authorize URL and the code-for-identity exchange,
-so no endpoint URLs are needed and upstream tokens never pass through a
-playbook HTTP endpoint.
+`cliver_playbook.app.user.auth.adapters.register_adapter` before `create_app`.
+`create_app` validates every enabled provider's adapter name and fails startup
+with the provider key and registered names when one is misspelled, instead of
+returning a 500 on the first login. Adapters own the authorize URL and the
+code-for-identity exchange, so no endpoint URLs are needed and upstream tokens
+never pass through a playbook HTTP endpoint.
 
 The Alipay adapter needs the optional RSA dependency:
 

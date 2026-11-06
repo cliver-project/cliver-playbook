@@ -226,6 +226,29 @@ def test_provider_registry_rejects_unknown_adapter(yaml_file, monkeypatch):
         oidc.build_provider_registry()
 
 
+def test_create_app_validates_adapter_names_before_binding_runtime(yaml_file):
+    """A misspelled adapter must fail at startup, not at the first login.
+
+    ``create_app`` validates the provider registry before binding the process
+    runtime, so the error names the provider and the registered adapters even
+    when the runtime is already configured by another app in the process.
+    """
+    from cliver_playbook.app.user.app import create_app
+
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    bad:\n"
+        "      enabled: true\n"
+        "      adapter: no-such-adapter\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+    )
+    settings = _settings()
+    with pytest.raises(ValueError, match=r"bad.*unknown adapter"):
+        create_app(settings)
+
+
 def test_token_endpoint_auth_defaults_and_public_client(yaml_file):
     yaml_file(_enabled_provider("      issuer: https://idp.example.com\n"))
     provider = _settings().oidc.providers["acme"]

@@ -25,6 +25,7 @@ from cliver_playbook.app.basic.api.routes import ROUTERS as BASIC_ROUTERS
 from cliver_playbook.app.basic.runtime_settings import settings_lifespan
 from cliver_playbook.app.user.api.routes import ROUTERS as USER_ROUTERS
 from cliver_playbook.app.user.auth.oauth21 import RequestMetaMiddleware, mount_oauth_routes
+from cliver_playbook.app.user.auth.oidc import build_provider_registry
 from cliver_playbook.app.user.settings import Settings
 
 logger = logging.getLogger("cliver_playbook.app.user")
@@ -44,6 +45,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         The assembled application, ready for uvicorn or an ASGI test client.
     """
     resolved = settings if settings is not None else Settings()
+    # Fail-fast: an enabled provider whose adapter name is misspelled must
+    # stop startup, not surface as a 500 on its first login. This runs before
+    # the runtime is bound so a bad configuration never becomes process state.
+    build_provider_registry(resolved)
     runtime.configure(resolved)
 
     logging.basicConfig(level=resolved.log_level.upper())

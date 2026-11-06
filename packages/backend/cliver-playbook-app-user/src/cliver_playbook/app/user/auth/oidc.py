@@ -63,14 +63,14 @@ from cliver_playbook.app.user.auth.provider import (
     Identity,
     ProviderConfig,
 )
-from cliver_playbook.app.user.settings import get_settings
+from cliver_playbook.app.user.settings import Settings, get_settings
 
 _STATE_COOKIE = "cliver_oauth_state"
 _STATE_TTL_SECONDS = 600
 _DISCOVERY_TTL_SECONDS = 3600
 
 
-def build_provider_registry() -> dict[str, ProviderConfig]:
+def build_provider_registry(settings: Settings | None = None) -> dict[str, ProviderConfig]:
     """Registry from the nested `oidc.providers` settings block.
 
     Only enabled providers are registered: a disabled preset (the bundled
@@ -78,11 +78,17 @@ def build_provider_registry() -> dict[str, ProviderConfig]:
     page hides its button. Keys are validated by the settings model
     (charset + reserved words), so they are safe as URL path segments and as
     oauth_identities.provider column values.
+
+    ``create_app`` calls this before binding the runtime, so an enabled
+    provider with an unknown adapter name fails startup instead of the first
+    login attempt. The optional ``settings`` argument lets that startup check
+    run against the instance being assembled, before it becomes the
+    process-wide one.
     """
-    settings = get_settings()
+    resolved = settings if settings is not None else get_settings()
     available_adapters = adapter_names()
     registry: dict[str, ProviderConfig] = {}
-    for key, provider in settings.oidc.providers.items():
+    for key, provider in resolved.oidc.providers.items():
         if not provider.enabled:
             continue
         if provider.adapter and provider.adapter not in available_adapters:

@@ -144,8 +144,8 @@ round trip per provider. The frontend resolves the active language
 when only `brand_color` is set.
 
 Then test the denial paths: a disabled provider returns 404, and an enabled
-provider with a missing credential fails at startup rather than at first
-login.
+provider with a missing credential or an unknown `adapter` name fails at
+startup (`create_app`) rather than at first login.
 
 ## Pitfalls
 
