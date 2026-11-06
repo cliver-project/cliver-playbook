@@ -82,9 +82,10 @@ backend-lint: backend-init ## Check backend formatting and imports
 	done
 
 .PHONY: web-ui-check
-web-ui-check: web-ui-init ## Type-check, lint and build every frontend package and shell
+web-ui-check: web-ui-init ## Type-check, test, lint and build every frontend package and shell
 	@pnpm -r typecheck
 	@pnpm -r lint
+	@pnpm -r --if-present test
 	@pnpm -r build
 
 .PHONY: version-check

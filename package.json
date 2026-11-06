@@ -11,6 +11,7 @@
     "dev:mcp": "pnpm --filter cliver-playbook-dev-mcp dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r --if-present test"
   }
 }

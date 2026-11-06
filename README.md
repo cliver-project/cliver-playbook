@@ -141,7 +141,7 @@ make init           # uv sync + pnpm install
 make db-init        # apply every package's migration chain, dependencies first
 make backend-start  # the composed app on http://127.0.0.1:8000
 make web-ui-start   # the composed frontend shell on http://127.0.0.1:5173
-make check          # ruff + every package's tests + the frontend typecheck/lint/build
+make check          # ruff + every package's tests + frontend typecheck/lint/tests/build
 ```
 
 `make mcp-stdio` / `make mcp-http` run the MCP surface as a separate process for a

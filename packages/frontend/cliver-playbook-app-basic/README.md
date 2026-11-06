@@ -147,7 +147,13 @@ pnpm install                  # once, from the repository root
 pnpm --filter cliver-playbook-dev-basic dev    # the dev shell, proxying /api
 pnpm --filter cliver-playbook-app-basic typecheck
 pnpm --filter cliver-playbook-app-basic lint
+pnpm --filter cliver-playbook-app-basic test
 ```
+
+Unit tests use Vitest with jsdom and live next to the source they cover
+(`src/**/*.test.tsx`). The build and dev shell still type-check the package as
+a consumer would; the test harness is for isolated helpers such as `lazyRoute`
+and `usePagedQuery`.
 
 `dev/` is a throwaway app: it exists so the package can be type-checked, linted
 and built as a real consumer would, and so a UI change can be looked at without

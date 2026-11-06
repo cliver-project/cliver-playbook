@@ -89,7 +89,12 @@ pnpm install
 pnpm --filter cliver-playbook-dev-user dev          # the composed shell, proxying /api
 pnpm --filter cliver-playbook-app-user typecheck
 pnpm --filter cliver-playbook-app-user lint
+pnpm --filter cliver-playbook-app-user test
 ```
+
+Unit tests use Vitest with jsdom and live next to the source they cover
+(`src/**/*.test.tsx`); `ProviderBrand` covers locale-aware label resolution and
+the icon fallback initial.
 
 `dev/` is a throwaway app: it exists so the package can be type-checked, linted
 and built as a real consumer would, and so a UI change can be looked at without
