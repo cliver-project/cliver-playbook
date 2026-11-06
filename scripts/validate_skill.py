@@ -35,6 +35,14 @@ SHIPPED_PATH = re.compile(
 )
 LOCAL_PATH = re.compile(r"(?:/Users/|/home/|/private/(?:tmp|var)/|[A-Za-z]:\\)")
 FILE_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".sh", ".py", ".ts", ".tsx", ".css"}
+USE_CASE_DIR = Path("reference") / "use-cases"
+USE_CASE_HEADINGS = (
+    "## Use when",
+    "## Do",
+    "## Verify",
+    "## Pitfalls",
+    "## Source of truth",
+)
 
 
 def _string_field(
@@ -66,6 +74,22 @@ def _validate_manifest_assets(skill_dir: Path, errors: list[str]) -> None:
             continue
         for error in validate_manifest(data):
             errors.append(f"{path.name}: {error}")
+
+
+def _validate_document(
+    skill_dir: Path, label: str, text: str, errors: list[str]
+) -> None:
+    """Check one Markdown document for fence balance, path leaks, and links."""
+    if text.count("```") % 2:
+        errors.append(f"{label}: unbalanced ``` fence")
+
+    if LOCAL_PATH.search(text):
+        errors.append(f"{label}: contains a local absolute path")
+
+    for reference in sorted(set(SHIPPED_PATH.findall(text))):
+        target = skill_dir / reference
+        if target.suffix in FILE_SUFFIXES and not target.is_file():
+            errors.append(f"{label}: references missing file {reference!r}")
 
 
 def validate_skill(skill_dir: Path) -> list[str]:
@@ -109,16 +133,28 @@ def validate_skill(skill_dir: Path) -> list[str]:
     _string_field(frontmatter, "compatibility", 500, errors, required=False)
 
     body = text[match.end() :]
-    if body.count("```") % 2:
-        errors.append("body: unbalanced ``` fence")
+    _validate_document(skill_dir, "body", body, errors)
 
-    if LOCAL_PATH.search(body):
-        errors.append("body: contains a local absolute path")
+    use_case_dir = skill_dir / USE_CASE_DIR
+    for path in sorted(skill_dir.rglob("*.md")):
+        if path == skill_file:
+            continue
+        label = path.relative_to(skill_dir).as_posix()
+        try:
+            document = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            errors.append(f"{label}: cannot be read: {exc}")
+            continue
+        _validate_document(skill_dir, label, document, errors)
+        if path.parent == use_case_dir:
+            for heading in USE_CASE_HEADINGS:
+                if heading not in document:
+                    errors.append(f"{label}: missing required section {heading!r}")
 
-    for reference in sorted(set(SHIPPED_PATH.findall(body))):
-        target = skill_dir / reference
-        if target.suffix in FILE_SUFFIXES and not target.is_file():
-            errors.append(f"body: references missing file {reference!r}")
+    for path in sorted(use_case_dir.glob("*.md")):
+        label = path.relative_to(skill_dir).as_posix()
+        if label not in body:
+            errors.append(f"body: use case {label!r} is not listed in SKILL.md")
 
     _validate_manifest_assets(skill_dir, errors)
     return errors
@@ -147,6 +183,58 @@ def _self_test() -> int:
 
         good = _write_skill(root, "good-skill", "See `reference/notes.md`.")
         assert validate_skill(good) == []
+
+        good_use_case = _write_skill(
+            root, "good-use-case", "See `reference/use-cases/add-page.md`."
+        )
+        use_case_dir = good_use_case / USE_CASE_DIR
+        use_case_dir.mkdir(parents=True)
+        (use_case_dir / "add-page.md").write_text(
+            "# Add a page\n\n"
+            "## Use when\n\nA page is needed.\n\n"
+            "## Do\n\nAdd it.\n\n"
+            "## Verify\n\nBuild it.\n\n"
+            "## Pitfalls\n\nNone.\n\n"
+            "## Source of truth\n\n`reference/notes.md`.\n",
+            encoding="utf-8",
+        )
+        assert validate_skill(good_use_case) == []
+
+        orphan = _write_skill(
+            root, "orphan-use-case", "See `reference/use-cases/indexed.md`."
+        )
+        orphan_dir = orphan / USE_CASE_DIR
+        orphan_dir.mkdir(parents=True)
+        (orphan_dir / "indexed.md").write_text(
+            "# Indexed\n\n"
+            "## Use when\n\nA page is needed.\n\n"
+            "## Do\n\nAdd it.\n\n"
+            "## Verify\n\nBuild it.\n\n"
+            "## Pitfalls\n\nNone.\n\n"
+            "## Source of truth\n\n`reference/notes.md`.\n",
+            encoding="utf-8",
+        )
+        (orphan_dir / "orphan.md").write_text(
+            "# Orphan\n\n"
+            "## Use when\n\nA page is needed.\n\n"
+            "## Do\n\nAdd it.\n\n"
+            "## Verify\n\nBuild it.\n\n"
+            "## Pitfalls\n\nNone.\n\n"
+            "## Source of truth\n\n`reference/notes.md`.\n",
+            encoding="utf-8",
+        )
+        assert validate_skill(orphan), "accepted a use case missing from the index"
+
+        incomplete = _write_skill(
+            root, "incomplete-use-case", "See `reference/use-cases/incomplete.md`."
+        )
+        incomplete_dir = incomplete / USE_CASE_DIR
+        incomplete_dir.mkdir(parents=True)
+        (incomplete_dir / "incomplete.md").write_text(
+            "# Incomplete\n\n## Use when\n\nMissing the rest.\n",
+            encoding="utf-8",
+        )
+        assert validate_skill(incomplete), "accepted a use case without its sections"
 
         bad_name = _write_skill(root, "bad-name", "ok")
         text = (bad_name / "SKILL.md").read_text(encoding="utf-8")

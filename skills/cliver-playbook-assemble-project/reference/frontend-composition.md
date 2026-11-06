@@ -1,5 +1,10 @@
 # Frontend composition
 
+> **Use-case first.** This is the full scaffold reference. For one task in an
+> existing project, open the matching page under `reference/use-cases/` from
+> `SKILL.md`; come back here only for the initial scaffold or a section a
+> recipe links to.
+
 The frontend is a Vite + React 19 + Tailwind v4 application at the project
 root. The playbook packages are installed as TypeScript sources from the
 release tag; the app's build transpiles them. There is no npm registry

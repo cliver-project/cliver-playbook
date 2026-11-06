@@ -1,5 +1,10 @@
 # Backend composition
 
+> **Use-case first.** This is the full scaffold reference. For one task in an
+> existing project, open the matching page under `reference/use-cases/` from
+> `SKILL.md`; come back here only for the initial scaffold or a section a
+> recipe links to.
+
 The backend is a FastAPI application assembled from the selected playbook
 packages plus a project-owned domain package. Every step below is a seam the
 playbook supports; nothing here edits an installed package.

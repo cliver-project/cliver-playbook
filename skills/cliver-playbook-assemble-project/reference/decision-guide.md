@@ -1,5 +1,9 @@
 # Decision guide: reuse, configure, create, vendor
 
+> **Use-case first.** Most capabilities have a one-task page under
+> `reference/use-cases/`. Read this file only when the disposition is
+> ambiguous or vendoring is on the table.
+
 Apply the tests in order. The first one that answers is the disposition.
 
 1. **Does a playbook package already provide it?** → *Reuse.*

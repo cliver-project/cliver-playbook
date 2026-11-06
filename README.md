@@ -72,8 +72,8 @@ createI18n(userTranslations, ragTranslations, mcpTranslations);
 ### The assembly skill
 
 The `cliver-playbook-assemble-project` skill takes an agent from an empty
-directory to a running, production-grade project. Starting from a one-paragraph
-brief, it:
+directory to a running, production-grade project, and it extends a project that
+already composes the playbook. Starting from a one-paragraph brief, it:
 
 1. Fetches the pinned playbook release into `var/playbook`; the clone is
    read-only reference material, the published packages are the dependency.
@@ -94,6 +94,15 @@ everywhere, compose before copying and copy before vendoring, no
 `FastAPI.mount()`, all model access through cliver-core, and no secrets in the
 repository.
 
+The skill is routed by task, not read end to end. `SKILL.md` carries a
+use-case catalog; an agent picks the one recipe that matches the job and opens
+source only for the symbols that recipe names. The catalog covers adopting the
+playbook in an existing project, adding a domain slice, permissions, settings,
+runtime settings sections, OIDC/WeChat/Alipay login, pagination, MCP tools, RAG
+stages, frontend pages, CRUD and paged lists, theming, and release upgrades.
+The longer composition guides are deep dives for the initial scaffold or when
+a recipe links to a specific section.
+
 The skill ships in this repository under
 `skills/cliver-playbook-assemble-project/` and installs with
 [vercel-labs/skills](https://github.com/vercel-labs/skills):
@@ -113,9 +122,12 @@ latest guidance, and does not need to match the release a project pins.
 skills directory (`.claude/skills/` for Claude Code, `.agents/skills/` for the
 other supported agents); add `-g` for a user-level install or `--list` to
 inspect what the repository offers.
-`SKILL.md` holds the workflow; `reference/` holds the detailed guides
-(decision guide, backend and frontend composition, quality gates, upstream
-loop), and `assets/` the project-manifest template.
+`SKILL.md` holds the workflow and the reading protocol;
+`reference/use-cases/` holds the one-task recipes; the remaining `reference/`
+files are deep dives (decision guide, backend and frontend composition,
+quality gates, upstream loop), and `assets/` holds the project-manifest
+template. `make skill-check` validates the frontmatter, every referenced file,
+and the manifest example.
 
 `scripts/assemble_project.py --dry-run` prints the package set for a profile, and
 the mcp frontend shell remains the worked composition. Releases are cut with
