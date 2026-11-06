@@ -56,6 +56,15 @@ Enabled providers must use `https` issuer and endpoint URLs.
 escape hatch for a plain-http IdP on a loopback or private network; never
 enable it in production.
 
+Provider buttons can carry brand metadata: `label` is the default text,
+`labels` maps lowercase locale tags to overrides (e.g. `{en: WeChat, zh: 微信}`),
+`icon` is a square image path or URL, and `brand_color` is a CSS color.
+`/api/v1/auth/oauth/providers` returns all four verbatim as
+`{key, label, labels, icon, brand_color}`; the SPA resolves the active
+language and renders the configured icon, or a colored initial badge when only
+`brand_color` is set. Keep `label` to the brand name (e.g. `WeChat`, not
+`WeChat login`) when the localized "Continue with …" button template is used.
+
 Outbound IdP traffic (discovery, token, userinfo) goes through one
 process-wide client factory,
 `cliver_playbook.app.user.auth.oidc.set_http_client_factory`. The default

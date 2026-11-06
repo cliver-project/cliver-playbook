@@ -60,7 +60,10 @@ class ProviderConfig:
     form fields. Both are ignored when `adapter` is set.
 
     `label` is the UI button text; empty means the edge falls back to
-    `key.title()`.
+    `key.title()`. `labels` supplies per-locale overrides keyed by a lowercase
+    locale tag. `icon` is an optional brand image URL/path and `brand_color`
+    a CSS color for the accent or the fallback initial badge; the providers
+    endpoint returns all three verbatim for the SPA to render.
     """
 
     key: str  # URL segment + oauth_identities.provider value
@@ -71,6 +74,9 @@ class ProviderConfig:
     auto_provision: bool = True
     default_role: str = "user"
     label: str = ""
+    labels: Mapping[str, str] = field(default_factory=dict)
+    icon: str = ""
+    brand_color: str = ""
     subject_claim: str = "sub"
     authorize_url: str = ""
     token_url: str = ""

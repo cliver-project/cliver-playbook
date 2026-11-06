@@ -107,7 +107,14 @@ export async function updateProfile(input: ProfileUpdateInput): Promise<CurrentU
 
 export interface OAuthProviderButton {
   key: string;
+  /** Default label, used when `labels` has no match for the active locale. */
   label: string;
+  /** Locale tag (lowercase) -> label override, e.g. { en: "WeChat", zh: "微信" }. */
+  labels?: Record<string, string>;
+  /** Square brand image URL/path. Empty -> render the brand initial. */
+  icon?: string;
+  /** CSS color for the brand accent and the fallback initial badge. */
+  brand_color?: string;
 }
 
 export async function listOAuthProviders(): Promise<OAuthProviderButton[]> {

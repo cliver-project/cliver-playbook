@@ -105,6 +105,60 @@ def test_scopes_accepts_yaml_list_or_string(yaml_file):
     assert _settings().oidc.providers["acme"].scopes == "openid profile"
 
 
+def test_provider_brand_metadata_is_normalized(yaml_file):
+    yaml_file(
+        _enabled_provider(
+            "      issuer: https://idp.example.com\n"
+            "      icon: /icons/acme.svg\n"
+            '      brand_color: "#123abc"\n'
+            "      labels:\n"
+            "        EN: Acme Corp\n"
+            "        zh-CN: 艾克米\n"
+        )
+    )
+    provider = _settings().oidc.providers["acme"]
+    # Locale keys are folded to lowercase so env overrides and lookups agree.
+    assert provider.labels == {"en": "Acme Corp", "zh-cn": "艾克米"}
+    assert provider.icon == "/icons/acme.svg"
+    assert provider.brand_color == "#123abc"
+
+
+def test_provider_labels_reject_empty_locale_or_text(yaml_file):
+    yaml_file(
+        _enabled_provider(
+            "      issuer: https://idp.example.com\n      labels:\n        '': Acme\n"
+        )
+    )
+    with pytest.raises(ValidationError, match="non-empty"):
+        _settings()
+    yaml_file(
+        _enabled_provider("      issuer: https://idp.example.com\n      labels:\n        en: ''\n")
+    )
+    with pytest.raises(ValidationError, match="non-empty"):
+        _settings()
+
+
+def test_provider_registry_copies_brand_metadata(yaml_file, monkeypatch):
+    from cliver_playbook.app.user.auth import oidc
+
+    yaml_file(
+        _enabled_provider(
+            "      issuer: https://idp.example.com\n"
+            "      icon: /icons/acme.svg\n"
+            '      brand_color: "#123abc"\n'
+            "      labels:\n"
+            "        en: Acme Corp\n"
+            "        zh: 艾克米\n"
+        )
+    )
+    settings = _settings()
+    monkeypatch.setattr(oidc, "get_settings", lambda: settings)
+    config = oidc.build_provider_registry()["acme"]
+    assert config.labels == {"en": "Acme Corp", "zh": "艾克米"}
+    assert config.icon == "/icons/acme.svg"
+    assert config.brand_color == "#123abc"
+
+
 def test_http_timeout_defaults_and_must_be_positive(yaml_file):
     """The default outbound client's timeout is settings-controlled."""
     yaml_file("oidc:\n  providers: {}\n")

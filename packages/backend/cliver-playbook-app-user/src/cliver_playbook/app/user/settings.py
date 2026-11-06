@@ -97,6 +97,16 @@ class OidcProviderSettings(BaseModel):
     enabled: bool = False
     # Button text in the login/profile UI; empty -> key.title() at the edge.
     label: str = ""
+    # Per-locale label overrides, e.g. {en: Continue with WeChat, zh: 微信}.
+    # Keys are locale tags, folded to lowercase; the SPA picks the best match
+    # for its active language and falls back to `label`.
+    labels: dict[str, str] = Field(default_factory=dict)
+    # Optional square brand image: a site-relative path or absolute URL. The
+    # SPA renders it beside the label.
+    icon: str = ""
+    # CSS color for the brand accent and the fallback initial badge shown when
+    # `icon` is empty. Empty -> no accent.
+    brand_color: str = ""
     client_id: str = ""
     client_secret: str = ""
     # Token-request client authentication (RFC 6749 section 2.3):
@@ -132,6 +142,21 @@ class OidcProviderSettings(BaseModel):
         if isinstance(value, (list, tuple)):
             return " ".join(str(v) for v in value)
         return value
+
+    @field_validator("labels")
+    @classmethod
+    def _check_labels(cls, value: dict[str, str]) -> dict[str, str]:
+        # Case-insensitive lookup and merge with env-sourced keys: both
+        # sources must land on the same locale entry.
+        normalized: dict[str, str] = {}
+        for locale, text in value.items():
+            key = locale.strip().lower()
+            if not key:
+                raise ValueError("labels keys must be non-empty locale tags")
+            if not text.strip():
+                raise ValueError(f"labels[{key!r}] must be non-empty")
+            normalized[key] = text
+        return normalized
 
     @field_validator("token_extra_params")
     @classmethod

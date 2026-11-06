@@ -17,7 +17,7 @@ dependencies (the app owns the single React instance).
 | `src/routes.tsx` | `userStandaloneRoutes` (outside the chrome) and `userRoutes` (layout children). |
 | `src/layout/AuthAppLayout.tsx` | The layout route: basic `AppLayout` + the session guard + the account menu. |
 | `src/auth/session.ts` | Token storage and `installAuthClient()` — the client half of the session policy. |
-| `src/components/auth/` | `AuthProvider`/`useAuth`, `AuthShell` (standalone-page chrome), `RequirePerm`. |
+| `src/components/auth/` | `AuthProvider`/`useAuth`, `AuthShell` (standalone-page chrome), `RequirePerm`, `ProviderBrand` (localized provider label + icon/initial badge). |
 | `src/api/auth.ts` | Every auth/admin endpoint, as typed wrappers over the shared client. |
 | `src/pages/` | Sign-in, password gate, OIDC callback, OAuth 2.1 authorize, profile. |
 | `src/pages/admin/` | Users, roles (with the `*` superuser wildcard), runtime settings rendered from each package's section, OAuth clients/grants, audit log. |
@@ -50,6 +50,16 @@ package to a project never means editing an app file: `AuthAppLayout` gates the
 layout on the session and shows the admin entries the viewer's permissions
 allow. Import convention, including the extension on deep paths, is the basic
 package's — see its README.
+
+### Provider branding
+
+The login and profile pages render the brand metadata returned by
+`/api/v1/auth/oauth/providers`. `labels` is resolved against the active i18n
+language — the full tag first (`zh-cn`), then its base (`zh`), then the default
+`label`. `icon` renders a square brand image; when it is empty, `brand_color`
+renders a colored initial badge, and with neither the button stays plain.
+Providers are configured on the backend (`oidc.providers.<key>.labels`,
+`.icon`, `.brand_color`).
 
 ### The app's stylesheet
 

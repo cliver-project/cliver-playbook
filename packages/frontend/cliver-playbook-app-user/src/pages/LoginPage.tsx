@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
 import { AuthShell } from "cliver-playbook-app-user/components/auth/AuthShell.tsx";
+import { ProviderIcon, providerLabel } from "cliver-playbook-app-user/components/auth/ProviderBrand.tsx";
 import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 import { Input } from "cliver-playbook-app-basic/components/ui/input.tsx";
 import { Label } from "cliver-playbook-app-basic/components/ui/label.tsx";
@@ -22,7 +23,8 @@ import { listOAuthProviders, oauthLoginUrl } from "cliver-playbook-app-user/api/
  * to the page that originally linked here (or home).
  */
 export default function LoginPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -96,10 +98,12 @@ export default function LoginPage() {
                 key={provider.key}
                 type="button"
                 variant="outline"
+                className="justify-start"
                 // Full tab navigation: OIDC is a redirect dance across origins.
                 onClick={() => window.location.assign(oauthLoginUrl(provider.key))}
               >
-                {t("auth.ssoWith", { provider: provider.label })}
+                <ProviderIcon provider={provider} />
+                {t("auth.ssoWith", { provider: providerLabel(provider, language) })}
               </Button>
             ))}
           </div>

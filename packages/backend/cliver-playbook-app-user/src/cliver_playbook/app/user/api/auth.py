@@ -264,13 +264,22 @@ async def update_profile(
 async def oauth_providers() -> dict:
     """Which SSO providers the login page should render buttons for.
 
-    The label comes from configuration; an unset label falls back to the
-    provider key in title case so the button is never blank.
+    Brand metadata is returned verbatim — default label, locale overrides,
+    icon, brand color — and the SPA resolves the active language and renders
+    the buttons. An unset label falls back to the title-cased provider key so
+    a button is never blank.
     """
     registry = build_provider_registry()
     return {
         "providers": [
-            {"key": key, "label": config.label or key.title()} for key, config in registry.items()
+            {
+                "key": key,
+                "label": config.label or key.title(),
+                "labels": dict(config.labels),
+                "icon": config.icon,
+                "brand_color": config.brand_color,
+            }
+            for key, config in registry.items()
         ]
     }
 

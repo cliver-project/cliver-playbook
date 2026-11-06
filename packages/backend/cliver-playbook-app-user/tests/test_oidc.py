@@ -104,6 +104,9 @@ def _provider(auto_provision: bool = True) -> dict[str, ProviderConfig]:
             auto_provision=auto_provision,
             default_role="user",
             label="MockHub",
+            labels={"zh": "模拟中心"},
+            icon="/icons/mockhub.svg",
+            brand_color="#1f6feb",
             subject_claim="id",
             authorize_url=HUB_AUTHORIZE,
             token_url=HUB_TOKEN,
@@ -144,13 +147,27 @@ def _no_discovery(monkeypatch, oidc_module):
 
 
 async def test_providers_endpoint_lists_configured(idp, client):
-    resp = await client.get("/api/v1/auth/oauth/providers")
+    # The endpoint returns the brand metadata verbatim; the SPA resolves the
+    # locale (an Accept-Language header here must not pre-resolve it).
+    resp = await client.get("/api/v1/auth/oauth/providers", headers={"Accept-Language": "zh-CN"})
     assert resp.status_code == 200
     assert resp.json() == {
         "providers": [
             # Unset label -> title-cased key; configured label passes through.
-            {"key": "default", "label": "Default"},
-            {"key": "mockhub", "label": "MockHub"},
+            {
+                "key": "default",
+                "label": "Default",
+                "labels": {},
+                "icon": "",
+                "brand_color": "",
+            },
+            {
+                "key": "mockhub",
+                "label": "MockHub",
+                "labels": {"zh": "模拟中心"},
+                "icon": "/icons/mockhub.svg",
+                "brand_color": "#1f6feb",
+            },
         ]
     }
 

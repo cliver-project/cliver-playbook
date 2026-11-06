@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
+import { ProviderIcon, providerLabel } from "cliver-playbook-app-user/components/auth/ProviderBrand.tsx";
 import { ConfirmDialog } from "cliver-playbook-app-basic/components/ConfirmDialog.tsx";
 import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 import {
@@ -46,7 +47,8 @@ import {
  * and scrubbed from history immediately so back/reload cannot replay it.
  */
 export default function ProfilePage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const { user, refresh, adoptToken } = useAuth();
 
   // --- contact details form ------------------------------------------------
@@ -329,7 +331,12 @@ export default function ProfilePage() {
                   disabled={link.isPending}
                   onClick={() => link.mutate(provider.key)}
                 >
-                  {link.isPending ? t("common.pending") : t("profile.linkedAccounts.connect", { provider: provider.label })}
+                  <ProviderIcon provider={provider} />
+                  {link.isPending
+                    ? t("common.pending")
+                    : t("profile.linkedAccounts.connect", {
+                        provider: providerLabel(provider, language),
+                      })}
                 </Button>
               ))}
             </div>

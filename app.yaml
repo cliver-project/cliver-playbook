@@ -87,9 +87,19 @@ oidc:
     # client_secret. `token_extra_params: {key: value}` adds provider-specific
     # form fields; protocol fields (code, grant_type, redirect_uri, code_verifier,
     # client_id, client_secret) are rejected.
+    #
+    # Optional brand metadata for the SSO buttons: `labels` maps lowercase
+    # locale tags to label overrides; `icon` is a square image path/URL; and
+    # `brand_color` is a CSS color used for the accent and, when `icon` is
+    # empty, a colored initial badge. The providers endpoint returns all of
+    # them verbatim and the SPA resolves the active language.
     google:
       enabled: false
       label: Google
+      # labels:
+      #   zh: 谷歌
+      # icon: /icons/google.svg
+      brand_color: "#4285F4"
       # Standard OIDC: the three endpoints come from the issuer's
       # /.well-known/openid-configuration document.
       issuer: https://accounts.google.com
@@ -101,6 +111,7 @@ oidc:
     github:
       enabled: false
       label: GitHub
+      brand_color: "#181717"
       # GitHub speaks plain OAuth2 with no discovery document: explicit
       # endpoints, and the numeric account id is the stable subject.
       authorize_url: https://github.com/login/oauth/authorize
