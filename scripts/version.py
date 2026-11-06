@@ -21,14 +21,15 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-BACKEND_PACKAGES = ("basic", "user", "rag", "mcp")
+BACKEND_PACKAGES = ("basic", "user", "rag", "rag-governance", "mcp")
 FRONTEND_PACKAGES = ("basic", "user", "rag", "mcp")
 
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$")
 PY_VERSION_LINE = re.compile(r'(?m)^version = "([^"]+)"$')
 PY_VERSION_REPLACE = re.compile(r'(?m)^(version = ")[^"]+(")$')
-PY_PIN = re.compile(r'"(cliver-playbook-app-(?:basic|user|rag|mcp))([^"]*)"')
-PY_PIN_REPLACE = re.compile(r'("cliver-playbook-app-(?:basic|user|rag|mcp))==[^"]+(")')
+PACKAGE_NAME = r"cliver-playbook-app-(?:rag-governance|basic|user|rag|mcp)"
+PY_PIN = re.compile(rf'"({PACKAGE_NAME})([^"]*)"')
+PY_PIN_REPLACE = re.compile(rf'("{PACKAGE_NAME})==[^"]+(")')
 JSON_VERSION_REPLACE = re.compile(r'(?m)^(\s*"version":\s*")[^"]+(")')
 JSON_DEP_REPLACE = re.compile(
     r'("cliver-playbook-app-(?:basic|user|rag|mcp)":\s*")(?!workspace:)[^"]+(")'
@@ -50,8 +51,16 @@ def _frontend_manifests(root: Path) -> list[Path]:
     return paths
 
 
+def _root_manifests(root: Path) -> list[Path]:
+    return [root / "pyproject.toml"]
+
+
 def _manifest_paths(root: Path) -> list[Path]:
-    return [*_backend_manifests(root), *_frontend_manifests(root)]
+    return [
+        *_root_manifests(root),
+        *_backend_manifests(root),
+        *_frontend_manifests(root),
+    ]
 
 
 def collect_versions(root: Path) -> dict[str, str]:
@@ -151,6 +160,14 @@ def set_version(root: Path, version: str) -> list[str]:
         path.write_text(text, encoding="utf-8")
         changed.append(path.relative_to(root).as_posix())
 
+    for path in _root_manifests(root):
+        text = path.read_text(encoding="utf-8")
+        text, count = PY_VERSION_REPLACE.subn(rf"\g<1>{version}\g<2>", text, count=1)
+        if count != 1:
+            raise ValueError(f"{path}: no [project] version line found")
+        path.write_text(text, encoding="utf-8")
+        changed.append(path.relative_to(root).as_posix())
+
     errors = check_versions(root)
     if errors:
         raise RuntimeError("version update left inconsistencies:\n" + "\n".join(errors))
@@ -178,6 +195,9 @@ def _self_test() -> int:
             )
         root.joinpath("package.json").write_text(
             '{\n  "name": "root",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+        )
+        root.joinpath("pyproject.toml").write_text(
+            '[project]\nname = "root"\nversion = "0.1.0"\n', encoding="utf-8"
         )
         for name in FRONTEND_PACKAGES:
             base = root / "packages/frontend" / f"cliver-playbook-app-{name}"
@@ -231,6 +251,9 @@ def _self_test() -> int:
             data = json.loads(manifest.read_text(encoding="utf-8"))
             assert data["dependencies"]["cliver-playbook-app-basic"] == "0.2.0"
         assert not check_versions(root, "0.2.0")
+        assert tomllib.loads(
+            root.joinpath("pyproject.toml").read_text(encoding="utf-8")
+        )["project"]["version"] == "0.2.0"
         assert check_versions(root, "0.1.0")
         assert check_versions(root, "v0.2.0")
         dev_manifest = (

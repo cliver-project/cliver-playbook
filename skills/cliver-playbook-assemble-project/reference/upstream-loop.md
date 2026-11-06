@@ -107,7 +107,7 @@ make release VERSION=X.Y.Z
 
 The release target refuses an unbumped version, aligns every backend pin and
 frontend reference, runs the checks, commits, tags `X.Y.Z` (no `v` prefix),
-and pushes. The tag triggers publication of the four backend distributions in
+and pushes. The tag triggers publication of the five backend distributions in
 dependency order and creates the GitHub release. See `docs/releasing.md` in
 the playbook for the trusted-publisher setup and the frontend git-dependency
 form.

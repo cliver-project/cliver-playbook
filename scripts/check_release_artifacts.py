@@ -19,7 +19,7 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-PACKAGES = ("basic", "user", "rag", "mcp")
+PACKAGES = ("basic", "user", "rag", "rag-governance", "mcp")
 LICENSE_PREFIXES = ("LICENSE", "LICENCE", "COPYING", "NOTICE")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -107,7 +107,10 @@ def main(argv: list[str]) -> int:
     for error in errors:
         print(error, file=sys.stderr)
     if not errors:
-        print(f"release artifacts OK: 4 packages at {version}, license text present")
+        print(
+            f"release artifacts OK: {len(PACKAGES)} packages at {version}, "
+            "license text present"
+        )
     return 1 if errors else 0
 
 

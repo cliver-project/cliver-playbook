@@ -23,11 +23,11 @@ git add -A && git commit -m "release: 0.2.0"
 make release
 ```
 
-Every path checks that the four backend `pyproject.toml` files, the workspace
-`package.json`, all frontend packages and dev shells, and every inter-module
-dependency pin (`==0.2.0` backend pins and frontend sibling versions) agree
-on one version. With `VERSION`, the script rewrites them all and refreshes
-`uv.lock` and `pnpm-lock.yaml`.
+Every path checks that the five backend `pyproject.toml` files, the workspace
+root `pyproject.toml`, the workspace `package.json`, all frontend packages and
+dev shells, and every inter-module dependency pin (`==0.2.0` backend pins and
+frontend sibling versions) agree on one version. With `VERSION`, the script
+rewrites them all and refreshes `uv.lock` and `pnpm-lock.yaml`.
 
 The target then:
 
@@ -38,10 +38,10 @@ The target then:
 3. Creates the annotated tag `0.2.0` (the tag name is the version).
 4. Pushes the current branch and the tag to `origin`; the tag triggers the
    `Release` workflow, which verifies that every manifest carries `0.2.0`,
-   builds all four backend distributions, checks that each wheel and sdist
+   builds all five backend distributions, checks that each wheel and sdist
    carries the Apache-2.0 license text, publishes them to PyPI in dependency
-   order (`basic` → `user` → `rag` → `mcp`), and creates a GitHub release
-   with the build artifacts.
+   order (`basic` → `user` → `rag` → `rag-governance` → `mcp`), and creates a
+   GitHub release with the build artifacts.
 
 Preview without changing anything:
 
@@ -74,33 +74,40 @@ project:
 | `cliver-playbook-app-basic` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-basic` |
 | `cliver-playbook-app-user` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-user` |
 | `cliver-playbook-app-rag` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-rag` |
+| `cliver-playbook-app-rag-governance` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-rag-governance` |
 | `cliver-playbook-app-mcp` | `cliver-project` | `cliver-playbook` | `release.yml` | `pypi-mcp` |
 
 The GitHub repository must be named `cliver-playbook` (PyPI matches the
-repository name exactly). Create the four environments in the repository
+repository name exactly). Create the five environments in the repository
 settings; no secrets are stored in them.
 
 Each project needs its own environment because PyPI identifies a *pending*
 trusted publisher by the tuple (owner, repository, workflow, environment).
 Registering the same tuple for a second project fails with "A pending trusted
 publisher matching this configuration has already been registered for a
-different project name." Distinct environments make the four pending
+different project name." Distinct environments make the five pending
 publishers legal; the workflow runs one publish job per environment in
 dependency order. After the first successful upload, each pending publisher
 becomes that project's normal trusted publisher.
 
-### First release with four projects
+### First release with several projects
 
 PyPI allows at most three pending trusted publishers per account at once.
-Register `pypi-basic`, `pypi-user` and `pypi-rag` first, then cut the release.
-The workflow builds and publishes those three; `publish-mcp` fails because
-its pending publisher does not exist yet, so no GitHub release is created.
-The three pending publishers have now become normal publishers and no longer
-occupy the pending slots. Register the fourth pending publisher
-(`cliver-playbook-app-mcp`, environment `pypi-mcp`), then re-run the failed
-jobs of the same workflow run: `publish-mcp` creates the project, the
-version's already-published files are skipped by `--check-url`, and the
-GitHub release job runs. Later releases publish all four in one pass.
+Register the publisher and environment for `basic`, `user` and `rag` first,
+then cut the release. The workflow builds and publishes those three;
+`publish-rag-governance` fails because its pending publisher does not exist
+yet, so no GitHub release is created. The three pending publishers have now
+become normal publishers and no longer occupy the pending slots. Register the
+next pending publishers (`cliver-playbook-app-rag-governance` with
+`pypi-rag-governance`, then `cliver-playbook-app-mcp` with `pypi-mcp`), then
+re-run the failed jobs of the same workflow run: they create the projects, the
+version's already-published files are skipped by `--check-url`, and the GitHub
+release job runs. Later releases publish all five in one pass.
+
+The 0.1.0 release already published `basic`, `user`, `rag` and `mcp`. Before
+pushing 0.2.0, register only the new
+`cliver-playbook-app-rag-governance` pending publisher; no pending-slot
+juggling is needed for that release.
 
 ## Frontend packages
 
