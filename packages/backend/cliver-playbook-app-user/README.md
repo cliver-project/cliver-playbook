@@ -78,10 +78,13 @@ Provider buttons can carry brand metadata: `label` is the default text,
 `labels` maps lowercase locale tags to overrides (e.g. `{en: WeChat, zh: 微信}`),
 `icon` is a square image path or URL, and `brand_color` is a CSS color.
 `/api/v1/auth/oauth/providers` returns all four verbatim as
-`{key, label, labels, icon, brand_color}`; the SPA resolves the active
-language and renders the configured icon, or a colored initial badge when only
-`brand_color` is set. Keep `label` to the brand name (e.g. `WeChat`, not
-`WeChat login`) when the localized "Continue with …" button template is used.
+`{key, label, labels, icon, brand_color}`. The profile endpoint
+`/api/v1/auth/identities` returns the same `provider_label`/`labels` pair on
+each linked row (including disabled presets), so the "linked accounts" card
+resolves the active language too. The SPA renders the configured icon, or a
+colored initial badge when only `brand_color` is set. Keep `label` to the
+brand name (e.g. `WeChat`, not `WeChat login`) when the localized
+"Continue with …" button template is used.
 
 Outbound IdP traffic (discovery, token, userinfo) goes through one
 process-wide client factory,

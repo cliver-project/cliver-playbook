@@ -136,6 +136,8 @@ export interface LinkedIdentity {
   /** Display label resolved through the settings registry; falls back to the
    * raw key for providers that left the config. Display-only. */
   provider_label: string;
+  /** Locale tag -> label override from the same provider settings. */
+  labels?: Record<string, string>;
   email: string;
   display_name: string;
   linked_at: string;

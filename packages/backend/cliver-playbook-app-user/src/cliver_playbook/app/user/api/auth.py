@@ -565,11 +565,13 @@ async def list_identities(
 ) -> list[LinkedIdentityRead]:
     """The viewer's linked external identities ("Linked accounts" card).
 
-    provider_label resolves through the FULL settings registry — disabled
-    presets included — so a provider switched off after linking still shows a
-    sane name; an identity whose key vanished from the config falls back to
-    the raw key. is_last_credential flags the one row an OIDC-only account
-    cannot unlink (the DELETE enforces it with 409 regardless).
+    provider_label and labels resolve through the FULL settings registry —
+    disabled presets included — so a provider switched off after linking
+    still shows a sane name; an identity whose key vanished from the config
+    falls back to the raw key and no locale overrides. Returning the full
+    labels map lets the SPA resolve the active language; is_last_credential
+    flags the one row an OIDC-only account cannot unlink (the DELETE enforces
+    it with 409 regardless).
     """
     user = await users_service.get_user(db, viewer.user_id)
     if user is None:  # raced with deletion mid-request
@@ -585,25 +587,30 @@ async def list_identities(
         .scalars()
         .all()
     )
-    labels = {
-        key: (provider.label or key.title())
+    provider_metadata = {
+        key: (provider.label or key.title(), dict(provider.labels))
         for key, provider in get_settings().oidc.providers.items()
     }
     oidc_only = user.password_hash == ""
-    return [
-        LinkedIdentityRead(
-            id=row.id,
-            provider=row.provider,
-            provider_label=labels.get(row.provider, row.provider),
-            email=row.email,
-            display_name=row.display_name,
-            linked_at=row.linked_at,
-            # Only meaningful for an OIDC-only account down to its last row:
-            # a password account always has its password to fall back on.
-            is_last_credential=oidc_only and len(rows) == 1,
+    identities: list[LinkedIdentityRead] = []
+    for row in rows:
+        provider_label, labels = provider_metadata.get(row.provider, (row.provider, {}))
+        identities.append(
+            LinkedIdentityRead(
+                id=row.id,
+                provider=row.provider,
+                provider_label=provider_label,
+                labels=labels,
+                email=row.email,
+                display_name=row.display_name,
+                linked_at=row.linked_at,
+                # Only meaningful for an OIDC-only account down to its last
+                # row: a password account always has its password to fall
+                # back on.
+                is_last_credential=oidc_only and len(rows) == 1,
+            )
         )
-        for row in rows
-    ]
+    return identities
 
 
 @router.post("/identities/{provider}/link")

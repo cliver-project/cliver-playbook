@@ -290,7 +290,12 @@ export default function ProfilePage() {
               {(identities.data ?? []).map((row) => (
                 <li key={row.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{row.provider_label}</p>
+                    <p className="text-sm font-medium">
+                      {providerLabel(
+                        { label: row.provider_label, labels: row.labels },
+                        language,
+                      )}
+                    </p>
                     <p className="text-muted-foreground truncate text-xs">
                       {/* Email snapshot; display name is the fallback for
                           providers that do not return one (GitHub nulls). */}
@@ -348,7 +353,12 @@ export default function ProfilePage() {
         open={unlinking !== null}
         onOpenChange={(open) => !open && setUnlinking(null)}
         title={t("profile.linkedAccounts.unlinkTitle", {
-          provider: unlinking?.provider_label ?? "",
+          provider: unlinking
+            ? providerLabel(
+                { label: unlinking.provider_label, labels: unlinking.labels },
+                language,
+              )
+            : "",
         })}
         description={t("profile.linkedAccounts.unlinkConfirm")}
         confirmLabel={t("profile.linkedAccounts.unlink")}

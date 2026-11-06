@@ -374,6 +374,11 @@ async def test_list_identities_labels(idp, client, db):
     assert set(by_provider) == {"default", "legacy", "google"}
     assert by_provider["default"]["provider_label"] == "default"
     assert by_provider["google"]["provider_label"] == "Google"
+    # Locale overrides travel with the row; the SPA resolves them for the
+    # active language instead of the server guessing from Accept-Language.
+    assert by_provider["default"]["labels"] == {}
+    assert by_provider["google"]["labels"] == {"zh": "谷歌"}
+    assert by_provider["legacy"]["labels"] == {}
     assert by_provider["default"]["email"] == "dev@example.com"
     assert "linked_at" in by_provider["default"]
     # Password account: unlinking is always allowed, never "last credential".

@@ -2,20 +2,36 @@ import { cn } from "cliver-playbook-app-basic/lib/utils.ts";
 
 import type { OAuthProviderButton } from "cliver-playbook-app-user/api/auth.ts";
 
+/** The minimum metadata needed to resolve a provider's display label. */
+export interface ProviderLabelSource {
+  /** Default label, used when `labels` has no match for the active locale. */
+  label: string;
+  /** Locale tag (lowercase) -> label override, e.g. { en: "WeChat", zh: "微信" }. */
+  labels?: Record<string, string>;
+}
+
 /**
- * Resolve a provider's label for the active UI language.
+ * Resolve a label for the active UI language.
  *
- * The backend returns a default `label` plus lowercase locale overrides
- * (`labels`). Try the full tag first ("zh-cn"), then its base ("zh"), then the
- * default — so an app configured for "zh-CN" still finds a "zh" entry.
+ * The backend returns a default label plus lowercase locale overrides. Try the
+ * full tag first ("zh-cn"), then its base ("zh"), then the default — so an app
+ * configured for "zh-CN" still finds a "zh" entry.
  */
-export function providerLabel(provider: OAuthProviderButton, language: string): string {
-  const labels = provider.labels ?? {};
+export function resolveProviderLabel(
+  label: string,
+  labels: Record<string, string> | undefined,
+  language: string,
+): string {
   for (const candidate of [language, language.split("-")[0]]) {
-    const value = labels[candidate.toLowerCase()];
+    const value = labels?.[candidate.toLowerCase()];
     if (value) return value;
   }
-  return provider.label;
+  return label;
+}
+
+/** Resolve a provider object's label for the active UI language. */
+export function providerLabel(provider: ProviderLabelSource, language: string): string {
+  return resolveProviderLabel(provider.label, provider.labels, language);
 }
 
 /**

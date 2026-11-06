@@ -16,6 +16,8 @@ oidc:
     google:
       enabled: false
       label: Google
+      labels:
+        zh: 谷歌
       issuer: https://accounts.google.com
       scopes: openid profile email
     github:

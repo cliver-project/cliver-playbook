@@ -231,6 +231,10 @@ class LinkedIdentityRead(BaseModel):
     # disabled presets); identities whose key left the config fall back to
     # the raw key. Display-only — the provider key is the stable value.
     provider_label: str
+    # Locale tag -> label overrides from the same provider settings. The SPA
+    # resolves the active language with the full tag -> base tag -> default
+    # fallback (the providers endpoint returns the same shape).
+    labels: dict[str, str] = Field(default_factory=dict)
     email: str
     display_name: str
     linked_at: datetime
