@@ -16,6 +16,12 @@
   "language": {
     "label": "语言"
   },
+  "error": {
+    "title": "页面加载失败",
+    "description": "渲染过程中发生意外错误。可以重试，或重新加载应用。",
+    "retry": "重试",
+    "reload": "重新加载"
+  },
   "common": {
     "loading": "加载中…",
     "error": "出了点问题",

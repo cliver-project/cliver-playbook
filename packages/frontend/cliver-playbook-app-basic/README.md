@@ -14,8 +14,8 @@ project, never published) and why `react`/`react-dom` are peer dependencies
 | Path | Contents |
 | --- | --- |
 | `src/index.ts` | The public barrel — everything an app is expected to import from the package root. |
-| `src/routes.tsx` | `basicRoutes: RouteObject[]` — the routes this package contributes. |
-| `src/layout/` | `AppLayout` (parameterised nav + `headerExtra` slot) and its `NavItem` type. |
+| `src/routes.tsx` | `basicRoutes: RouteObject[]` — the routes this package contributes — plus `lazyRoute()`, the Suspense-backed lazy-route helper. |
+| `src/layout/` | `AppLayout` (parameterised nav + `headerExtra` slot, its `NavItem` type) and the `ErrorBoundary` that wraps its outlet. |
 | `src/theme/` | `ThemeProvider` / `ThemeToggle` — `data-theme` attribute, `light` / `dark` / `system`. |
 | `src/i18n/` | `createI18n()` (deep-merges every package's bundles) and `LanguageSwitcher`. |
 | `src/locales/` | `en.json` / `zh.json` translation bundles owned by this package. |
@@ -43,6 +43,37 @@ const routes: RouteObject[] = [
   { path: "*", element: <Navigate to="/" replace /> },
 ];
 ```
+
+### Lazy routes and error recovery
+
+`AppLayout` wraps its `<Outlet />` in `ErrorBoundary`: a render, lifecycle, or
+lazy-chunk failure below the layout shows a localized panel with retry and
+reload actions instead of a blank page. The boundary resets when the pathname
+changes, so navigating away from a crashed page recovers. Render another
+boundary with a custom `fallback` (or an `onError` reporter) where a page needs
+its own scoped treatment.
+
+Project pages opt into route-level code splitting with `lazyRoute()`:
+
+```tsx
+import { lazyRoute } from "cliver-playbook-app-basic";
+
+const ordersRoutes: RouteObject[] = [
+  lazyRoute(() => import("./pages/OrdersPage.tsx"), { path: "orders" }),
+  lazyRoute(() => import("./pages/OrderDetailPage.tsx"), {
+    path: "orders/:id",
+    // The wrapper runs before the chunk is requested, so an unauthorized
+    // viewer never downloads the page.
+    wrap: (page) => <RequirePerm code="orders:read">{page}</RequirePerm>,
+  }),
+];
+```
+
+A route is either `{ path }` or `{ index: true }`; the helper types enforce
+one of the two. The page module default-exports a no-props component (route
+params come from `useParams`, as usual), and `fallback` overrides the default
+localized loading panel. The package's own `basicRoutes` uses `lazyRoute`, so
+the demo pages are the worked example.
 
 Import convention: every import names its owning package — no `@/` alias, so a
 file's provenance is visible at the import site and moving code between

@@ -27,9 +27,18 @@ export {
   type AppLayoutProps,
   type NavItem,
 } from "cliver-playbook-app-basic/layout/AppLayout.tsx";
+export {
+  ErrorBoundary,
+  type ErrorBoundaryProps,
+  type ErrorFallbackProps,
+} from "cliver-playbook-app-basic/layout/ErrorBoundary.tsx";
 export { queryClient } from "cliver-playbook-app-basic/lib/queryClient.ts";
 export { cn } from "cliver-playbook-app-basic/lib/utils.ts";
-export { basicRoutes } from "cliver-playbook-app-basic/routes.tsx";
+export {
+  basicRoutes,
+  lazyRoute,
+  type LazyRouteOptions,
+} from "cliver-playbook-app-basic/routes.tsx";
 export {
   ThemeProvider,
   useTheme,

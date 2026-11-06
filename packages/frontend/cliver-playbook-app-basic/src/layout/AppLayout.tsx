@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { LanguageSwitcher } from "cliver-playbook-app-basic/i18n/LanguageSwitcher.tsx";
+import { ErrorBoundary } from "cliver-playbook-app-basic/layout/ErrorBoundary.tsx";
 import { ThemeToggle } from "cliver-playbook-app-basic/theme/ThemeToggle.tsx";
 
 /** One header navigation entry: a route and the i18n key of its label. */
@@ -38,6 +39,12 @@ export interface AppLayoutProps {
  * theme controls (plus anything the app adds) on the right, routed content in
  * the outlet.
  *
+ * The outlet is wrapped in an `ErrorBoundary`, so a render or lazy-chunk
+ * failure below the layout shows the recoverable error panel instead of a
+ * blank page. The boundary resets when the pathname changes: navigating away
+ * from a crashed page is enough to recover. Errors thrown by the layout's own
+ * header are outside that boundary by design.
+ *
  * Used as the app's single layout route, so a composing app passes the header
  * entries of every package it includes:
  *
@@ -46,6 +53,7 @@ export interface AppLayoutProps {
  */
 export function AppLayout({ navItems = basicNavItems, headerExtra }: AppLayoutProps) {
   const { t } = useTranslation();
+  const location = useLocation();
 
   return (
     <div className="min-h-svh">
@@ -74,7 +82,9 @@ export function AppLayout({ navItems = basicNavItems, headerExtra }: AppLayoutPr
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <Outlet />
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

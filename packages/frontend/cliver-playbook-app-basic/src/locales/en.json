@@ -16,6 +16,12 @@
   "language": {
     "label": "Language"
   },
+  "error": {
+    "title": "This page failed to load",
+    "description": "An unexpected error interrupted rendering. Try again, or reload the application.",
+    "retry": "Try again",
+    "reload": "Reload page"
+  },
   "common": {
     "loading": "Loading…",
     "error": "Something went wrong",
