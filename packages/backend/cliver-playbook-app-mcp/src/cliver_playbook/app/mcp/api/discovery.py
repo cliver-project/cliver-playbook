@@ -15,10 +15,11 @@ configured (ADR-0017).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cliver_playbook.app.basic.api.pagination import PageParams, page_params
 from cliver_playbook.app.basic.db.session import get_db
 from cliver_playbook.app.mcp.api.streamable import MCP_PATH
 from cliver_playbook.app.mcp.server import SERVER_NAME
@@ -44,8 +45,7 @@ async def mcp_info() -> dict:
 
 @router.get("/calls", response_model=AuditLogPage)
 async def list_mcp_calls(
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    params: PageParams = Depends(page_params(default_limit=100, max_limit=500)),
     _viewer: Viewer = Depends(require_perm("mcp:agents:read")),
     db: AsyncSession = Depends(get_db),
 ) -> AuditLogPage:
@@ -64,8 +64,8 @@ async def list_mcp_calls(
         select(AuditLog)
         .where(AuditLog.event.like("mcp.%"))
         .order_by(AuditLog.id.desc())
-        .limit(limit)
-        .offset(offset)
+        .limit(params.limit)
+        .offset(params.offset)
     )
     count_stmt = select(func.count()).select_from(AuditLog).where(AuditLog.event.like("mcp.%"))
     rows = await db.execute(stmt)
@@ -73,4 +73,6 @@ async def list_mcp_calls(
     return AuditLogPage(
         items=[AuditLogRead.model_validate(row) for row in rows.scalars().all()],
         total=int(total or 0),
+        limit=params.limit,
+        offset=params.offset,
     )

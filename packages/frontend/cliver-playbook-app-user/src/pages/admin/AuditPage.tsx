@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "cliver-playbook-app-basic/components/ui/badge.tsx";
 import { Button } from "cliver-playbook-app-basic/components/ui/button.tsx";
 import { Input } from "cliver-playbook-app-basic/components/ui/input.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "cliver-playbook-app-basic/components/ui/table.tsx";
+import { usePagedQuery } from "cliver-playbook-app-basic/crud/usePagedQuery.ts";
 import { listAudit } from "cliver-playbook-app-user/api/auth.ts";
 
 /**
@@ -24,21 +24,20 @@ export default function AuditPage() {
   const { t } = useTranslation();
   const [event, setEvent] = useState("");
   const [username, setUsername] = useState("");
-  const [offset, setOffset] = useState(0);
 
-  const page = useQuery({
-    queryKey: ["audit", event, username, offset],
-    queryFn: () =>
+  const page = usePagedQuery({
+    queryKey: ["audit", event, username],
+    // Serialized filter identity: an edit rewinds to page one immediately.
+    resetKey: `${event}\u0000${username}`,
+    pageSize: PAGE_SIZE,
+    queryFn: ({ limit, offset }) =>
       listAudit({
         event: event || undefined,
         username: username || undefined,
-        limit: PAGE_SIZE,
+        limit,
         offset,
       }),
-    placeholderData: (prev) => prev, // keep rows on the screen while refetching
   });
-
-  const total = page.data?.total ?? 0;
 
   return (
     <div className="space-y-4">
@@ -48,19 +47,13 @@ export default function AuditPage() {
           <Input
             placeholder={t("admin.audit.filterEvent")}
             value={event}
-            onChange={(e) => {
-              setEvent(e.target.value);
-              setOffset(0);
-            }}
+            onChange={(e) => setEvent(e.target.value)}
             className="w-48 font-mono text-sm"
           />
           <Input
             placeholder={t("admin.audit.filterUsername")}
             value={username}
-            onChange={(e) => {
-              setUsername(e.target.value);
-              setOffset(0);
-            }}
+            onChange={(e) => setUsername(e.target.value)}
             className="w-40"
           />
         </div>
@@ -85,8 +78,8 @@ export default function AuditPage() {
                   {t("common.loading")}
                 </TableCell>
               </TableRow>
-            ) : page.data && page.data.items.length > 0 ? (
-              page.data.items.map((row) => (
+            ) : page.items.length > 0 ? (
+              page.items.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="text-muted-foreground whitespace-nowrap text-xs">
                     {new Date(row.created_at).toLocaleString()}
@@ -122,25 +115,25 @@ export default function AuditPage() {
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground text-xs">
           {t("admin.audit.range", {
-            from: total === 0 ? 0 : offset + 1,
-            to: Math.min(offset + PAGE_SIZE, total),
-            total,
+            from: page.from,
+            to: page.to,
+            total: page.total,
           })}
         </p>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            disabled={offset === 0 || page.isFetching}
-            onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+            disabled={!page.canPrev || page.isFetching}
+            onClick={page.prevPage}
           >
             {t("admin.audit.prev")}
           </Button>
           <Button
             variant="outline"
             size="sm"
-            disabled={offset + PAGE_SIZE >= total || page.isFetching}
-            onClick={() => setOffset(offset + PAGE_SIZE)}
+            disabled={!page.canNext || page.isFetching}
+            onClick={page.nextPage}
           >
             {t("admin.audit.next")}
           </Button>

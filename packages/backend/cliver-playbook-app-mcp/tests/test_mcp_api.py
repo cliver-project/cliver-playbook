@@ -122,6 +122,9 @@ async def test_calls_anonymous_401_and_admin_reads_newest_first(client, db, admi
     assert (await client.get("/api/v1/mcp/calls")).status_code == 401
 
     body = (await client.get("/api/v1/mcp/calls", headers=admin_headers)).json()
+    # The shared envelope echoes the window the server applied.
+    assert body["limit"] == 100
+    assert body["offset"] == 0
     # Newest first: the reject row was written after the tool call.
     assert [row["event"] for row in body["items"]] == ["mcp.auth.reject", "mcp.tools.call"]
     call_row: dict[str, Any] = body["items"][1]
@@ -134,10 +137,15 @@ async def test_calls_pagination_and_shape(client, db, admin_headers):
 
     first = (await client.get("/api/v1/mcp/calls?limit=1", headers=admin_headers)).json()
     assert len(first["items"]) == 1 and first["total"] == 2
+    assert first["limit"] == 1
+    assert first["offset"] == 0
 
     second = (await client.get("/api/v1/mcp/calls?limit=1&offset=1", headers=admin_headers)).json()
     assert second["items"][0]["event"] == "mcp.tools.call"
     assert second["items"][0]["id"] != first["items"][0]["id"]
+    assert second["offset"] == 1
 
     # Out-of-range params are rejected by FastAPI validation, not clamped.
-    assert (await client.get("/api/v1/mcp/calls?limit=0", headers=admin_headers)).status_code == 422
+    for query in ("limit=0", "limit=501", "offset=-1"):
+        response = await client.get(f"/api/v1/mcp/calls?{query}", headers=admin_headers)
+        assert response.status_code == 422

@@ -1,4 +1,5 @@
 import { api } from "cliver-playbook-app-basic/api/client.ts";
+import type { Page } from "cliver-playbook-app-basic/api/pagination.ts";
 
 /**
  * Identity-domain API calls (the user package).
@@ -57,10 +58,8 @@ export interface AuditLogRow {
   user_agent: string;
 }
 
-export interface AuditLogPage {
-  items: AuditLogRow[];
-  total: number;
-}
+/** One page of the audit trail, in the shared pagination envelope. */
+export type AuditLogPage = Page<AuditLogRow>;
 
 // ---------------------------------------------------------------------------
 // Session

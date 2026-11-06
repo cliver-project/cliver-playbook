@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { api } from "cliver-playbook-app-basic/api/client.ts";
+import type { Page } from "cliver-playbook-app-basic/api/pagination.ts";
 import type { AuditLogRow } from "cliver-playbook-app-user/api/auth.ts";
 import { getStoredToken } from "cliver-playbook-app-user/auth/session.ts";
 
@@ -236,10 +237,8 @@ export interface McpCallDetail {
 
 export type McpCallRow = Omit<AuditLogRow, "detail"> & { detail: McpCallDetail };
 
-export interface McpCallPage {
-  items: McpCallRow[];
-  total: number;
-}
+/** One page of MCP activity, in the shared pagination envelope. */
+export type McpCallPage = Page<McpCallRow>;
 
 /** Recent MCP activity — tool calls AND gate rejections — from the
  * MCP-scoped endpoint. Not the generic audit listing: that one requires

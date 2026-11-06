@@ -19,8 +19,8 @@ project, never published) and why `react`/`react-dom` are peer dependencies
 | `src/theme/` | `ThemeProvider` / `ThemeToggle` — `data-theme` attribute, `light` / `dark` / `system`. |
 | `src/i18n/` | `createI18n()` (deep-merges every package's bundles) and `LanguageSwitcher`. |
 | `src/locales/` | `en.json` / `zh.json` translation bundles owned by this package. |
-| `src/api/` | `axios` instance with `setAuthTokenGetter()`, plus the items endpoints. |
-| `src/crud/` | `DataTable` and `useCrudQueries` — the list/edit/delete pattern. |
+| `src/api/` | `axios` instance with `setAuthTokenGetter()`, the items endpoints, and the shared `Page<T>` envelope types. |
+| `src/crud/` | `DataTable`, `useCrudQueries` (list/edit/delete) and `usePagedQuery` (offset pagination). |
 | `src/components/ui/` | Vendored shadcn/ui primitives (Radix under the hood). |
 | `src/styles/` | `index.css` (Tailwind + theme tokens) and `tokens.css` (the palettes). |
 | `tooling/` | `vite.config.base.ts`, `tsconfig.base.json`, `index.html` — shared config for apps. |
@@ -74,6 +74,38 @@ one of the two. The page module default-exports a no-props component (route
 params come from `useParams`, as usual), and `fallback` overrides the default
 localized loading panel. The package's own `basicRoutes` uses `lazyRoute`, so
 the demo pages are the worked example.
+
+### Pagination
+
+API modules type a paginated response as `Page<Row>` — the same four fields as
+the backend envelope: `items`, `total`, `limit`, `offset`. `usePagedQuery`
+owns the offset, appends the window to the query key, and keeps the previous
+page visible while the next one loads:
+
+```tsx
+import { usePagedQuery } from "cliver-playbook-app-basic/crud/usePagedQuery.ts";
+
+const page = usePagedQuery({
+  queryKey: ["audit", event, username], // filter identity only
+  resetKey: `${event}\u0000${username}`, // an edit rewinds to page one
+  pageSize: 50,
+  queryFn: ({ limit, offset }) => listAudit({ event, username, limit, offset }),
+});
+
+page.items; // rows in this window
+page.total; // full filtered count
+page.from; // 1-based range, 0..0 when empty
+page.to;
+page.canPrev; // pager state
+page.canNext;
+page.prevPage;
+page.nextPage;
+```
+
+The hook also steps back a page when the current window becomes empty (rows
+deleted elsewhere). The backend's `Page[T]` lives in
+`cliver_playbook.app.basic.schemas.pagination`; the user package's audit page
+is the worked example.
 
 Import convention: every import names its owning package — no `@/` alias, so a
 file's provenance is visible at the import site and moving code between

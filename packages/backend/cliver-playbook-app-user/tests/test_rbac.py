@@ -283,6 +283,8 @@ async def test_audit_listing_and_filter(client, db, admin_headers):
     assert resp.status_code == 200
     body = resp.json()
     assert body["total"] >= 1
+    assert body["limit"] == 50
+    assert body["offset"] == 0
     assert any(row["event"] == "auth.login" for row in body["items"])
 
     filtered = await client.get(
@@ -292,3 +294,8 @@ async def test_audit_listing_and_filter(client, db, admin_headers):
     assert all(row["event"] == "auth.login" for row in filtered.json()["items"])
     limited = await client.get("/api/v1/admin/audit", headers=admin_headers, params={"limit": 1})
     assert len(limited.json()["items"]) == 1
+    assert limited.json()["limit"] == 1
+    shifted = await client.get(
+        "/api/v1/admin/audit", headers=admin_headers, params={"limit": 1, "offset": 1}
+    )
+    assert shifted.json()["offset"] == 1

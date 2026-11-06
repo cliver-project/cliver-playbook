@@ -8,6 +8,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from cliver_playbook.app.basic.schemas.pagination import Page
+
 # Passwords: length-only policy. Composition rules (symbols, mixed case) are
 # NIST SP 800-63B discouraged; length is the knob that matters.
 _PASSWORD_FIELD = Field(min_length=8, max_length=128)
@@ -259,9 +261,8 @@ class AuditLogRead(BaseModel):
     user_agent: str
 
 
-class AuditLogPage(BaseModel):
-    items: list[AuditLogRead]
-    total: int
+class AuditLogPage(Page[AuditLogRead]):
+    """One page of the audit trail, in the shared pagination envelope."""
 
 
 LoginResponse.model_rebuild()

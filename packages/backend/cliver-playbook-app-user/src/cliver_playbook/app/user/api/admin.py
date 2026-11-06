@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cliver_playbook.app.basic.api.pagination import PageParams, page_params
 from cliver_playbook.app.basic.db.session import get_db
 from cliver_playbook.app.user.auth.audit import write_audit
 from cliver_playbook.app.user.auth.dependencies import Viewer, require_perm
@@ -490,8 +491,7 @@ async def revoke_oauth_grant(
 async def list_audit(
     event: str | None = Query(default=None, max_length=64),
     username: str | None = Query(default=None, max_length=100),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    params: PageParams = Depends(page_params()),
     _viewer: Viewer = Depends(require_perm("audit:read")),
     db: AsyncSession = Depends(get_db),
 ) -> AuditLogPage:
@@ -503,9 +503,11 @@ async def list_audit(
     if username:
         stmt = stmt.where(AuditLog.username.ilike(f"%{username}%"))
         count_stmt = count_stmt.where(AuditLog.username.ilike(f"%{username}%"))
-    rows = await db.execute(stmt.limit(limit).offset(offset))
+    rows = await db.execute(stmt.limit(params.limit).offset(params.offset))
     total = await db.scalar(count_stmt)
     return AuditLogPage(
         items=[AuditLogRead.model_validate(row) for row in rows.scalars().all()],
         total=int(total or 0),
+        limit=params.limit,
+        offset=params.offset,
     )
