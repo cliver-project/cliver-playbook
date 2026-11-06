@@ -14,7 +14,7 @@ DB_NAME="cliver_reference_smoke_$$"
 SCRATCH_DSN="postgresql://cliver:cliver@127.0.0.1:5432/${DB_NAME}"
 HEALTH_URL="http://127.0.0.1:8111/api/v1/health"
 BACKEND_PID=""
-BACKEND_LOG="$(mktemp "${TMPDIR:-/tmp}/cliver-reference-smoke.XXXXXX.log")"
+BACKEND_LOG="$(mktemp "${TMPDIR:-/tmp}/cliver-reference-smoke.XXXXXX")"
 
 cleanup() {
     status=$?
@@ -41,7 +41,7 @@ echo "==> Applying every migration chain to the scratch database"
 uv run python -m cliver_playbook.app.mcp.migrate --database-url "$SCRATCH_DSN"
 
 echo "==> Booting the composed app on 127.0.0.1:8111"
-CLIVER_DATABASE_URL="$SCRATCH_DSN" uv run uvicorn --factory \
+CLIVER_DATABASE_URL="$SCRATCH_DSN" uv run python -m uvicorn --factory \
     cliver_playbook.app.mcp.app:create_app \
     --host 127.0.0.1 --port 8111 >"$BACKEND_LOG" 2>&1 &
 BACKEND_PID=$!
