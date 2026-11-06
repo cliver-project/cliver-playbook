@@ -87,6 +87,14 @@ from the localized label (微 in Chinese, W in English). Keep `label` to the
 brand name (e.g. `WeChat`, not `WeChat login`) when the localized
 "Continue with …" button template is used.
 
+Importing the user package imports the built-in adapters, and `wechat.py` pins
+the process-wide `httpx` logger to WARNING at import time. This is intentional:
+WeChat sends the app secret and upstream access token in query strings, and
+httpx logs request URLs at INFO. It is also a global side effect — httpx
+INFO/DEBUG request logs from unrelated libraries in the same process are
+suppressed even when WeChat is not configured. Raise the `httpx` logger level
+after import only when no WeChat credential is in use.
+
 Outbound IdP traffic (discovery, token, userinfo) goes through one
 process-wide client factory,
 `cliver_playbook.app.user.auth.oidc.set_http_client_factory`. The default

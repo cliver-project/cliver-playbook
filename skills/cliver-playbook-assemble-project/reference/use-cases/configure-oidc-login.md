@@ -135,6 +135,14 @@ set_http_client_factory(shared_client)
 `set_http_client_factory(None)` restores the default. Tests use the same public
 factory with `httpx.MockTransport`.
 
+Importing the user package also imports the built-in WeChat adapter, whose
+module pins the process-wide `httpx` logger to WARNING at import time. That is
+intentional: WeChat's token request carries the app secret and access token in
+its query string, and httpx logs request URLs at INFO. The setting is global,
+so httpx INFO/DEBUG logs from other libraries in the process are hidden too,
+even when WeChat is not configured. Raise the `httpx` logger level after import
+only when no WeChat credential is in use.
+
 ## Verify
 
 ```sh

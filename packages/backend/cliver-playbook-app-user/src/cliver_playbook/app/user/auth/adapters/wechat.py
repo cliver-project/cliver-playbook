@@ -5,10 +5,18 @@ exchange and profile lookup are plain GETs, and failures arrive as HTTP 200
 with an ``errcode`` field inside the body.
 
 Security note: the app secret travels in the token request query string
-(WeChat's protocol requirement, over HTTPS). The module pins httpx's logger
-below INFO so those URLs never reach application logs, and every error raised
-here names only the step and WeChat's numeric error code — never the request
-URL, which carries the secret and the upstream access token.
+(WeChat's protocol requirement, over HTTPS). Importing this module pins
+httpx's process-wide logger below INFO so those URLs never reach application
+logs, and every error raised here names only the step and WeChat's numeric
+error code — never the request URL, which carries the secret and the upstream
+access token.
+
+That pinning is an intentional import-time, process-global side effect. It
+runs when the adapter registry imports the built-ins during application
+startup, whether or not WeChat is configured, and it also suppresses httpx
+INFO/DEBUG request logs from unrelated libraries in the same process. An
+application that needs those logs can raise the ``httpx`` logger level after
+importing this package; do not lower it while WeChat credentials are in use.
 """
 
 from __future__ import annotations
@@ -30,6 +38,12 @@ from cliver_playbook.app.user.auth.provider import (
 # for the process so those URLs can never reach application logs. The identity
 # package owns this setting: every HTTP call it makes is to an IdP, where URLs
 # and headers are credential-bearing.
+#
+# Intentional import-time global side effect: the adapter registry imports this
+# module during startup, so the pin applies even when WeChat is disabled, and
+# it hides httpx INFO/DEBUG request logs for every other httpx user in the
+# process. Raising the level in application logging configuration re-enables
+# those logs; doing so while WeChat is enabled would expose its token URL.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 AUTHORIZE_ENDPOINT = "https://open.weixin.qq.com/connect/qrconnect"
