@@ -207,6 +207,62 @@ def test_provider_registry_copies_adapter(yaml_file, monkeypatch):
     assert registry["wechat"].adapter == "wechat"
 
 
+def test_provider_registry_copies_adapter_options(yaml_file):
+    from cliver_playbook.app.user.auth import oidc
+
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    alipay:\n"
+        "      enabled: true\n"
+        "      adapter: alipay\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+        "      adapter_options:\n"
+        "        gateway_url: https://openapi-sandbox.example/gateway.do\n"
+    )
+    config = oidc.build_provider_registry(_settings())["alipay"]
+    assert config.adapter_options == {"gateway_url": "https://openapi-sandbox.example/gateway.do"}
+
+
+def test_provider_registry_validates_adapter_options_at_startup(yaml_file):
+    """Adapter-specific URLs are validated before the app serves traffic."""
+    from cliver_playbook.app.user.auth import oidc
+
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    alipay:\n"
+        "      enabled: true\n"
+        "      adapter: alipay\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+        "      adapter_options:\n"
+        "        gateway_url: http://openapi.example/gateway.do\n"
+    )
+    with pytest.raises(ValueError, match="gateway_url"):
+        oidc.build_provider_registry(_settings())
+
+
+def test_provider_registry_rejects_unknown_adapter_option(yaml_file):
+    """A typo in adapter-specific options is a startup error, not a silent no-op."""
+    from cliver_playbook.app.user.auth import oidc
+
+    yaml_file(
+        "oidc:\n"
+        "  providers:\n"
+        "    alipay:\n"
+        "      enabled: true\n"
+        "      adapter: alipay\n"
+        "      client_id: appid\n"
+        "      client_secret: secret\n"
+        "      adapter_options:\n"
+        "        gatewy_url: https://openapi.example/gateway.do\n"
+    )
+    with pytest.raises(ValueError, match="gatewy_url"):
+        oidc.build_provider_registry(_settings())
+
+
 def test_provider_registry_rejects_unknown_adapter(yaml_file, monkeypatch):
     from cliver_playbook.app.user.auth import oidc
 

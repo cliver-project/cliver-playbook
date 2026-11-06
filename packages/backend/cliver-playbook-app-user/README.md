@@ -47,6 +47,22 @@ The Alipay adapter needs the optional RSA dependency:
 python -m pip install -e ".[alipay]"   # cryptography
 ```
 
+An adapter may expose `validate_config(config)`; `create_app` calls it after
+building the registry, so bad adapter-specific configuration fails startup.
+Alipay uses `adapter_options.authorize_url` and `adapter_options.gateway_url`
+to target its sandbox (or a compatible proxy). Both must be absolute `https`
+URLs; unset values use the production Alipay hosts. Unknown option names are
+rejected at startup.
+
+```yaml
+alipay:
+  enabled: true
+  adapter: alipay
+  adapter_options:
+    authorize_url: https://openauth-sandbox.dl.alipaydev.com/oauth2/publicAppAuthorize.htm
+    gateway_url: https://openapi-sandbox.dl.alipaydev.com/gateway.do
+```
+
 Standard providers choose how the token exchange authenticates the client:
 `oidc.providers.<key>.token_endpoint_auth_method` is `client_secret_post`
 (the default, credentials in the form body), `client_secret_basic` (an HTTP

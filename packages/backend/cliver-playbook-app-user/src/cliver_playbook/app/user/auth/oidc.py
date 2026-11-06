@@ -113,9 +113,14 @@ def build_provider_registry(settings: Settings | None = None) -> dict[str, Provi
             token_url=provider.token_url,
             userinfo_url=provider.userinfo_url,
             adapter=provider.adapter,
+            adapter_options=dict(provider.adapter_options),
             token_endpoint_auth_method=provider.token_endpoint_auth_method,
             token_extra_params=dict(provider.token_extra_params),
         )
+        if provider.adapter:
+            validate_config = getattr(get_adapter(provider.adapter), "validate_config", None)
+            if callable(validate_config):
+                validate_config(registry[key])
     return registry
 
 

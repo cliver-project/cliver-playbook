@@ -7,6 +7,10 @@ configured as the provider's ``client_secret``; it is used locally to sign
 requests and never transmitted. ``cryptography`` is an optional dependency
 (``cliver-playbook-app-user[alipay]``) imported only when the adapter runs.
 
+The production hosts below are defaults. Set the provider's
+``adapter_options.authorize_url`` / ``adapter_options.gateway_url`` to target
+the Alipay sandbox or a compatible proxy; both must be absolute https URLs.
+
 P0 trusts TLS for the gateway responses and does not verify Alipay's response
 signature; see the provider-adapter ADR for the follow-up.
 """
@@ -17,7 +21,7 @@ import base64
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
@@ -29,9 +33,26 @@ from cliver_playbook.app.user.auth.provider import (
 
 AUTHORIZE_ENDPOINT = "https://openauth.alipay.com/oauth2/publicAppAuthorize.htm"
 GATEWAY_ENDPOINT = "https://openapi.alipay.com/gateway.do"
+_OPTION_NAMES = frozenset({"authorize_url", "gateway_url"})
 _SCOPE = "auth_user"
 # China Standard Time has no DST; a fixed offset avoids a tzdata dependency.
 _CST = timezone(timedelta(hours=8))
+
+
+def _option_endpoint(config: ProviderConfig, option: str, default: str) -> str:
+    """Resolve an ``adapter_options`` URL override, or the production default.
+
+    Overrides exist for the Alipay sandbox, whose authorize and gateway hosts
+    differ from production. Both carry credentials or access tokens, so only
+    absolute https URLs are accepted.
+    """
+    value = config.adapter_options.get(option, "")
+    if not value:
+        return default
+    parsed = urlsplit(value)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError(f"alipay adapter option {option!r} must be an absolute https URL")
+    return value
 
 
 def sign_content(params: Mapping[str, str]) -> str:
@@ -97,6 +118,14 @@ def _error_message(step: str, body: Mapping[str, Any]) -> str:
 class AlipayAdapter:
     """The built-in ``alipay`` adapter (RSA2-signed OpenAPI gateway)."""
 
+    def validate_config(self, config: ProviderConfig) -> None:
+        """Fail startup on unknown options or unsafe endpoint URLs."""
+        unknown = sorted(set(config.adapter_options) - _OPTION_NAMES)
+        if unknown:
+            raise ValueError("unknown alipay adapter option(s): " + ", ".join(unknown))
+        _option_endpoint(config, "authorize_url", AUTHORIZE_ENDPOINT)
+        _option_endpoint(config, "gateway_url", GATEWAY_ENDPOINT)
+
     def authorize_url(
         self,
         config: ProviderConfig,
@@ -116,7 +145,8 @@ class AlipayAdapter:
                 "state": state,
             }
         )
-        return f"{AUTHORIZE_ENDPOINT}?{query}"
+        endpoint = _option_endpoint(config, "authorize_url", AUTHORIZE_ENDPOINT)
+        return f"{endpoint}?{query}"
 
     async def complete(
         self,
@@ -180,7 +210,8 @@ class AlipayAdapter:
             **extra,
         }
         params["sign"] = sign(params, config.client_secret)
-        response = await client.post(GATEWAY_ENDPOINT, data=params)
+        endpoint = _option_endpoint(config, "gateway_url", GATEWAY_ENDPOINT)
+        response = await client.post(endpoint, data=params)
         response.raise_for_status()
         try:
             payload = response.json()

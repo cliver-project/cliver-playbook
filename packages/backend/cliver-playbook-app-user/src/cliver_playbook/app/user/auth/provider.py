@@ -46,7 +46,9 @@ class ProviderConfig:
 
     `adapter` non-empty selects a registered ``ProviderAdapter`` instead of the
     standard OAuth2 flow; in that case the three endpoint fields and `issuer`
-    are unused.
+    are unused. `adapter_options` carries adapter-specific settings, such as
+    the built-in Alipay adapter's ``authorize_url`` and ``gateway_url``
+    overrides.
 
     `subject_claim` names the userinfo field carrying the provider-side
     stable user id: "sub" for standard OIDC, "id" for GitHub-style APIs
@@ -82,6 +84,8 @@ class ProviderConfig:
     token_url: str = ""
     userinfo_url: str = ""
     adapter: str = ""
+    # Adapter-specific settings, interpreted only by the selected adapter.
+    adapter_options: Mapping[str, str] = field(default_factory=dict)
     # How the token request authenticates the client (RFC 6749 section 2.3):
     # "client_secret_post", "client_secret_basic", or "none".
     token_endpoint_auth_method: str = "client_secret_post"
@@ -145,6 +149,10 @@ class ProviderAdapter(Protocol):
     whatever upstream token it obtains stays local; it must return an
     ``Identity`` or raise ``ProviderAdapterError`` (HTTP/transport failures may
     propagate as ``httpx.HTTPError`` for the flow to classify).
+
+    An adapter may also define ``validate_config(config)``. ``create_app``
+    calls it while building the startup registry, so adapter-specific options
+    fail fast; adapters without it skip this optional check.
     """
 
     def authorize_url(

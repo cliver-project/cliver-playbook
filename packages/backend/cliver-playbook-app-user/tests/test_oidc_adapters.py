@@ -91,7 +91,12 @@ def test_identity_falls_back_to_preferred_username_and_subject():
 # ---------------------------------------------------------------------------
 
 
-def _config(adapter: str, *, secret: str = "secret") -> ProviderConfig:
+def _config(
+    adapter: str,
+    *,
+    secret: str = "secret",
+    adapter_options: dict[str, str] | None = None,
+) -> ProviderConfig:
     return ProviderConfig(
         key=adapter,
         issuer="",
@@ -99,6 +104,7 @@ def _config(adapter: str, *, secret: str = "secret") -> ProviderConfig:
         client_secret=secret,
         scopes="",
         adapter=adapter,
+        adapter_options=adapter_options or {},
     )
 
 
@@ -282,6 +288,18 @@ def test_alipay_authorize_url_shape():
     }
 
 
+def test_alipay_authorize_url_honors_configured_endpoint():
+    """Sandbox deployments point the browser at a different authorize host."""
+    endpoint = "https://openauth-sandbox.example/oauth2/publicAppAuthorize.htm"
+    url = AlipayAdapter().authorize_url(
+        _config("alipay", adapter_options={"authorize_url": endpoint}),
+        state="st-1",
+        redirect_uri="https://app.example/api/v1/auth/oauth/alipay/callback",
+    )
+    assert url.startswith(f"{endpoint}?")
+    assert parse_qs(urlparse(url).query)["app_id"] == ["alipay-client"]
+
+
 def test_alipay_sign_content_sorts_and_skips_empty_values():
     assert (
         sign_content({"b": "2", "a": "1", "empty": "", "sign": "ignored", "sign_type": "RSA2"})
@@ -344,6 +362,54 @@ async def test_alipay_complete_signs_gateway_calls_and_normalizes_identity(escap
     assert identity.subject == "2088"
     assert identity.name == "Ada"
     assert identity.picture == "https://img.example/ada.png"
+
+
+async def test_alipay_complete_uses_configured_gateway():
+    """Both signed calls (token + profile) go to the configured gateway host."""
+    pem, _ = _rsa_keypair()
+    gateway = "https://openapi-sandbox.example/gateway.do"
+    urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        urls.append(str(request.url))
+        params = dict(parse_qsl(request.content.decode()))
+        if params["method"] == "alipay.system.oauth.token":
+            return httpx.Response(
+                200,
+                json={
+                    "alipay_system_oauth_token_response": {
+                        "code": "10000",
+                        "access_token": "at-1",
+                        "user_id": "2088",
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "alipay_user_info_share_response": {
+                    "code": "10000",
+                    "user_id": "2088",
+                    "nick_name": "Ada",
+                }
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        identity = await AlipayAdapter().complete(
+            _config(
+                "alipay",
+                secret=pem,
+                adapter_options={"gateway_url": gateway},
+            ),
+            code="the-code",
+            code_verifier="ignored",
+            redirect_uri="https://app.example/callback",
+            client=client,
+        )
+
+    assert urls == [gateway, gateway]
+    assert identity.subject == "2088"
 
 
 @pytest.mark.parametrize(

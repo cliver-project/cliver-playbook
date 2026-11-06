@@ -53,6 +53,10 @@ oidc:
       adapter: alipay
       client_id: "..."
       client_secret: ""             # the application PRIVATE KEY; env only
+      # Optional; production hosts are the default. Both must be https.
+      # adapter_options:
+      #   authorize_url: https://openauth-sandbox.dl.alipaydev.com/oauth2/publicAppAuthorize.htm
+      #   gateway_url: https://openapi-sandbox.dl.alipaydev.com/gateway.do
 ```
 
 Register the exact callback with the provider:
@@ -150,7 +154,8 @@ startup (`create_app`) rather than at first login.
 ## Pitfalls
 
 - **Do not put issuer/endpoint URLs on an adapter provider.** The adapter owns
-  the authorize URL and the exchange; endpoint fields are ignored.
+  the authorize URL and the exchange; endpoint fields are ignored. Use
+  `adapter_options` for adapter-specific overrides (Alipay sandbox URLs).
 - **Never log adapter request URLs or exception strings.** The WeChat query
   string carries the app secret and access token; the Alipay private key must
   never leave the process.

@@ -141,6 +141,10 @@ oidc:
       # is the application PRIVATE KEY (PEM or bare Base64); it signs requests
       # locally and is never transmitted. Requires the `alipay` extra:
       #   pip install "cliver-playbook-app-user[alipay]"
+      # Sandbox deployments override both hosts through adapter_options:
+      #   adapter_options:
+      #     authorize_url: https://openauth-sandbox.dl.alipaydev.com/oauth2/publicAppAuthorize.htm
+      #     gateway_url: https://openapi-sandbox.dl.alipaydev.com/gateway.do
       adapter: alipay
       client_id: ""
       client_secret: ""

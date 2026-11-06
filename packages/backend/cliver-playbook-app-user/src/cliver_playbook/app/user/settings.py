@@ -125,6 +125,11 @@ class OidcProviderSettings(BaseModel):
     userinfo_url: str = ""
     # Registered protocol adapter name (empty -> standard OAuth2/OIDC flow).
     adapter: str = ""
+    # Adapter-specific settings, interpreted only by the selected adapter.
+    # The built-in Alipay adapter reads `authorize_url` and `gateway_url` to
+    # target its sandbox (or another compatible gateway); unset values use
+    # the production Alipay endpoints.
+    adapter_options: dict[str, str] = Field(default_factory=dict)
     # Space-separated string (what the IdP authorize URL expects on the wire).
     scopes: str = "openid profile email"
     subject_claim: str = "sub"
