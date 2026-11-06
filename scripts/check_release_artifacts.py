@@ -58,7 +58,9 @@ def check(dist: Path, version: str) -> list[str]:
     """Return one error per missing or incomplete artifact."""
     errors: list[str] = []
     for package in PACKAGES:
-        stem = f"cliver_playbook_app_{package}-{version}"
+        # Distribution filenames normalize hyphens to underscores
+        # (cliver-playbook-app-rag-governance -> cliver_playbook_app_rag_governance).
+        stem = f"cliver_playbook_app_{package.replace('-', '_')}-{version}"
         wheels = sorted(dist.glob(f"{stem}-*.whl"))
         sdists = sorted(dist.glob(f"{stem}.tar.gz"))
         if len(wheels) != 1:
