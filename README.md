@@ -39,6 +39,33 @@ name. The `cliver-playbook-app-mcp` shell is the full composition (basic + user 
 mcp) and doubles as the reference for what a finished project's wiring looks like;
 `cliver-playbook-app-rag` has its own smaller shell for working on the RAG pages alone.
 
+## Scope and non-goals
+
+The playbook is a thin platform for cross-cutting infrastructure, not a framework
+and not a code generator. Coding agents already generate application code; the
+playbook exists to keep repeated decisions, fixes, production baselines and
+agent context in one place. Before adding a capability, read ADR-0025 and answer
+its review questions. The non-negotiables:
+
+- **Seams, not control flow.** Packages and documented extension points only; a
+  consumer must be able to replace or bypass a behaviour without editing
+  installed code.
+- **No deployment-specific values.** Hosts, URLs, credentials, tenant/project
+  names and provider endpoints are configuration with safe defaults and startup
+  validation.
+- **A real consumer and an exit path.** No speculative features; every capability
+  can be removed or deprecated without breaking unrelated packages.
+- **Contracts and tests are the feature.** A regression test, a public contract
+  and an upgrade path are part of "done"; validated use-case docs are product,
+  not optional documentation.
+- **Domain logic stays with the consumer.** The playbook owns infrastructure and
+  reference slices, never a project's entities, workflows or copy.
+- **Adoption must stay cheaper than regeneration.** If composing or upgrading
+  costs more than generating fresh code, the playbook has failed.
+- **Fix upstream.** A consumer workaround means a seam is missing; fix it in the
+  package with a failing test and a release.
+- **Keep the surface small.** Deletion and deprecation are valid outcomes.
+
 ## Consuming the library
 
 Two supported models, both composing the same way:
@@ -192,6 +219,9 @@ applying — read before deviating:
 - 0020 LLM generation through cliver-core
 - 0021 Superuser wildcard and module-owned runtime settings
 - 0022 cliver-core purpose bindings across RAG stages
+- 0023 The RAG governance loop
+- 0024 Provider adapters for non-OAuth2 identity providers
+- 0025 Playbook scope, seams and non-goals
 
 ## Conventions
 

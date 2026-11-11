@@ -63,3 +63,11 @@ rename surface existed only to make copy-merge deterministic.
 - Keeping the fixed `app` package name or the `cliver_app` rename token — with
   composition there is nothing to copy-merge or rename. The display-name and
   `CLIVER_` env-prefix conventions are retained.
+
+## Amendment (2026-11-07): the PyPI non-goal is retired
+
+The first non-goal above no longer holds. Publishing became the default
+distribution path for the compose model: all five backend distributions are
+published to PyPI and `docs/releasing.md` defines the release. The second
+non-goal stands. This amendment changes only the first item; the rest of
+ADR-0015 is unchanged.
