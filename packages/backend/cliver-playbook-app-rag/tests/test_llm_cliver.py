@@ -10,6 +10,7 @@ vendor API.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Self
 
 import pytest
 
@@ -56,12 +57,19 @@ def test_generate_runs_cliver_core_and_closes_it(monkeypatch) -> None:
         def __init__(self, bindings) -> None:
             captured["binding"] = bindings.llm
 
+        @classmethod
+        def open(cls, bindings, **agent_kwargs) -> Self:
+            return cls(bindings)
+
+        async def __aenter__(self) -> Self:
+            return self
+
+        async def __aexit__(self, *exc_info) -> None:
+            captured["closed"] = True
+
         async def chat(self, prompt: str, *, system_prompt=None, options=None):
             captured.update(prompt=prompt, system=system_prompt, options=options)
             return SimpleNamespace(message=SimpleNamespace(content="grounded answer"))
-
-        async def aclose(self) -> None:
-            captured["closed"] = True
 
     monkeypatch.setattr(cliver_module, "AgentCore", FakeAgent)
 
@@ -82,6 +90,16 @@ def test_generate_flattens_text_blocks(monkeypatch) -> None:
         def __init__(self, bindings) -> None:
             pass
 
+        @classmethod
+        def open(cls, bindings, **agent_kwargs) -> Self:
+            return cls(bindings)
+
+        async def __aenter__(self) -> Self:
+            return self
+
+        async def __aexit__(self, *exc_info) -> None:
+            pass
+
         async def chat(self, prompt: str, *, system_prompt=None, options=None):
             return SimpleNamespace(
                 message=SimpleNamespace(
@@ -92,9 +110,6 @@ def test_generate_flattens_text_blocks(monkeypatch) -> None:
                     ]
                 )
             )
-
-        async def aclose(self) -> None:
-            pass
 
     monkeypatch.setattr(cliver_module, "AgentCore", FakeAgent)
 

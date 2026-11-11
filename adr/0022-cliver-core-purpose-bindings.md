@@ -187,3 +187,21 @@ serializes inference internally.
 Stage names, `id` / `model_id` values (`...@lazy`) and dimensions are
 unchanged, so vectors already stored in `rag_chunk_embeddings` remain
 retrievable.
+
+## Amendment (2026-11-11): cliver-core 0.3.1 and loop-agnostic local bindings
+
+The pin advances to `cliver-core[local]==0.3.1`. One reading in the
+2026-10-19 amendment is confirmed and one changes:
+
+- cliver-core 0.3.1 lets a provider class that owns no loop-bound resources
+  declare `loop_agnostic = True`, and the in-process local embed / rerank
+  providers do. A binding that wraps one no longer claims the event loop it
+  is first used on, so each local stage caches one binding for its lifetime
+  while every `embed` / `rerank` call still runs `asyncio.run(...)` on a
+  worker thread. The fake-provider tests pin the contract with consecutive
+  fresh-loop calls on one cached binding.
+- The alpha caveat under Risks no longer applies to the pin: 0.3.x patch
+  releases are bug-fix-only, and upgrades stay deliberate (exact pin,
+  regression tests).
+
+Stage names, `id` / `model_id` values and dimensions are unchanged.

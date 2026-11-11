@@ -123,6 +123,22 @@ def test_bge_reranker_scores_through_cliver_core_local_rerank() -> None:
     assert [hit.score for hit in out] == pytest.approx([0.7310586, 0.5, 0.2689414])
 
 
+def test_bge_reranker_supports_consecutive_calls_on_fresh_event_loops() -> None:
+    # Every stage call runs on its own event loop (asyncio.run in a worker
+    # thread). The stage caches one binding for its lifetime; that is only
+    # safe because cliver-core (>= 0.3.1) marks the in-process local
+    # providers loop_agnostic, so the binding never claims a loop. This
+    # pins the upgrade contract: a cliver-core regression would fail here.
+    backend = _FakeRerankBackend([-1.0, 0.0, 1.0])
+    provider = LocalRerankProvider(model="BAAI/bge-reranker-v2-m3", backend=backend)
+    reranker = BgeRerankerV2M3(provider=provider)
+
+    reranker.rerank("q", _hits([0.9, 0.8, 0.7]))
+    reranker.rerank("q", _hits([0.9, 0.8, 0.7]))
+
+    assert len(backend.pairs) == 6
+
+
 def test_bge_reranker_applies_top_k_after_ranking() -> None:
     backend = _FakeRerankBackend([-1.0, 0.0, 1.0])
     provider = LocalRerankProvider(model="BAAI/bge-reranker-v2-m3", backend=backend)

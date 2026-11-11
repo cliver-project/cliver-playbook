@@ -98,3 +98,13 @@ dimensions, but model loading and inference delegate to cliver-core's local
 providers. The dependency becomes `cliver-core[local]==0.3.0a2` so both
 local backends are installed; the `[mcp]` extra remains absent. See the
 amendment in ADR-0022.
+
+## Amendment (2026-11-11): the pin advances to cliver-core 0.3.1
+
+The dependency is now `cliver-core[local]==0.3.1`. The generator opens its
+per-call agent through `AgentCore.open()`, the async context manager
+cliver-core 0.3.1 added for the create / chat / close lifecycle: `aclose()`
+is awaited on every exit path. Remote providers keep loop-bound HTTP
+clients, so the agent remains per call. On the local side, 0.3.1 marks the
+in-process providers `loop_agnostic`, so the BGE stages again cache one
+binding per stage. See the 2026-11-11 amendment in ADR-0022.

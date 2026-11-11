@@ -10,7 +10,8 @@ the answer, so the loop terminates after one model turn.
 The RAG LLM seam is synchronous because the chat endpoint already runs
 generation in a worker thread. This adapter therefore executes the async
 cliver-core call on a private event loop. An ``AgentCore`` (and the
-provider it builds) is created per call and closed in ``finally``: a
+provider it builds) is created per call through ``AgentCore.open`` and
+closed by the async context manager on every exit path: a remote
 provider's HTTP client stays bound to the loop that created it, so a
 process-wide instance could not be reused across short-lived loops. The
 cost is client construction per request, not model loading — the remote
@@ -111,13 +112,10 @@ class CliverCoreLLM:
         return asyncio.run(self._generate(system=system, prompt=prompt, max_tokens=max_tokens))
 
     async def _generate(self, *, system: str, prompt: str, max_tokens: int) -> str:
-        agent = AgentCore(ModelBindings(llm=self.binding()))
-        try:
+        async with AgentCore.open(ModelBindings(llm=self.binding())) as agent:
             response = await agent.chat(
                 prompt,
                 system_prompt=system,
                 options={"max_tokens": max_tokens},
             )
-        finally:
-            await agent.aclose()
         return _text_of(response.message.content)

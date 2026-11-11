@@ -12,6 +12,12 @@ cliver-core shares a loaded model: it deliberately has no process-global
 cache. The model is fetched on the first ``embed`` call, so importing the
 package and constructing the stage download nothing.
 
+One binding is cached for the stage's lifetime. cliver-core binds a
+``ModelBinding`` to the event loop that first uses it — but the in-process
+local providers are ``loop_agnostic`` (cliver-core 0.3.1), so a binding
+that wraps one never claims a loop and stays usable across the fresh loop
+every ``embed`` call runs on (``asyncio.run`` in a worker thread).
+
 The concrete HF revision is not resolved at construction time, so ``id``
 keeps the ``@lazy`` sentinel; rows in
 ``rag_chunk_embeddings.embedder_version`` therefore identify the model
@@ -48,6 +54,8 @@ class BgeM3Embedder:
             dtype="auto",
             max_length=self.max_input_tokens,
         )
+        # Cached once: the local provider is loop_agnostic, so the binding
+        # carries no event-loop claim across the per-call asyncio.run loops.
         self._binding = local_embed(
             provider=self._provider,
             dim=DIM,

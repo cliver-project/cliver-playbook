@@ -139,6 +139,22 @@ def test_bge_m3_delegates_to_cliver_core_local_embed() -> None:
     assert len(backend.batches) == 1
 
 
+def test_bge_m3_supports_consecutive_calls_on_fresh_event_loops() -> None:
+    # Every stage call runs on its own event loop (asyncio.run in a worker
+    # thread). The stage caches one binding for its lifetime; that is only
+    # safe because cliver-core (>= 0.3.1) marks the in-process local
+    # providers loop_agnostic, so the binding never claims a loop. This
+    # pins the upgrade contract: a cliver-core regression would fail here.
+    backend = _FakeEmbeddingBackend(1024)
+    provider = LocalEmbeddingProvider(model="BAAI/bge-m3", backend=backend)
+    embedder = BgeM3Embedder(provider=provider)
+
+    embedder.embed(["first"], mode="document")
+    embedder.embed(["second"], mode="query")
+
+    assert backend.batches == [(["first"], 32), (["second"], 32)]
+
+
 def test_bge_base_zh_delegates_to_cliver_core_and_prefixes_queries_only() -> None:
     backend = _FakeEmbeddingBackend(768)
     provider = LocalEmbeddingProvider(model="BAAI/bge-base-zh-v1.5", backend=backend)

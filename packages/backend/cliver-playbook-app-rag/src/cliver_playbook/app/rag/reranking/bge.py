@@ -8,6 +8,12 @@ deliberately has no process-global cache. The model is fetched on the
 first ``rerank`` call, so importing the package and constructing the
 reranker download nothing.
 
+One binding is cached for the stage's lifetime. cliver-core binds a
+``ModelBinding`` to the event loop that first uses it — but the in-process
+local providers are ``loop_agnostic`` (cliver-core 0.3.1), so a binding
+that wraps one never claims a loop and stays usable across the fresh loop
+every ``rerank`` call runs on (``asyncio.run`` in a worker thread).
+
 cliver-core's local rerank provider returns raw cross-encoder scores and
 optionally applies a stable sigmoid; ``normalize=True`` yields [0, 1],
 the scale ``Settings.rag.score_floor`` is defined on. This stage keeps
@@ -47,6 +53,8 @@ class BgeRerankerV2M3:
             device="cpu",
             dtype="auto",
         )
+        # Cached once: the local provider is loop_agnostic, so the binding
+        # carries no event-loop claim across the per-call asyncio.run loops.
         self._binding = local_rerank(
             provider=self._provider,
             normalize=True,
