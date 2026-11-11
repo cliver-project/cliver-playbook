@@ -1,6 +1,6 @@
 [project]
 name = "cliver-playbook-app-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "cliver-playbook agent surface: MCP server (streamable-http + stdio) on top of the identity stack"
 readme = "README.md"
 license = "Apache-2.0"
@@ -14,10 +14,10 @@ requires-python = ">=3.12"
 # ../cliver-playbook-app-user` followed by `pip install -e .` satisfies the
 # chain without redeclaring the dependencies it already brings (ADR-0015).
 dependencies = [
-    "cliver-playbook-app-user==0.2.0",
+    "cliver-playbook-app-user==0.2.1",
     # The composed application serves the knowledge-base surface: upload,
     # index, search and chat routers plus the rag stage settings block.
-    "cliver-playbook-app-rag==0.2.0",
+    "cliver-playbook-app-rag==0.2.1",
     # Web framework. The >=0.143 lower bound is load-bearing, not cosmetic:
     # router inclusion rebuilds plain Starlette routes out of an APIRouter by
     # copying `route.endpoint` — the behaviour that lets the protocol endpoint

@@ -670,7 +670,7 @@ local = [
 
 [[package]]
 name = "cliver-playbook"
-version = "0.2.0"
+version = "0.2.1"
 source = { virtual = "." }
 dependencies = [
     { name = "cliver-playbook-app-basic" },
@@ -691,7 +691,7 @@ requires-dist = [
 
 [[package]]
 name = "cliver-playbook-app-basic"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "packages/backend/cliver-playbook-app-basic" }
 dependencies = [
     { name = "alembic" },
@@ -744,7 +744,7 @@ dev = [
 
 [[package]]
 name = "cliver-playbook-app-mcp"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "packages/backend/cliver-playbook-app-mcp" }
 dependencies = [
     { name = "cliver-playbook-app-rag" },
@@ -787,7 +787,7 @@ dev = [
 
 [[package]]
 name = "cliver-playbook-app-rag"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "packages/backend/cliver-playbook-app-rag" }
 dependencies = [
     { name = "alembic" },
@@ -852,7 +852,7 @@ dev = [
 
 [[package]]
 name = "cliver-playbook-app-rag-governance"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "packages/backend/cliver-playbook-app-rag-governance" }
 dependencies = [
     { name = "alembic" },
@@ -912,7 +912,7 @@ dev = [
 
 [[package]]
 name = "cliver-playbook-app-user"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "packages/backend/cliver-playbook-app-user" }
 dependencies = [
     { name = "alembic" },

@@ -1,6 +1,6 @@
 [project]
 name = "cliver-playbook-app-user"
-version = "0.2.0"
+version = "0.2.1"
 description = "cliver-playbook identity: accounts, RBAC, OIDC login and provider adapters, OAuth 2.1 provider for agent clients"
 readme = "README.md"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ requires-python = ">=3.12"
 # `pip install -e .` satisfies it without redeclaring basic's requirements
 # (ADR-0015).
 dependencies = [
-    "cliver-playbook-app-basic==0.2.0",
+    "cliver-playbook-app-basic==0.2.1",
     # Web framework and server
     "fastapi>=0.143.0",
     # Async ORM in services/routes; Alembic drives the sync psycopg URL that

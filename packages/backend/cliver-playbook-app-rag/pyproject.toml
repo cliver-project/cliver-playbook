@@ -1,6 +1,6 @@
 [project]
 name = "cliver-playbook-app-rag"
-version = "0.2.0"
+version = "0.2.1"
 description = "cliver-playbook knowledge base: pluggable RAG (chunker / embedder / retriever / reranker / LLM) over the identity stack"
 readme = "README.md"
 license = "Apache-2.0"
@@ -12,7 +12,7 @@ requires-python = ">=3.12"
 # other packages use, so there is no separate rag_tokens table and no
 # separate identity surface to audit.
 dependencies = [
-    "cliver-playbook-app-user==0.2.0",
+    "cliver-playbook-app-user==0.2.1",
     # Web framework. >=0.143 because router inclusion copies plain Starlette
     # routes (rebuilding them from route.endpoint) — the behaviour that
     # lets every RAG router reach the composed app the same way ADR-0017

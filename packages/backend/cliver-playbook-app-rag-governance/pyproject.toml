@@ -1,6 +1,6 @@
 [project]
 name = "cliver-playbook-app-rag-governance"
-version = "0.2.0"
+version = "0.2.1"
 description = "cliver-playbook knowledge-base governance: projects, golden datasets, rules, evaluation, approval and governed tools"
 readme = "README.md"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 # documents, chunks, embeddings and the retriever seam stay owned by
 # `rag`. The dependency chain is basic <- user <- rag <- rag-governance.
 dependencies = [
-    "cliver-playbook-app-rag==0.2.0",
+    "cliver-playbook-app-rag==0.2.1",
     "fastapi>=0.143.0",
     "sqlalchemy>=2.0.36",
     "pydantic>=2.0.0",

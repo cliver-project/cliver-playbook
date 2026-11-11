@@ -1,6 +1,6 @@
 [project]
 name = "cliver-playbook"
-version = "0.2.0"
+version = "0.2.1"
 description = "Development workspace root for the cliver-playbook packages"
 requires-python = ">=3.12"
 # The workspace root is a development convenience, not a distributable
