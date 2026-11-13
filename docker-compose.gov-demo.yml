@@ -1,0 +1,37 @@
+# Local demo database for the RAG governance package (make gov-demo-up).
+#
+# The governance demo deliberately uses offset ports so it can run beside this
+# repository's composed dev stack (docker-compose.yml on 5432/8000) and beside
+# other services on the same machine: PostgreSQL on 15432, the standalone
+# governance app on 18000, the mock Kingdee MCP server on 18080. The
+# application itself never runs in Docker during development (same rule as
+# docker-compose.yml); this file owns only the dependency service.
+#
+# The image is the official pgvector build of the same PostgreSQL major
+# version as docker-compose.yml: the rag migration chain runs
+# CREATE EXTENSION vector. The project name is pinned so the demo containers
+# keep their names regardless of the checkout directory.
+name: cliver-gov-demo
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: cliver_gov_demo_db
+    environment:
+      POSTGRES_USER: cliver
+      POSTGRES_PASSWORD: cliver
+      POSTGRES_DB: cliver_app
+    ports:
+      # Host port is overridable so two demos (or another PostgreSQL) can
+      # coexist; the Makefile passes GOV_DB_PORT through.
+      - "127.0.0.1:${GOV_DB_PORT:-15432}:5432"
+    volumes:
+      - cliver_gov_demo_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cliver -d cliver_app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  cliver_gov_demo_db_data:

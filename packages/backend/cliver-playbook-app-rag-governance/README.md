@@ -29,7 +29,7 @@ Full design: `docs/superpowers/specs/2026-11-05-rag-governance-loop-design.md`
 | Intent rules | `rules/`, `api/rules.py` | Priority-ordered keyword/regex rules, typed filter-AST scopes, `none`/`retrieval`/`tools`/`agentic` strategies. |
 | Evaluation | `evaluation/`, `api/evaluations.py` | Runner, evaluators, hard gates, thresholds, case-level and aggregate reports. |
 | Approvals | `services/approvals.py`, `api/approvals.py` | Approve/reject a staged batch, audit, publish or discard. |
-| Jobs | `runtime/jobs.py` | DB-backed queue and in-process worker for ingestion, evaluation and sync. |
+| Jobs | `runtime/jobs.py`, `runtime/handlers.py` | DB-backed queue, in-process worker, and the canonical handlers for `ingest_batch`, `run_eval` and `generate_golden`. |
 | Access | `services/access.py`, `query/access.py`, `rag.access` | `AccessScope`, clearance comparison, explicit document grants, staged preview. |
 | Tools | `tools/` | `ToolRegistry`, `ToolSpec`, `RestrictedToolInvoker`, composite dependencies, masking, audit, MCP and HTTP-OpenAPI adapters. |
 | Query facade | `query/facade.py`, `api/query.py` | Intent recognition, retrieval, parent lookup, live tool calls, generation and observations. |
@@ -52,9 +52,12 @@ for router in GOVERNANCE_ROUTERS:
 `create_app()` in `cliver_playbook.app.rag_governance.app` assembles the
 standalone stack (`basic + user + rag + governance`) for development and
 tests. It binds the most-derived `Settings` with the runtime, so every
-package's `settings` proxy sees the same instance (ADR-0016). It also puts an
-empty `ToolRegistry` and the rule-based `RuleToolPlanner` on `app.state`; a
-scenario registers its composite tools there at startup:
+package's `settings` proxy sees the same instance (ADR-0016). Its lifespan
+also starts the in-process job worker (`rag_governance.worker_enabled`,
+default on) so the 202 endpoints actually execute; a deployment that runs
+its own worker sets the flag false. The factory puts an empty `ToolRegistry`
+and the rule-based `RuleToolPlanner` on `app.state`; a scenario registers
+its composite tools there at startup:
 
 ```python
 from examples.finance_kpi.tools import register
@@ -120,36 +123,74 @@ database is current.
 
 ## Local demo (isolated ports)
 
-Other services on this machine may own 5432 and 8000. The demo uses offset
-ports: test database `127.0.0.1:15432`, standalone app `127.0.0.1:18000`,
-mock Kingdee `127.0.0.1:18080`.
+Other services on this machine may own 5432, 8000 and 5173. The demo uses
+offset ports: demo database `127.0.0.1:15432`, standalone app
+`127.0.0.1:18000`, mock Kingdee `127.0.0.1:18080`, web UI
+`127.0.0.1:5174`.
+
+From the repository root:
 
 ```bash
-# 1. Isolated PostgreSQL with pgvector
-docker run --rm -d --name cliver_gov_demo_db \
-  -p 127.0.0.1:15432:5432 \
-  -e POSTGRES_USER=cliver -e POSTGRES_PASSWORD=cliver -e POSTGRES_DB=cliver_app \
-  pgvector/pgvector:pg16
+# 1. Stack: demo PostgreSQL (compose), every migration chain, the mock
+#    Kingdee server, and the finance scenario app (worker + tools + LLM).
+make gov-demo-up
 
-# 2. Schema
-uv run python -m cliver_playbook.app.rag_governance.migrate \
-  --database-url postgresql+psycopg://cliver:cliver@127.0.0.1:15432/cliver_app
+# 2. Scenario data, in a second terminal: project, confirmed golden set,
+#    proposed rules, one staged ingest, role clearance and tool bindings.
+#    The seeded admin must change password on first login, so pass both.
+make gov-demo-seed ADMIN_PASSWORD=… ADMIN_NEW_PASSWORD=…
 
-# 3. Mock Kingdee MCP server (curated read-only contract, period fixtures)
-uv run python -m cliver_playbook.app.rag_governance.testing.mock_kingdee.server \
-  --fixtures examples/finance_kpi/fixtures/kingdee --period 2026-10 --port 18080
-
-# 4. Standalone governance app
-CLIVER_DATABASE_URL=postgresql+asyncpg://cliver:cliver@127.0.0.1:15432/cliver_app \
-uv run uvicorn --factory cliver_playbook.app.rag_governance.app:create_app \
-  --host 127.0.0.1 --port 18000
+# 3. Web UI (governance pages, proxied to :18000).
+make gov-demo-web
 ```
 
+The app is `examples/finance_kpi/app.py:create_demo_app` — the governance
+factory plus the scenario's tool registration, the filename-based taxonomy
+stage (`examples/finance_kpi/stages.py`) and the in-process job worker
+(`rag_governance.worker_enabled`, on by default). Generation uses the local
+ollama endpoint unless `GOV_LLM_BASE_URL` / `GOV_LLM_MODEL` /
+`GOV_LLM_API_KEY` say otherwise; without a model the facade still answers
+with a verbatim-context stub and full citations. A reasoning model needs a
+larger `max_tokens` on the query (the UI defaults to 4096) — the hidden
+reasoning otherwise consumes the whole budget and the answer text comes
+back empty.
+
+The demo storyline in the UI (or through the API):
+
+1. **Intent rules** — inspect the proposed rule set; try the matcher.
+2. **Sources & ingestion** — the seeded corpus is staged, not searchable.
+3. **Evaluations** — run a baseline over the confirmed golden set with the
+   staged batch as its evidence (`batch_id`); the run id is recorded on the
+   batch, which is what the approval gate verifies.
+4. **Approvals** — approve: the batch's documents publish (prior versions
+   of the same logical ids unpublish), and the project turns `active`.
+5. **Intent rules** — activate the proposed set against the passing run.
+6. **Governed query** — ask a question; the trace shows the intent, the
+   strategy, live tool rows, citations with locators, and the as-of.
+
+Re-seeding converges configuration (project config, golden set, source,
+proposed rules) and never stages the corpus twice. A full reset is
+`make gov-demo-down` followed by
+`docker compose -f docker-compose.gov-demo.yml down -v`.
+
 The mock accepts JSON-RPC `initialize` / `tools/list` / `tools/call` at any
-path, so a tool binding can point at `http://127.0.0.1:18080/mcp`. The finance
-composites are registered by scenario startup code, not by core governance;
-`tests/test_finance_acceptance.py` shows the full wiring. Stop the container
-with `docker stop cliver_gov_demo_db`.
+path, so a tool binding can point at `http://127.0.0.1:18080/mcp`. The
+composites are registered by the scenario at composition time, not by core
+governance; `tests/test_finance_acceptance.py` shows the same wiring in a
+test. The manual commands behind the targets:
+
+```bash
+GOV_DB_PORT=15432 docker compose -f docker-compose.gov-demo.yml up -d --wait db
+uv run python -m cliver_playbook.app.rag_governance.migrate \
+  --database-url postgresql+psycopg://cliver:cliver@127.0.0.1:15432/cliver_app
+uv run python -m cliver_playbook.app.rag_governance.testing.mock_kingdee.server \
+  --fixtures examples/finance_kpi/fixtures/kingdee --period 2026-10 --port 18080
+cd packages/backend/cliver-playbook-app-rag-governance && \
+  CLIVER_DATABASE_URL=postgresql+asyncpg://cliver:cliver@127.0.0.1:15432/cliver_app \
+  CLIVER_RAG__LLM=cliver-core \
+  uv run python -m uvicorn --factory examples.finance_kpi.app:create_demo_app \
+    --host 127.0.0.1 --port 18000
+```
 
 The reference scenario's fixtures are pinned to period `2026-10` with a data
 cutoff of `2026-10-31T23:59:59+08:00`; questions use the injected `as_of`,

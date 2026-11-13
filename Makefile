@@ -123,6 +123,82 @@ verify-reference: ## Migrate a scratch DB, boot the composed app, build the refe
 release: ## Cut a release (make release [VERSION=x.y.z]); quits if the version is not bumped
 	python3 scripts/release.py $(if $(VERSION),--version $(VERSION),) $(if $(DRY_RUN),--dry-run,)
 
+##@ RAG governance demo
+
+# The governance demo (packages/backend/cliver-playbook-app-rag-governance,
+# README "Local demo") runs on offset ports so it never fights the composed
+# dev stack (5432/8000) or other services on this machine. The compose file
+# owns the demo PostgreSQL; the mock Kingdee server and the standalone app
+# run on the host like every other dev process here. The app is the finance
+# scenario's factory (examples/finance_kpi/app.py), which additionally
+# registers the scenario's tools; generation uses the local ollama endpoint
+# by default — point the GOV_LLM_* variables elsewhere or start ollama first.
+GOV_COMPOSE_FILE := docker-compose.gov-demo.yml
+GOV_DB_PORT ?= 15432
+GOV_APP_PORT ?= 18000
+GOV_MOCK_PORT ?= 18080
+GOV_WEB_PORT ?= 5174
+GOV_DB_DSN_PSYCOPG := postgresql+psycopg://cliver:cliver@127.0.0.1:$(GOV_DB_PORT)/cliver_app
+GOV_DB_DSN_ASYNCPG := postgresql+asyncpg://cliver:cliver@127.0.0.1:$(GOV_DB_PORT)/cliver_app
+GOV_DB_DSN_PLAIN := postgresql://cliver:cliver@127.0.0.1:$(GOV_DB_PORT)/cliver_app
+GOV_MOCK_FIXTURES := packages/backend/cliver-playbook-app-rag-governance/examples/finance_kpi/fixtures/kingdee
+GOV_LLM_BASE_URL ?= http://127.0.0.1:11434/v1
+GOV_LLM_MODEL ?= qwen3.6:latest
+GOV_LLM_API_KEY ?= ollama
+GOV_VAR_DIR := var/gov-demo
+GOV_PKG_DIR := packages/backend/cliver-playbook-app-rag-governance
+
+.PHONY: gov-demo-up
+gov-demo-up: backend-init ## Start the governance demo: db (compose) + mock Kingdee + app
+	@mkdir -p $(GOV_VAR_DIR)
+	GOV_DB_PORT=$(GOV_DB_PORT) docker compose -f $(GOV_COMPOSE_FILE) up -d --wait db
+	@echo "==> Applying every migration chain to the demo database (idempotent)"
+	@CLIVER_DATABASE_URL=$(GOV_DB_DSN_ASYNCPG) \
+		uv run python -m cliver_playbook.app.rag_governance.migrate \
+			--database-url $(GOV_DB_DSN_PSYCOPG)
+	@if nc -z 127.0.0.1 $(GOV_MOCK_PORT) 2>/dev/null; then \
+		echo "==> Mock Kingdee already listening on $(GOV_MOCK_PORT)"; \
+	else \
+		echo "==> Starting the mock Kingdee MCP server on $(GOV_MOCK_PORT)"; \
+		nohup uv run python -m cliver_playbook.app.rag_governance.testing.mock_kingdee.server \
+			--fixtures $(GOV_MOCK_FIXTURES) --period 2026-10 --port $(GOV_MOCK_PORT) \
+			>$(GOV_VAR_DIR)/mock.log 2>&1 & echo $$! > $(GOV_VAR_DIR)/mock.pid; \
+	fi
+	@echo "==> Governance app on http://127.0.0.1:$(GOV_APP_PORT) (docs: /docs)"
+	@echo "==> Next: make gov-demo-seed ADMIN_PASSWORD=… then make gov-demo-web"
+	@echo "==> Ctrl-C stops the app; make gov-demo-down stops the whole demo"
+	@cd $(GOV_PKG_DIR) && CLIVER_DATABASE_URL=$(GOV_DB_DSN_ASYNCPG) \
+		GOV_DEMO_MOCK_URL=http://127.0.0.1:$(GOV_MOCK_PORT)/mcp \
+		CLIVER_RAG__LLM=cliver-core \
+		CLIVER_RAG__CLIVER_LLM__BASE_URL=$(GOV_LLM_BASE_URL) \
+		CLIVER_RAG__CLIVER_LLM__MODEL=$(GOV_LLM_MODEL) \
+		CLIVER_RAG__CLIVER_LLM__API_KEY=$(GOV_LLM_API_KEY) \
+		uv run python -m uvicorn --factory examples.finance_kpi.app:create_demo_app \
+		--host 127.0.0.1 --port $(GOV_APP_PORT)
+
+.PHONY: gov-demo-web
+gov-demo-web: web-ui-init ## Start the governance demo web UI (http://127.0.0.1:5174)
+	@pnpm --filter cliver-playbook-dev-gov dev --host 127.0.0.1 --port $(GOV_WEB_PORT)
+
+.PHONY: gov-demo-seed
+gov-demo-seed: ## Seed the finance scenario (ADMIN_PASSWORD=… [ADMIN_NEW_PASSWORD=…]); run after gov-demo-up
+	@test -n "$(ADMIN_PASSWORD)" || { echo "usage: make gov-demo-seed ADMIN_PASSWORD=… [ADMIN_NEW_PASSWORD=…]" >&2; exit 2; }
+	@cd $(GOV_PKG_DIR) && uv run python -m examples.finance_kpi.seed_demo \
+		--app-url http://127.0.0.1:$(GOV_APP_PORT) \
+		--database-url $(GOV_DB_DSN_PLAIN) \
+		--admin-password "$(ADMIN_PASSWORD)" \
+		$(if $(ADMIN_NEW_PASSWORD),--new-password "$(ADMIN_NEW_PASSWORD)",)
+
+.PHONY: gov-demo-down
+gov-demo-down: ## Stop the governance demo (db container + mock server; data volume kept)
+	@if [ -f $(GOV_VAR_DIR)/mock.pid ] && kill -0 $$(cat $(GOV_VAR_DIR)/mock.pid) 2>/dev/null; then \
+		echo "==> Stopping the mock Kingdee server"; \
+		kill $$(cat $(GOV_VAR_DIR)/mock.pid) || true; \
+	fi
+	@rm -f $(GOV_VAR_DIR)/mock.pid
+	GOV_DB_PORT=$(GOV_DB_PORT) docker compose -f $(GOV_COMPOSE_FILE) down
+	@echo "==> Data volume kept; full reset: docker compose -f $(GOV_COMPOSE_FILE) down -v"
+
 ##@ MCP server
 
 # The composed app already serves /mcp in-process. These targets start the MCP
