@@ -5,10 +5,16 @@ returns plain ``GoldenCase`` values and writes nothing: candidates only
 become a set through the version manager, and only a confirmed set is
 used by evaluation.
 
-The prompt asks for strict JSON and the parser is unforgiving. A
-generator that emits prose, a fenced code block, an unknown field or a
-duplicate id produces an error, not a half-parsed set. The caller may
-retry; it must never confirm what it could not read.
+The prompt asks for strict JSON and the parser is unforgiving *about
+content*: an unknown field, a missing id or a duplicate id produces an
+error, not a half-parsed set. The caller may retry; it must never confirm
+what it could not read.
+
+It is lenient about *framing*, because real models frame: a reasoning
+model writes its reasoning first, and many models wrap the array in a
+markdown fence after a sentence of prose. The parser therefore locates
+the one balanced JSON array in the response and validates that array
+strictly. Prose containing no array is still an error.
 
 Live-data cases need an ``as_of``. The generator is allowed to propose
 tool cases (the schema enforces the reference time), but it must never
@@ -33,7 +39,7 @@ from cliver_playbook.app.rag_governance.stages.base import SourceDocument
 
 _MAX_DOCUMENT_CHARS = 4000
 _MAX_TOTAL_CHARS = 20000
-_FENCE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
+_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 _SYSTEM = (
     "You write golden test cases for a governed RAG project. "
@@ -84,16 +90,69 @@ def build_golden_prompt(
     )
 
 
+def _balanced_array(text: str, start: int = 0) -> tuple[str, int] | None:
+    """The next complete JSON array at or after ``start``, and its end index.
+
+    Bracket counting respects string literals and escapes, so a ``]``
+    inside a question never ends the scan early.
+    """
+    start = text.find("[", start)
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1], index + 1
+    return None
+
+
 def parse_generated_cases(raw: str) -> list[GoldenCase]:
     """Parse the model's JSON array, assigning ids when it omitted them."""
     text = raw.strip()
-    match = _FENCE.match(text)
+    match = _FENCE.search(text)
     if match is not None:
-        text = match.group(1)
+        text = match.group(1).strip()
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise GoldenGenerationError(f"the model did not return JSON: {exc.msg}") from None
+        # Try every balanced array in turn: prose may contain bracket-like
+        # text (``[note]``) before the real payload.
+        payload = None
+        position = 0
+        while True:
+            found = _balanced_array(text, position)
+            if found is None:
+                break
+            embedded, position = found
+            try:
+                payload = json.loads(embedded)
+                break
+            except json.JSONDecodeError:
+                continue
+        if payload is None:
+            if not text:
+                raise GoldenGenerationError(
+                    "the model returned an empty response; a reasoning model may "
+                    "need a larger golden.max_tokens"
+                ) from None
+            raise GoldenGenerationError(f"the model did not return JSON: {exc.msg}") from None
     if isinstance(payload, dict) and isinstance(payload.get("cases"), list):
         payload = payload["cases"]
     if not isinstance(payload, list):
@@ -129,6 +188,7 @@ async def generate_candidates(
     llm: LLM,
     scenario: str = "",
     max_cases: int = 10,
+    max_tokens: int = 8192,
 ) -> list[GoldenCase]:
     """Ask the configured model for candidate cases. Writes nothing."""
     if not documents:
@@ -143,7 +203,7 @@ async def generate_candidates(
         llm.generate,
         system=_SYSTEM,
         prompt=prompt,
-        max_tokens=4096,
+        max_tokens=max_tokens,
     )
     return parse_generated_cases(raw)
 

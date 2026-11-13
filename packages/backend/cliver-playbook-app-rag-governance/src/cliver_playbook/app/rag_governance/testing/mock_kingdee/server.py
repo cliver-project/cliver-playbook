@@ -347,7 +347,14 @@ class MockKingdeeServer:
         """Serve the mock over streamable HTTP (uvicorn, lazily imported)."""
         import uvicorn
 
-        uvicorn.run(self.asgi_app, host=host, port=port, log_level="info")
+        # A plain async function, not the bound ``self.asgi_app``: uvicorn's
+        # interface detection treats a bound method as ASGI2 (it is not an
+        # ``inspect.isfunction`` and its ``__call__`` is a method-wrapper),
+        # and its ASGI2 adapter then calls the app with the scope only.
+        async def asgi(scope: dict[str, Any], receive: Any, send: Any) -> None:
+            await self.asgi_app(scope, receive, send)
+
+        uvicorn.run(asgi, host=host, port=port, log_level="info")
 
 
 def main(argv: list[str] | None = None) -> None:

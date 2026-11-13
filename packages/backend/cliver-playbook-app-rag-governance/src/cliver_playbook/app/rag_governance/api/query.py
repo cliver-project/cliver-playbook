@@ -92,6 +92,7 @@ async def query_project(
             viewer=viewer,
             as_of=as_of,
             llm=llm,
+            max_tokens=payload.max_tokens,
             tool_registry=registry,
             planner=planner,
             audit=_audit_sink(viewer, request),

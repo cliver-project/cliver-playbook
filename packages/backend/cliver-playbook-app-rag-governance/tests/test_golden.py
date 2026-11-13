@@ -230,3 +230,34 @@ def test_generator_rejects_duplicate_ids() -> None:
 
     with pytest.raises(GoldenGenerationError, match="duplicate case id"):
         parse_generated_cases(raw)
+
+
+def test_generator_locates_the_array_inside_reasoning_prose() -> None:
+    # Reasoning models emit their thinking before the answer; the array must
+    # still be found and validated strictly.
+    raw = (
+        "Let me think about the corpus. The policy documents discuss 应收账龄.\n"
+        "Here is the array:\n"
+        '[{"id": "case-0001", "question": "90+ 应收占比多少？", "expected_intent": "receivables_aging"}]\n'
+        "That covers the main intent."
+    )
+
+    cases = parse_generated_cases(raw)
+
+    assert [case.id for case in cases] == ["case-0001"]
+
+
+def test_generator_ignores_brackets_inside_strings() -> None:
+    raw = (
+        "prefix [not json] then "
+        '[{"id": "case-0001", "question": "a [bracketed] word", "expected_intent": "x"}]'
+    )
+
+    cases = parse_generated_cases(raw)
+
+    assert cases[0].question == "a [bracketed] word"
+
+
+def test_generator_rejects_an_empty_response_with_a_budget_hint() -> None:
+    with pytest.raises(GoldenGenerationError, match="empty response.*max_tokens"):
+        parse_generated_cases("   ")

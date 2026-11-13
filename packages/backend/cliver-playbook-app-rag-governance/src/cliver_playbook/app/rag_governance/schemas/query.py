@@ -25,6 +25,10 @@ class QueryRequest(BaseModel):
     # Omitted means "the request time", supplied by the API boundary.
     # The facade itself never reads a clock.
     as_of: datetime | None = None
+    # Output budget for the generator. A reasoning model spends most of it
+    # on hidden reasoning, so a caller that names one should budget higher
+    # than the plain-answer default.
+    max_tokens: int = Field(default=1024, ge=1, le=8192)
 
     @field_validator("as_of")
     @classmethod

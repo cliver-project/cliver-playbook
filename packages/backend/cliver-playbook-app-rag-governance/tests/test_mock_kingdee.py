@@ -160,3 +160,26 @@ async def test_asgi_transport_round_trips_the_jsonrpc_surface(
     envelope = called.json()["result"]["structuredContent"]
     assert envelope["isError"] is False
     assert envelope["period"] == "2026-10"
+
+
+def test_serve_hands_uvicorn_a_plain_asgi3_function(
+    mock_kingdee_server: MockKingdeeServer, monkeypatch
+) -> None:
+    # Regression: serve() used to pass the bound ``self.asgi_app`` method.
+    # uvicorn's interface detection treats a bound method as ASGI2 (it is
+    # not an ``inspect.isfunction`` and its ``__call__`` is a
+    # method-wrapper), so its ASGI2 adapter called the app with the scope
+    # only and every request crashed. The app must therefore be a plain
+    # async function.
+    import inspect
+
+    import uvicorn
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: captured.update(app=app))
+
+    mock_kingdee_server.serve(port=18080)
+
+    app = captured["app"]
+    assert inspect.isfunction(app)
+    assert inspect.iscoroutinefunction(app)
