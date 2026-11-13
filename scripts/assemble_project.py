@@ -32,6 +32,19 @@ PROFILES = {
             "cliver-playbook-app-rag",
         ],
     },
+    "rag-governance": {
+        "backend": [
+            "cliver-playbook-app-basic",
+            "cliver-playbook-app-user",
+            "cliver-playbook-app-rag",
+            "cliver-playbook-app-rag-governance",
+        ],
+        "frontend": [
+            "cliver-playbook-app-basic",
+            "cliver-playbook-app-user",
+            "cliver-playbook-app-rag-governance",
+        ],
+    },
     "mcp": {
         "backend": [
             "cliver-playbook-app-basic",

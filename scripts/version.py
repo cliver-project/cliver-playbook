@@ -22,7 +22,7 @@ import tomllib
 from pathlib import Path
 
 BACKEND_PACKAGES = ("basic", "user", "rag", "rag-governance", "mcp")
-FRONTEND_PACKAGES = ("basic", "user", "rag", "mcp")
+FRONTEND_PACKAGES = ("basic", "user", "rag", "rag-governance", "mcp")
 
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$")
 PY_VERSION_LINE = re.compile(r'(?m)^version = "([^"]+)"$')
@@ -32,7 +32,7 @@ PY_PIN = re.compile(rf'"({PACKAGE_NAME})([^"]*)"')
 PY_PIN_REPLACE = re.compile(rf'("{PACKAGE_NAME})==[^"]+(")')
 JSON_VERSION_REPLACE = re.compile(r'(?m)^(\s*"version":\s*")[^"]+(")')
 JSON_DEP_REPLACE = re.compile(
-    r'("cliver-playbook-app-(?:basic|user|rag|mcp)":\s*")(?!workspace:)[^"]+(")'
+    r'("cliver-playbook-app-(?:basic|user|rag|rag-governance|mcp)":\s*")(?!workspace:)[^"]+(")'
 )
 
 

@@ -19,9 +19,29 @@ import {
 import { useAuth } from "cliver-playbook-app-user/components/auth/AuthContext.tsx";
 
 /** A navigation entry that is only shown to viewers holding `perm`. */
-export interface AuthedNavItem extends NavItem {
+export interface AuthedNavItem extends Omit<NavItem, "children"> {
   /** Permission code required to see the entry; null = always visible. */
   perm: string | null;
+  /** Second-level entries, each filtered by its own permission. */
+  children?: AuthedNavItem[];
+}
+
+/**
+ * Drop entries the viewer may not see, recursively.
+ *
+ * A parent with children always keeps its own route, so it stays even when
+ * every child is filtered out — the parent page itself may need fewer
+ * permissions than the pages beneath it.
+ */
+function visibleNavItems(
+  items: AuthedNavItem[],
+  hasPerm: (code: string) => boolean,
+): AuthedNavItem[] {
+  return items.flatMap((item) => {
+    if (item.perm !== null && !hasPerm(item.perm)) return [];
+    const children = item.children ? visibleNavItems(item.children, hasPerm) : undefined;
+    return [{ ...item, ...(children ? { children } : {}) }];
+  });
 }
 
 /** This package's authenticated pages — the navigation of a user-management app. */
@@ -84,9 +104,7 @@ export function AuthAppLayout({ extraNavItems = [], headerExtra }: AuthAppLayout
 
   const navItems: NavItem[] = [
     ...basicNavItems,
-    ...[...userNavItems, ...extraNavItems].filter(
-      (item) => item.perm === null || hasPerm(item.perm),
-    ),
+    ...visibleNavItems([...userNavItems, ...extraNavItems], hasPerm),
   ];
 
   async function handleLogout() {
