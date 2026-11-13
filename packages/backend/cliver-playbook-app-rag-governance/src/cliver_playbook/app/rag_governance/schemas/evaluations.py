@@ -17,6 +17,10 @@ class EvaluationRequest(BaseModel):
     rule_version: int | None = Field(default=None, ge=1)
     stage: str = Field(default="baseline", min_length=1, max_length=32)
     reference_time: AwareDatetime | None = None
+    # Optional staged batch this run is evidence for. When set, the run id is
+    # recorded on the batch as its approval report: the approval gate is
+    # fail-closed and refuses a batch without one.
+    batch_id: str | None = Field(default=None, min_length=1, max_length=36)
 
 
 class EvaluationAccepted(BaseModel):

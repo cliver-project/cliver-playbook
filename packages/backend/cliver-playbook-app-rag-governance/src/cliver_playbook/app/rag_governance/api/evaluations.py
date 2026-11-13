@@ -15,7 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic.db.session import get_db
 from cliver_playbook.app.rag_governance.golden import get_set
-from cliver_playbook.app.rag_governance.models.entities import GovEvalCaseResult, GovEvalRun
+from cliver_playbook.app.rag_governance.models.entities import (
+    GovEvalCaseResult,
+    GovEvalRun,
+    GovIngestBatch,
+)
 from cliver_playbook.app.rag_governance.rules import get_rule_set
 from cliver_playbook.app.rag_governance.runtime import enqueue
 from cliver_playbook.app.rag_governance.schemas.evaluations import (
@@ -66,6 +70,10 @@ async def start_evaluation(
         rule_set = await get_rule_set(db, project.id, payload.rule_version)
         if rule_set is None:
             raise HTTPException(status_code=404, detail="rule set not found")
+    if payload.batch_id is not None:
+        batch = await db.get(GovIngestBatch, payload.batch_id)
+        if batch is None or batch.project_id != project.id:
+            raise HTTPException(status_code=404, detail="batch not found")
 
     job = await enqueue(
         db,
@@ -79,6 +87,7 @@ async def start_evaluation(
             "reference_time": (
                 payload.reference_time.isoformat() if payload.reference_time else None
             ),
+            "batch_id": payload.batch_id,
         },
     )
     await db.commit()

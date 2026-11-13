@@ -65,6 +65,10 @@ def settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
             # A retry is immediately claimable in tests, so a retry loop
             # does not have to sleep through the production backoff.
             "job_retry_backoff_seconds": 0,
+            # The app's lifespan would start the in-process worker, racing
+            # every test that asserts on a freshly enqueued job's status.
+            # Tests that exercise workers run `run_worker` explicitly.
+            "worker_enabled": False,
         },
         _env_file=None,
     )
