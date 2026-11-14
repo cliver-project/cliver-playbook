@@ -281,6 +281,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/agents/{name}/config/rollout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the staged rollout percentage for the active prompt config */
+        post: operations["setAgentConfigRollout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/agents/{name}/config/rollback/{version}": {
         parameters: {
             query?: never;
@@ -589,6 +608,8 @@ export interface components {
             /** Format: int32 */
             version: number;
             prompt_overlay: string;
+            /** Format: int32 */
+            rollout_percent: number;
             source_proposal_id?: string | null;
             note: string;
             created_by?: number | null;
@@ -601,12 +622,19 @@ export interface components {
         AgentConfigRollbackRequest: {
             note?: string;
         };
+        AgentConfigRolloutRequest: {
+            /** Format: int32 */
+            percent: number;
+            note?: string;
+        };
         AgentLearningSummary: {
             agent: string;
             config_version?: number | null;
             /** Format: int64 */
             config_versions: number;
             prompt_overlay: string;
+            /** Format: int32 */
+            rollout_percent: number;
             active_golden_version?: number | null;
             /** Format: int64 */
             golden_versions: number;
@@ -1294,6 +1322,53 @@ export interface operations {
             };
             /** @description Agent not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setAgentConfigRollout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentConfigRolloutRequest"];
+            };
+        };
+        responses: {
+            /** @description Learning summary after the rollout change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLearningSummary"];
+                };
+            };
+            /** @description Reviewer permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rollout percent outside 0..100 */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

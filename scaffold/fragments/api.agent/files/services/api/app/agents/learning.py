@@ -27,6 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.contracts import AgentContext, AgentResult, AutonomyPolicy
+from app.agents.judge import GoldenCaseJudge
 from app.agents.models import (
     AgentConfig,
     AgentConfigVersion,
@@ -580,6 +581,8 @@ async def approve_proposal(
     *,
     regression_runner: GoldenCaseRunner | None = None,
     regression_min_score: float = 0.8,
+    regression_judge: GoldenCaseJudge | None = None,
+    regression_judge_required: bool = False,
 ) -> tuple[AgentImprovement, bool]:
     """Approve a proposal; apply prompt proposals to the active overlay.
 
@@ -605,6 +608,8 @@ async def approve_proposal(
                 proposal,
                 runner=regression_runner,
                 min_score=regression_min_score,
+                judge=regression_judge,
+                judge_required=regression_judge_required,
             )
         except RegressionError as exc:
             await db.rollback()
@@ -627,7 +632,12 @@ async def approve_proposal(
             select(AgentConfig).where(AgentConfig.agent == proposal.agent).with_for_update()
         )
         if config is None:
-            config = AgentConfig(agent=proposal.agent, prompt_overlay=text, version=1)
+            config = AgentConfig(
+                agent=proposal.agent,
+                prompt_overlay=text,
+                version=1,
+                rollout_percent=100,
+            )
             db.add(config)
         else:
             overlay = (
@@ -642,6 +652,7 @@ async def approve_proposal(
                 agent=proposal.agent,
                 version=config.version,
                 prompt_overlay=config.prompt_overlay,
+                rollout_percent=config.rollout_percent,
                 source_proposal_id=proposal.id,
                 note="Approved improvement proposal.",
                 created_by=actor_id,
@@ -705,12 +716,49 @@ async def list_proposals(
     return list((await db.scalars(query)).all())
 
 
-async def load_prompt_overlay(db: AsyncSession | None, agent: str) -> str:
-    """Return the active approved guidance for an agent, if any."""
+def _rollout_bucket(agent: str, bucket_key: str) -> int:
+    digest = hashlib.sha256(f"{agent}\0{bucket_key}".encode()).digest()
+    return int.from_bytes(digest[:4], "big") % 100
+
+
+def should_apply_overlay(agent: str, bucket_key: str, percent: int) -> bool:
+    """Return whether a staged prompt overlay applies to this stable bucket."""
+    if percent >= 100:
+        return True
+    if percent <= 0:
+        return False
+    return _rollout_bucket(agent, bucket_key) < percent
+
+
+async def load_prompt_overlay(
+    db: AsyncSession | None,
+    agent: str,
+    *,
+    bucket_key: str | None = None,
+) -> str:
+    """Return the active approved guidance for an agent, if any.
+
+    ``rollout_percent`` below 100 applies the overlay only to a deterministic
+    bucket of users/sessions. A missing bucket is conservative: staged
+    guidance is not applied.
+    """
     if db is None:
         return ""
-    overlay = await db.scalar(select(AgentConfig.prompt_overlay).where(AgentConfig.agent == agent))
-    return overlay or ""
+    row = (
+        await db.execute(
+            select(AgentConfig.prompt_overlay, AgentConfig.rollout_percent).where(
+                AgentConfig.agent == agent
+            )
+        )
+    ).one_or_none()
+    if row is None or not row.prompt_overlay:
+        return ""
+    overlay, percent = str(row.prompt_overlay), int(row.rollout_percent)
+    if percent >= 100:
+        return overlay
+    if percent <= 0 or not bucket_key:
+        return ""
+    return overlay if should_apply_overlay(agent, bucket_key, percent) else ""
 
 
 class LearningPipeline:

@@ -183,12 +183,14 @@ async def rollback_config(
     if config is None:
         raise VersionError("Agent config not found", 404)
     config.prompt_overlay = source.prompt_overlay
+    config.rollout_percent = source.rollout_percent
     config.version += 1
     db.add(
         AgentConfigVersion(
             agent=agent,
             version=config.version,
             prompt_overlay=config.prompt_overlay,
+            rollout_percent=config.rollout_percent,
             source_proposal_id=None,
             note=(note.strip() or f"Rollback to version {version_number}"),
             created_by=actor_id,
@@ -273,6 +275,7 @@ async def agent_learning_summary(db: AsyncSession, agent: str) -> dict:
         "config_version": config.version if config is not None else None,
         "config_versions": config_versions,
         "prompt_overlay": config.prompt_overlay if config is not None else "",
+        "rollout_percent": config.rollout_percent if config is not None else 100,
         "active_golden_version": active_golden.version if active_golden else None,
         "golden_versions": golden_versions,
         "proposal_counts": proposal_counts,
@@ -282,3 +285,44 @@ async def agent_learning_summary(db: AsyncSession, agent: str) -> dict:
         "recent_evaluations": len(recent),
         "generated_at": datetime.now(UTC),
     }
+
+
+async def set_rollout_percent(
+    db: AsyncSession,
+    agent: str,
+    percent: int,
+    *,
+    actor_id: int | None,
+    note: str = "",
+) -> AgentConfig:
+    """Set the staged rollout percentage and record it in config history."""
+    if not 0 <= int(percent) <= 100:
+        raise VersionError("rollout percent must be between 0 and 100", 422)
+    config = await db.scalar(
+        select(AgentConfig).where(AgentConfig.agent == agent).with_for_update()
+    )
+    if config is None:
+        config = AgentConfig(
+            agent=agent,
+            prompt_overlay="",
+            version=1,
+            rollout_percent=int(percent),
+        )
+        db.add(config)
+    else:
+        config.rollout_percent = int(percent)
+        config.version += 1
+    db.add(
+        AgentConfigVersion(
+            agent=agent,
+            version=config.version,
+            prompt_overlay=config.prompt_overlay,
+            rollout_percent=config.rollout_percent,
+            source_proposal_id=None,
+            note=(note.strip() or f"Rollout set to {percent}%"),
+            created_by=actor_id,
+        )
+    )
+    await db.commit()
+    await db.refresh(config)
+    return config

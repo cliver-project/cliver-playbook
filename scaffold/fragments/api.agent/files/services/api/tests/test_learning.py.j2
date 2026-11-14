@@ -11,6 +11,7 @@ from app.agents.contracts import (
     AgentToolkit,
     AutonomyPolicy,
 )
+from app.agents.judge import JudgeResult
 from app.agents.learning import (
     DEFAULT_PROMPT_APPEND,
     LearningError,
@@ -1042,3 +1043,190 @@ async def test_feedback_rejects_another_users_run(client, auth_headers):
     )
     assert response.status_code == 403, response.text
 {% endif %}
+
+
+class _PassingJudge:
+    async def judge(self, **kwargs) -> JudgeResult:
+        return JudgeResult(passed=True, score=1.0, reason="meets the rubric")
+
+
+class _FailingJudge:
+    async def judge(self, **kwargs) -> JudgeResult:
+        return JudgeResult(passed=False, score=0.2, reason="misses the required policy")
+
+
+class _BrokenJudge:
+    async def judge(self, **kwargs) -> JudgeResult:
+        raise RuntimeError("judge provider unavailable")
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_can_block_a_candidate_that_passes_assertions(db_session):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="judged answer",
+        message="What is the price?",
+        expected_contains=["price"],
+    )
+    proposal = await _pending_proposal(db_session)
+    runner = _OverlayRunner(baseline="no idea", candidate="The price is 100.")
+
+    with pytest.raises(LearningError) as raised:
+        await approve_proposal(
+            db_session,
+            proposal.id,
+            actor_id=7,
+            regression_runner=runner,
+            regression_judge=_FailingJudge(),
+            regression_judge_required=True,
+        )
+
+    assert raised.value.status_code == 409
+    report = await get_regression_run(db_session, proposal.id)
+    assert report is not None
+    assert report.status == "failed"
+    assert report.case_results[0]["candidate_judge_reason"] == "misses the required policy"
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_failure_fails_closed(db_session):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="judge error",
+        message="What is the price?",
+        expected_contains=["price"],
+    )
+    proposal = await _pending_proposal(db_session)
+    runner = _OverlayRunner(baseline="no idea", candidate="The price is 100.")
+
+    with pytest.raises(LearningError) as raised:
+        await approve_proposal(
+            db_session,
+            proposal.id,
+            actor_id=7,
+            regression_runner=runner,
+            regression_judge=_BrokenJudge(),
+            regression_judge_required=True,
+        )
+
+    assert raised.value.status_code == 409
+    report = await get_regression_run(db_session, proposal.id)
+    assert report is not None
+    assert report.status == "error"
+    assert "judge provider unavailable" in report.error
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_required_without_a_judge_fails_closed(db_session):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="judge missing",
+        message="What is the price?",
+        expected_contains=["price"],
+    )
+    proposal = await _pending_proposal(db_session)
+    runner = _OverlayRunner(baseline="no idea", candidate="The price is 100.")
+
+    with pytest.raises(LearningError) as raised:
+        await approve_proposal(
+            db_session,
+            proposal.id,
+            actor_id=7,
+            regression_runner=runner,
+            regression_judge=None,
+            regression_judge_required=True,
+        )
+
+    assert raised.value.status_code == 409
+    report = await get_regression_run(db_session, proposal.id)
+    assert report is not None
+    assert report.status == "error"
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_pass_allows_the_candidate(db_session):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="judge pass",
+        message="What is the price?",
+        expected_contains=["price"],
+    )
+    proposal = await _pending_proposal(db_session)
+    runner = _OverlayRunner(baseline="no idea", candidate="The price is 100.")
+
+    applied, was_applied = await approve_proposal(
+        db_session,
+        proposal.id,
+        actor_id=7,
+        regression_runner=runner,
+        regression_judge=_PassingJudge(),
+        regression_judge_required=True,
+    )
+
+    assert was_applied is True
+    assert applied.status == "applied"
+
+
+def test_rollout_bucket_is_deterministic_and_bounded():
+    from app.agents.learning import should_apply_overlay
+
+    assert should_apply_overlay("products", "stable-key", 100) is True
+    assert should_apply_overlay("products", "stable-key", 0) is False
+    first = should_apply_overlay("products", "stable-key", 50)
+    second = should_apply_overlay("products", "stable-key", 50)
+    assert first == second
+
+
+@pytest.mark.asyncio
+async def test_load_prompt_overlay_respects_rollout_percent(db_session):
+    from app.agents.learning import load_prompt_overlay
+
+    config = AgentConfig(
+        agent="products",
+        prompt_overlay="Cite the price.",
+        version=1,
+        rollout_percent=0,
+    )
+    db_session.add(config)
+    await db_session.commit()
+    assert await load_prompt_overlay(db_session, "products", bucket_key="user-1") == ""
+
+    config.rollout_percent = 100
+    await db_session.commit()
+    assert (
+        await load_prompt_overlay(db_session, "products", bucket_key="user-1") == "Cite the price."
+    )
+
+
+@pytest.mark.asyncio
+async def test_rollout_endpoint_updates_summary(client, app_instance):
+    from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
+
+    async def _admin_viewer():
+        return Viewer(
+            user_id=999999,
+            username="reviewer",
+            display_name="Reviewer",
+            must_change_password=False,
+            role_codes=frozenset({"admin"}),
+            permissions=frozenset({"*"}),
+        )
+
+    app_instance.dependency_overrides[get_current_user] = _admin_viewer
+    try:
+        response = await client.post(
+            "/api/v1/agent/agents/general/config/rollout",
+            json={"percent": 25},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["rollout_percent"] == 25
+
+        summary = await client.get("/api/v1/agent/agents/general/learning")
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["rollout_percent"] == 25
+    finally:
+        app_instance.dependency_overrides.clear()

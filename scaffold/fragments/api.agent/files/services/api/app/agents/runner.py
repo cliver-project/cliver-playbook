@@ -49,6 +49,15 @@ CoreFactory = Callable[
 ]
 
 
+def _rollout_key(context: AgentContext) -> str:
+    """Stable staged-rollout bucket: user first, then session, then run."""
+    if context.user_id is not None:
+        return f"user:{context.user_id}"
+    if context.session_id:
+        return f"session:{context.session_id}"
+    return f"run:{context.run_id}"
+
+
 class AgentRunner(Protocol):
     """One sub-agent run as a stream of typed events, ending in agent.result."""
 
@@ -125,7 +134,11 @@ class AgentCoreRunner:
         else:
             overlay_db = context.resources.get("learning_db") or context.resources.get("db")
             try:
-                overlay = await load_prompt_overlay(overlay_db, agent.name)
+                overlay = await load_prompt_overlay(
+                    overlay_db,
+                    agent.name,
+                    bucket_key=_rollout_key(context),
+                )
             except Exception:  # approved guidance is advisory
                 logger.exception("Could not load prompt overlay for %s", agent.name)
                 overlay = ""

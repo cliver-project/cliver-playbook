@@ -42,9 +42,11 @@ Phase 2 is in progress:
   and feedback through AgentCore structured output; provider/validation
   failures fall back to the deterministic proposal. When
   golden cases exist, approval also runs an offline baseline-vs-candidate
-  gate with safe tools only and fails closed without a model; a reviewer
-  (`agent:improve` or admin) approves or rejects it, and approved prompt
-  guidance is loaded into the next AgentCore system prompt. Feedback,
+  gate with safe tools only and fails closed without a model; an optional LLM
+  judge adds a semantic verdict, reviewers (`agent:improve` or admin) approve
+  or reject, and approved prompt guidance is loaded into the next AgentCore
+  system prompt. Reviewers can set a 0–100 staged rollout percentage; the
+  overlay applies through a deterministic user/session bucket. Feedback,
   proposals and review decisions are audited, and the web chat exposes
   Helpful / Not helpful after a run.
 - The Android and iOS fragments generate module-per-feature apps with auth,

@@ -210,6 +210,9 @@ class AgentConfig(Base):
     agent: Mapped[str] = mapped_column(String(64), primary_key=True)
     prompt_overlay: Mapped[str] = mapped_column(Text, nullable=False, default="")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    rollout_percent: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=100, server_default="100"
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -282,6 +285,9 @@ class AgentConfigVersion(Base):
     agent: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     prompt_overlay: Mapped[str] = mapped_column(Text, nullable=False)
+    rollout_percent: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=100, server_default="100"
+    )
     source_proposal_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     note: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

@@ -157,6 +157,12 @@ CLIVER_AGENT_SYSTEM_ONE_API_KEY=<dashscope-key> \
 make system-one-smoke
 ```
 
+Set `CLIVER_AGENT_JUDGE_ENABLED=true` to add a semantic LLM judge to
+golden-set approval. It requires the API-plane model and fails closed when the
+model is missing. Reviewer-gated staged rollout is available at
+`POST /api/v1/agent/agents/{agent}/config/rollout` with a 0–100 percentage;
+the overlay applies to a stable user/session bucket. Auto-apply remains off.
+
 `CLIVER_AGENT_SYSTEM_ONE_PROVIDER` also accepts `typesafe` or `http`; leave it
 empty to disable selection. `make system-one-smoke` is a live check and needs
 the `local-system-one` extra for laya.

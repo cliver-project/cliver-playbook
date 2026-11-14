@@ -21,6 +21,7 @@ from app.agents.bootstrap import register_default_agents, register_project_agent
 from app.agents.contracts import SubAgent
 from app.agents.events import EventStore, broadcaster
 from app.agents.job_queue import wake_job_queue
+from app.agents.judge import build_golden_case_judge
 from app.agents.learning import (
     LearningError,
     approve_proposal,
@@ -59,10 +60,12 @@ from app.agents.versions import (
     list_golden_versions,
     publish_golden_set,
     rollback_config,
+    set_rollout_percent,
 )
 from app.agents.worker import TERMINAL_EVENT_TYPES
 from app.schemas.agent import (
     AgentConfigRollbackRequest,
+    AgentConfigRolloutRequest,
     AgentConfigVersionList,
     AgentConfigVersionRead,
     AgentDescriptorRead,
@@ -176,6 +179,7 @@ def _config_version_read(version: AgentConfigVersion) -> AgentConfigVersionRead:
         agent=version.agent,
         version=version.version,
         prompt_overlay=version.prompt_overlay,
+        rollout_percent=version.rollout_percent,
         source_proposal_id=version.source_proposal_id,
         note=version.note,
         created_by=version.created_by,
@@ -627,6 +631,42 @@ async def get_agent_config_versions(
 
 
 @router.post(
+    "/agents/{name}/config/rollout",
+    response_model=AgentLearningSummaryRead,
+)
+async def set_agent_config_rollout(
+    name: str,
+    payload: AgentConfigRolloutRequest,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentLearningSummaryRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    if registry.get(name) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+{% if enabled('api.auth') %}
+    actor_id = _viewer.user_id
+{% else %}
+    actor_id = None
+{% endif %}
+    try:
+        await set_rollout_percent(
+            db,
+            name,
+            payload.percent,
+            actor_id=actor_id,
+            note=payload.note,
+        )
+    except VersionError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return AgentLearningSummaryRead(**await agent_learning_summary(db, name))
+
+
+@router.post(
     "/agents/{name}/config/rollback/{version}",
     response_model=AgentLearningSummaryRead,
 )
@@ -677,7 +717,9 @@ async def approve_agent_proposal(
     if existing is None:
         raise HTTPException(status_code=404, detail="Proposal not found")
     agent = registry.get(existing.agent)
-    runner = build_regression_runner(get_settings(), agent, db) if agent is not None else None
+    settings = get_settings()
+    runner = build_regression_runner(settings, agent, db) if agent is not None else None
+    judge = build_golden_case_judge(settings)
     min_score = agent.autonomy.regression_min_score if agent is not None else 0.8
     try:
         proposal, applied = await approve_proposal(
@@ -686,6 +728,8 @@ async def approve_agent_proposal(
             actor_id,
             regression_runner=runner,
             regression_min_score=min_score,
+            regression_judge=judge,
+            regression_judge_required=settings.agent_judge_enabled,
         )
     except LearningError as exc:
         await db.rollback()

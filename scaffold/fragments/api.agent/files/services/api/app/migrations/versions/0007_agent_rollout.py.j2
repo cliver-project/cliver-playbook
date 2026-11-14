@@ -1,0 +1,30 @@
+"""Staged prompt rollout percentage.
+
+Revision ID: {{ "0007_agent_rollout" if enabled('api.products') else "0006_agent_rollout" }}
+Revises: {{ "0006_agent_versions" if enabled("api.products") else "0005_agent_versions" }}
+Create Date: 2026-01-01 00:00:00
+"""
+
+import sqlalchemy as sa
+from alembic import op
+
+revision = "{{ "0007_agent_rollout" if enabled('api.products') else "0006_agent_rollout" }}"
+down_revision = "{{ "0006_agent_versions" if enabled('api.products') else "0005_agent_versions" }}"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.add_column(
+        "agent_configs",
+        sa.Column("rollout_percent", sa.Integer(), nullable=False, server_default="100"),
+    )
+    op.add_column(
+        "agent_config_versions",
+        sa.Column("rollout_percent", sa.Integer(), nullable=False, server_default="100"),
+    )
+
+
+def downgrade() -> None:
+    op.drop_column("agent_config_versions", "rollout_percent")
+    op.drop_column("agent_configs", "rollout_percent")

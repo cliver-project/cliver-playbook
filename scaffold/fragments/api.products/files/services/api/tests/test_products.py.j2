@@ -125,12 +125,8 @@ async def test_product_pagination_and_error_envelope(client):
         )
         assert created.status_code == 201, created.text
 
-    first = await client.get(
-        "/api/v1/products", params={"limit": 1, "offset": 0}, headers=headers
-    )
-    second = await client.get(
-        "/api/v1/products", params={"limit": 1, "offset": 1}, headers=headers
-    )
+    first = await client.get("/api/v1/products", params={"limit": 1, "offset": 0}, headers=headers)
+    second = await client.get("/api/v1/products", params={"limit": 1, "offset": 1}, headers=headers)
     assert first.status_code == second.status_code == 200
     assert len(first.json()) == len(second.json()) == 1
     assert first.json()[0]["id"] != second.json()[0]["id"]

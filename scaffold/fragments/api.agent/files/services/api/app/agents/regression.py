@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.judge import GoldenCaseJudge
 from app.agents.models import (
     AgentConfig,
     AgentGoldenCase,
@@ -125,6 +126,8 @@ async def run_regression_gate(
     *,
     runner: GoldenCaseRunner | None,
     min_score: float = 0.8,
+    judge: GoldenCaseJudge | None = None,
+    judge_required: bool = False,
 ) -> AgentRegressionRun:
     """Compare the current overlay with the proposal's candidate overlay.
 
@@ -168,6 +171,20 @@ async def run_regression_gate(
         _audit(db, proposal, "gate_skipped", "No golden cases configured.")
         return run
 
+    if judge_required and judge is None:
+        run = await _save_run(
+            db,
+            proposal,
+            status="error",
+            baseline_score=0.0,
+            candidate_score=0.0,
+            min_score=min_score,
+            case_results=[],
+            error="An LLM judge is required but no judge model is configured.",
+        )
+        _audit(db, proposal, "gate_error", run.error)
+        return run
+
     if runner is None:
         run = await _save_run(
             db,
@@ -204,18 +221,45 @@ async def run_regression_gate(
         for case in cases:
             baseline_output = await runner.run(case.message, base_overlay)
             candidate_output = await runner.run(case.message, candidate_overlay)
-            baseline_passed = _case_passes(str(baseline_output or ""), case)
-            candidate_passed = _case_passes(str(candidate_output or ""), case)
+            baseline_assertions = _case_passes(str(baseline_output or ""), case)
+            candidate_assertions = _case_passes(str(candidate_output or ""), case)
+            baseline_verdict = candidate_verdict = None
+            if judge is not None:
+                baseline_verdict = await judge.judge(
+                    agent=proposal.agent,
+                    message=case.message,
+                    output=str(baseline_output or ""),
+                    expected_contains=list(case.expected_contains or []),
+                    forbidden_contains=list(case.forbidden_contains or []),
+                )
+                candidate_verdict = await judge.judge(
+                    agent=proposal.agent,
+                    message=case.message,
+                    output=str(candidate_output or ""),
+                    expected_contains=list(case.expected_contains or []),
+                    forbidden_contains=list(case.forbidden_contains or []),
+                )
+            baseline_passed = baseline_assertions and (
+                baseline_verdict.passed if baseline_verdict is not None else True
+            )
+            candidate_passed = candidate_assertions and (
+                candidate_verdict.passed if candidate_verdict is not None else True
+            )
             baseline_passes += int(baseline_passed)
             candidate_passes += int(candidate_passed)
-            case_results.append(
-                {
-                    "case_id": case.id,
-                    "name": case.name,
-                    "baseline_passed": baseline_passed,
-                    "candidate_passed": candidate_passed,
-                }
-            )
+            result = {
+                "case_id": case.id,
+                "name": case.name,
+                "baseline_passed": baseline_passed,
+                "candidate_passed": candidate_passed,
+            }
+            if baseline_verdict is not None:
+                result["baseline_judge_score"] = baseline_verdict.score
+                result["baseline_judge_reason"] = baseline_verdict.reason
+            if candidate_verdict is not None:
+                result["candidate_judge_score"] = candidate_verdict.score
+                result["candidate_judge_reason"] = candidate_verdict.reason
+            case_results.append(result)
     except Exception as exc:  # noqa: BLE001 — the report records the failure
         error = f"{type(exc).__name__}: {exc}"
 

@@ -1255,9 +1255,7 @@ async def test_event_contract_envelope_sequence_and_terminal(client, auth_header
     run_id = created.json()["run_id"]
     await _wait_status(run_id, "completed")
 
-    response = await client.get(
-        f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers
-    )
+    response = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
     assert response.status_code == 200, response.text
     events = _events_from_sse(response.text)
     assert events, "the stream must contain at least one event"

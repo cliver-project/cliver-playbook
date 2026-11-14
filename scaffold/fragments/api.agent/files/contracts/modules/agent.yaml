@@ -406,6 +406,38 @@ paths:
           description: Reviewer permission required
         "404":
           description: Agent not found
+  /api/v1/agent/agents/{name}/config/rollout:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [agent]
+      summary: Set the staged rollout percentage for the active prompt config
+      operationId: setAgentConfigRollout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentConfigRolloutRequest"
+      responses:
+        "200":
+          description: Learning summary after the rollout change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentLearningSummary"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Agent not found
+        "422":
+          description: Rollout percent outside 0..100
   /api/v1/agent/agents/{name}/config/rollback/{version}:
     parameters:
       - name: name
@@ -767,7 +799,7 @@ components:
     AgentConfigVersion:
       type: object
       required:
-        [id, agent, version, prompt_overlay, note, created_at]
+        [id, agent, version, prompt_overlay, rollout_percent, note, created_at]
       properties:
         id:
           type: integer
@@ -779,6 +811,11 @@ components:
           format: int32
         prompt_overlay:
           type: string
+        rollout_percent:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
         source_proposal_id:
           type: [string, "null"]
         note:
@@ -802,10 +839,22 @@ components:
         note:
           type: string
           maxLength: 2000
+    AgentConfigRolloutRequest:
+      type: object
+      required: [percent]
+      properties:
+        percent:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+        note:
+          type: string
+          maxLength: 2000
     AgentLearningSummary:
       type: object
       required:
-        [agent, config_versions, prompt_overlay, golden_versions,
+        [agent, config_versions, prompt_overlay, rollout_percent, golden_versions,
          proposal_counts, feedback_count, positive_feedback,
          recent_evaluations, generated_at]
       properties:
@@ -818,6 +867,11 @@ components:
           format: int64
         prompt_overlay:
           type: string
+        rollout_percent:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
         active_golden_version:
           type: [integer, "null"]
         golden_versions:

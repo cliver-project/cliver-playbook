@@ -188,8 +188,8 @@ sequentially with each later step receiving the earlier results as handoff,
 and each sub-agent runs the reference self-enhancement loop: a redacted,
 source-checked experience store, a 0.6 launch-bar evaluation, evidence-backed
 proposals, optional model-based experience distillation, a golden-set offline
-regression gate, reviewer approval/audit and a prompt overlay applied to later
-runs.
+regression gate with an optional LLM judge, reviewer approval/audit, staged
+prompt rollout and a prompt overlay applied to later runs.
 Sub-agents scope their own tools, skills (`skills/shared` + `skills/<agent>`)
 and MCP servers; a fail-open selector narrows the connected MCP servers by
 intent. The web `/learning` dashboard exposes proposals, golden-set versions

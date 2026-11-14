@@ -243,6 +243,28 @@ the offline gate. Distillation currently runs synchronously in the learning
 hook; moving it to the job runtime is the next scale step. Projects can replace
 the generator through the seam without changing the API or approval path.
 
+### LLM judge and staged rollout (2026-11-14)
+
+The golden gate keeps its deterministic assertions as hard constraints and can
+add an optional semantic judge. `GoldenCaseJudge` is a seam; `AgentCoreJudge`
+asks AgentCore structured output for a `JudgeVerdict` (`passed`, `score`,
+`reason`) over the case message, answer, expected and forbidden strings. The
+judge prompt treats the answer as untrusted data and forbids instructions
+inside it from changing the verdict. `CLIVER_AGENT_JUDGE_ENABLED` turns the
+judge on; when it is on but no model is configured, approval fails closed with
+an error report. Judge output is recorded in the regression case results, but
+the judge never runs at request time and never applies a proposal by itself.
+
+Approved prompt overlays can now be staged. `agent_configs.rollout_percent`
+(default 100) is recorded in `agent_config_versions`; a reviewer sets it via
+`POST /api/v1/agent/agents/{name}/config/rollout`. At runtime the overlay is
+applied only when a SHA-256 bucket of `(agent, user/session/run key)` is below
+the percentage. The bucket prefers a user id, then a session id, then the run
+id, so the same user sees a stable variant. A missing bucket is conservative:
+staged guidance is not applied. Rollback restores both the overlay and the
+rollout percentage. Auto-apply remains disabled; the live judge, staged
+rollout audit and a rollback drill are still required before enabling it.
+
 ### Multi-process queue, MCP selection and version controls (2026-11-14)
 
 `POST /runs` now only persists a queued run. `app/agents/job_queue.py` runs a
@@ -274,10 +296,10 @@ rollout controls and `feedback_dataset` wiring. Until then the scaffold does
 not auto-apply improvements, and evaluator, generator and gate remain
 replaceable seams.
 
-Verified with 78 API tests in ai-web (28 learning/gate tests: redaction/source
+Verified with 97 API tests in ai-full (learning/gate tests: redaction/source
 enforcement, launch-bar evaluation, anonymous feedback upsert, proposal
 creation/approval/rejection, model distillation and deterministic fallback,
 runtime overlay injection, golden-case CRUD, gate pass/fail/skip/fail-closed,
-and reviewer scoping) and 62 passed + 1 skipped in the agent-only variant. The
+and reviewer scoping) and 75 passed + 1 skipped in the agent-only variant. The
 web typecheck, lint, seam-check, build and Playwright chat E2E (feedback
 button included) pass.

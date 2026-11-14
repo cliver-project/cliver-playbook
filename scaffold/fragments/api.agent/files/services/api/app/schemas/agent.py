@@ -124,6 +124,7 @@ class AgentConfigVersionRead(BaseModel):
     agent: str
     version: int
     prompt_overlay: str
+    rollout_percent: int = 100
     source_proposal_id: str | None = None
     note: str
     created_by: int | None = None
@@ -138,11 +139,17 @@ class AgentConfigRollbackRequest(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class AgentConfigRolloutRequest(BaseModel):
+    percent: int = Field(ge=0, le=100)
+    note: str = Field(default="", max_length=2000)
+
+
 class AgentLearningSummaryRead(BaseModel):
     agent: str
     config_version: int | None = None
     config_versions: int
     prompt_overlay: str
+    rollout_percent: int = 100
     active_golden_version: int | None = None
     golden_versions: int
     proposal_counts: dict[str, int]
