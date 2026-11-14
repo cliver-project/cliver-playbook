@@ -99,8 +99,10 @@ components only from there; `pnpm seam-check` (part of `make web-check`) rejects
 a deep playbook visual import. Replace a component in that directory to
 customize the UI without touching feature data flow. The chat surface on `/`
 is the reference AI-native form; direct feature routes remain available. A
-collapsible run inspector shows the planner's steps, parallel groups, agent
-results and direct handoffs without mixing that detail into the conversation.
+session sidebar navigates owner-scoped history; a collapsible run inspector
+shows the planner's steps, parallel groups, agent results and direct handoffs
+without mixing that detail into the conversation. The mocked Playwright suite
+includes axe scans of chat, runtime and learning in light and dark themes.
 Playbook package pages (for example the auth screens) are replaced at the route
 level or by the package, not by a generated page.
 
@@ -168,8 +170,8 @@ through a separate tool-free model call when the previous call's input usage
 crosses the threshold; it is off by default and requires the API-plane model.
 
 `make live-smoke` is an opt-in local check for the configured model: chat,
-LLM judge, context compaction, the scoped permission callback and (when
-enabled) MCP discovery. It reads `CLIVER_AGENT_LLM_*` from the environment;
+real-model parallel planning/execution, direct handoff, LLM judge, context
+compaction, the scoped permission callback and (when enabled) MCP discovery. It reads `CLIVER_AGENT_LLM_*` from the environment;
 never commit the key or run it in CI.
 
 MCP is opt-in. Put deployment server configs in a gitignored `.cliver/mcp.json`
