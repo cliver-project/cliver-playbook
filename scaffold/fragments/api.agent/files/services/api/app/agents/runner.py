@@ -31,6 +31,7 @@ from app.agents.core import (
     build_system_one_selector,
 )
 from app.agents.learning import load_prompt_overlay
+from app.agents.mcp import select_mcp_servers
 from app.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -148,7 +149,7 @@ class AgentCoreRunner:
                     max_iterations=self.settings.agent_max_iterations,
                     run_timeout=self.settings.agent_llm_timeout,
                     tool_timeout=self.settings.agent_tool_timeout,
-                    mcp_servers=toolkit.mcp_servers or _mcp_servers(context),
+                    mcp_servers=select_mcp_servers(context, toolkit),
                     on_event=on_event,
                 ):
                     if chunk.content:
@@ -221,13 +222,6 @@ def _input_with_prior(context: AgentContext) -> str:
         lines.append(f"- {result.agent}: {result.message}")
     lines.extend(["", "Current request:", context.message])
     return "\n".join(lines)
-
-
-def _mcp_servers(context: AgentContext) -> list[str] | None:
-    configured = context.resources.get("mcp_servers")
-    if not isinstance(configured, (list, tuple)):
-        return None
-    return [str(server) for server in configured] or None
 
 
 def _usage_event(usage: Any) -> dict[str, Any]:

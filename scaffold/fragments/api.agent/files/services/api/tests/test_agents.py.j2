@@ -716,6 +716,63 @@ async def test_agentcore_runner_folds_prior_results_into_the_prompt() -> None:
     assert "second done" in core.user_input
 
 
+def test_keyword_mcp_server_selector_narrows_by_intent() -> None:
+    from app.agents.mcp import KeywordMcpServerSelector, McpServerDescriptor
+
+    selector = KeywordMcpServerSelector()
+    catalog = [
+        McpServerDescriptor(
+            name="crm", description="customers accounts orders", capabilities=("crm.search",)
+        ),
+        McpServerDescriptor(
+            name="docs", description="knowledge base search", capabilities=("docs.read",)
+        ),
+    ]
+    candidates = ["crm", "docs"]
+
+    assert selector.select("find the customer account", candidates, catalog) == ["crm"]
+    assert selector.select("search the knowledge base", candidates, catalog) == ["docs"]
+    assert selector.select("hello", candidates, catalog) == candidates
+
+
+@pytest.mark.asyncio
+async def test_runner_selects_mcp_servers_by_intent() -> None:
+    core = FakeCore()
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+    context = _context("find the customer account")
+    context.resources = {
+        "mcp_servers": ["crm", "docs"],
+        "mcp_server_catalog": [
+            {"name": "crm", "description": "customers accounts orders"},
+            {"name": "docs", "description": "knowledge base search"},
+        ],
+    }
+
+    events = [event async for event in runner.run(EchoAgent(), context)]
+    assert events[-1]["type"] == "agent.result"
+    assert core.kwargs["mcp_servers"] == ["crm"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_selector_failure_falls_back_to_allowed() -> None:
+    core = FakeCore()
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+
+    class BrokenSelector:
+        def select(self, message, candidates, catalog):
+            raise RuntimeError("selector down")
+
+    context = _context("find the customer")
+    context.resources = {
+        "mcp_servers": ["crm", "docs"],
+        "mcp_server_selector": BrokenSelector(),
+    }
+
+    events = [event async for event in runner.run(EchoAgent(), context)]
+    assert events[-1]["type"] == "agent.result"
+    assert core.kwargs["mcp_servers"] == ["crm", "docs"]
+
+
 @pytest.mark.asyncio
 async def test_toolkit_mcp_servers_reach_the_core() -> None:
     core = FakeCore()
