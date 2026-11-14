@@ -21,6 +21,7 @@ from app.agents.models import (
     AgentImprovementEvent,
     AgentRegressionRun,
 )
+from app.agents.versions import GoldenCaseSnapshot, active_golden_cases
 
 
 class RegressionError(Exception):
@@ -104,7 +105,7 @@ async def get_regression_run(db: AsyncSession, proposal_id: str) -> AgentRegress
     )
 
 
-def _case_passes(output: str, case: AgentGoldenCase) -> bool:
+def _case_passes(output: str, case: AgentGoldenCase | GoldenCaseSnapshot) -> bool:
     text = output or ""
     expected = [str(value) for value in (case.expected_contains or [])]
     forbidden = [str(value) for value in (case.forbidden_contains or [])]
@@ -130,18 +131,22 @@ async def run_regression_gate(
     The caller owns the transaction: approval commits this report together
     with the applied config, or commits it before raising on a failed gate.
     """
-    cases = list(
-        (
-            await db.scalars(
-                select(AgentGoldenCase)
-                .where(
-                    AgentGoldenCase.agent == proposal.agent,
-                    AgentGoldenCase.enabled.is_(True),
+    snapshot = await active_golden_cases(db, proposal.agent)
+    if snapshot is not None:
+        cases = snapshot
+    else:
+        cases = list(
+            (
+                await db.scalars(
+                    select(AgentGoldenCase)
+                    .where(
+                        AgentGoldenCase.agent == proposal.agent,
+                        AgentGoldenCase.enabled.is_(True),
+                    )
+                    .order_by(AgentGoldenCase.id)
                 )
-                .order_by(AgentGoldenCase.id)
-            )
-        ).all()
-    )
+            ).all()
+        )
     candidate_append = str((proposal.patch or {}).get("prompt_append", "")).strip()
     base_overlay = await _base_overlay(db, proposal.agent)
     candidate_overlay = (

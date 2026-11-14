@@ -4,7 +4,8 @@
   },
   "nav": {
     "home": "首页",
-    "products": "产品"
+    "products": "产品",
+    "learning": "Agent 学习"
   },
   "home": {
     "title": "欢迎",
@@ -42,5 +43,25 @@
     "notHelpful": "没帮助",
     "feedbackThanks": "感谢反馈。",
     "feedbackFailed": "反馈发送失败，请重试。"
+  },
+  "governance": {
+    "title": "Agent 学习",
+    "subtitle": "查看提案、golden set 和 prompt 历史；审批、回滚和发布都会留痕。",
+    "configVersion": "配置版本",
+    "goldenVersion": "Golden 版本",
+    "passRate": "近期通过率",
+    "feedback": "正向反馈",
+    "proposals": "改进提案",
+    "noProposals": "该 agent 暂无提案。",
+    "approve": "批准",
+    "reject": "拒绝",
+    "goldenSet": "Golden set 版本",
+    "publish": "发布当前 case",
+    "noGolden": "尚无已发布 golden set。",
+    "active": "当前",
+    "activate": "启用",
+    "configHistory": "Prompt 配置历史",
+    "noConfig": "尚无 prompt 配置版本。",
+    "rollback": "回滚"
   }
 }

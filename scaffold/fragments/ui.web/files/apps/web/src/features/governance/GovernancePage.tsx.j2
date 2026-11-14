@@ -1,0 +1,254 @@
+{% if enabled('api.agent') %}
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { Button, Card, CardContent, CardHeader, CardTitle, ErrorState, LoadingState } from "../../ui";
+import {
+  activateGoldenVersion,
+  approveProposal,
+  getLearningSummary,
+  listAgents,
+  listConfigVersions,
+  listGoldenVersions,
+  listProposals,
+  publishGoldenSet,
+  rejectProposal,
+  rollbackConfig,
+} from "./api";
+
+function readError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export default function GovernancePage() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const agents = useQuery({ queryKey: ["agent-catalog"], queryFn: listAgents });
+  const agent = selected || agents.data?.[0]?.name || "";
+  const summary = useQuery({
+    queryKey: ["agent-learning", agent],
+    queryFn: () => getLearningSummary(agent),
+    enabled: Boolean(agent),
+  });
+  const proposals = useQuery({
+    queryKey: ["agent-proposals", agent],
+    queryFn: () => listProposals(agent),
+    enabled: Boolean(agent),
+  });
+  const golden = useQuery({
+    queryKey: ["agent-golden", agent],
+    queryFn: () => listGoldenVersions(agent),
+    enabled: Boolean(agent),
+  });
+  const configs = useQuery({
+    queryKey: ["agent-configs", agent],
+    queryFn: () => listConfigVersions(agent),
+    enabled: Boolean(agent),
+  });
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["agent-learning", agent] }),
+      queryClient.invalidateQueries({ queryKey: ["agent-proposals", agent] }),
+      queryClient.invalidateQueries({ queryKey: ["agent-golden", agent] }),
+      queryClient.invalidateQueries({ queryKey: ["agent-configs", agent] }),
+    ]);
+  };
+
+  const act = async (key: string, action: () => Promise<void>) => {
+    setBusy(key);
+    setActionError(null);
+    try {
+      await action();
+      await refresh();
+    } catch (error) {
+      setActionError(readError(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (agents.isPending) return <LoadingState />;
+  if (agents.error) return <ErrorState message={readError(agents.error)} />;
+
+  return (
+    <section className="mx-auto flex max-w-5xl flex-col gap-4 p-4 md:p-8">
+      <header>
+        <h1 className="text-2xl font-semibold md:text-3xl">{t("governance.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t("governance.subtitle")}</p>
+      </header>
+
+      <div className="flex flex-wrap gap-2">
+        {(agents.data ?? []).map((item) => (
+          <Button
+            key={item.name}
+            type="button"
+            size="sm"
+            variant={item.name === agent ? "default" : "outline"}
+            onClick={() => setSelected(item.name)}
+          >
+            {item.name}
+          </Button>
+        ))}
+      </div>
+
+      {actionError ? <ErrorState message={actionError} /> : null}
+      {summary.error ? <ErrorState message={readError(summary.error)} /> : null}
+
+      {summary.data ? (
+        <div className="grid gap-3 md:grid-cols-4">
+          <Card>
+            <CardHeader><CardTitle className="text-sm">{t("governance.configVersion")}</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-semibold">{summary.data.config_version ?? "—"}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-sm">{t("governance.goldenVersion")}</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-semibold">{summary.data.active_golden_version ?? "—"}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-sm">{t("governance.passRate")}</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-semibold">
+              {summary.data.recent_pass_rate === null
+                ? "—"
+                : `${Math.round(summary.data.recent_pass_rate * 100)}%`}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-sm">{t("governance.feedback")}</CardTitle></CardHeader>
+            <CardContent className="text-2xl font-semibold">
+              {summary.data.positive_feedback}/{summary.data.feedback_count}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      <Card>
+        <CardHeader><CardTitle>{t("governance.proposals")}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {proposals.isPending ? <LoadingState /> : null}
+          {proposals.error ? <ErrorState message={readError(proposals.error)} /> : null}
+          {proposals.data?.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("governance.noProposals")}</p>
+          ) : null}
+          {(proposals.data ?? []).map((proposal) => (
+            <div key={proposal.id} className="rounded-lg border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium">{proposal.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {proposal.kind} · {proposal.status}
+                  </p>
+                </div>
+                {proposal.status === "pending" ? (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={busy !== null}
+                      onClick={() => void act(`approve-${proposal.id}`, () => approveProposal(proposal.id))}
+                    >
+                      {t("governance.approve")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy !== null}
+                      onClick={() => void act(`reject-${proposal.id}`, () => rejectProposal(proposal.id))}
+                    >
+                      {t("governance.reject")}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">{proposal.rationale}</p>
+              {typeof proposal.patch.prompt_append === "string" ? (
+                <pre className="mt-2 overflow-x-auto rounded bg-muted/40 p-2 text-xs">
+                  {proposal.patch.prompt_append}
+                </pre>
+              ) : null}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>{t("governance.goldenSet")}</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy !== null}
+              onClick={() => void act("publish-golden", () => publishGoldenSet(agent))}
+            >
+              {t("governance.publish")}
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {golden.error ? <ErrorState message={readError(golden.error)} /> : null}
+            {golden.data?.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("governance.noGolden")}</p>
+            ) : null}
+            {(golden.data ?? []).map((version) => (
+              <div key={version.id} className="flex items-center justify-between gap-2 rounded border p-2">
+                <div>
+                  <p className="text-sm font-medium">v{version.version}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {version.cases.length} cases · {version.is_active ? t("governance.active") : version.note}
+                  </p>
+                </div>
+                {!version.is_active ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      void act(`golden-${version.id}`, () => activateGoldenVersion(version.id))
+                    }
+                  >
+                    {t("governance.activate")}
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>{t("governance.configHistory")}</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {configs.error ? <ErrorState message={readError(configs.error)} /> : null}
+            {configs.data?.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("governance.noConfig")}</p>
+            ) : null}
+            {(configs.data ?? []).map((version) => (
+              <div key={version.id} className="flex items-center justify-between gap-2 rounded border p-2">
+                <div>
+                  <p className="text-sm font-medium">v{version.version}</p>
+                  <p className="text-xs text-muted-foreground">{version.note}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void act(`rollback-${version.version}`, () =>
+                      rollbackConfig(agent, version.version),
+                    )
+                  }
+                >
+                  {t("governance.rollback")}
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+{% endif %}

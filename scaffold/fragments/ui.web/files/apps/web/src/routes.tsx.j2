@@ -8,6 +8,9 @@ import type { NavItem } from "cliver-playbook-app-basic";
 {% if enabled('ui.web.products') %}
 import { productNavItems, productRoutes } from "./features/products/routes";
 {% endif %}
+{% if enabled('api.agent') %}
+import { governanceNavItems, governanceRoutes } from "./features/governance/routes";
+{% endif %}
 
 import HomePage from "./pages/HomePage";
 
@@ -16,6 +19,9 @@ export const projectRoutes: RouteObject[] = [
 {% if enabled('ui.web.products') %}
   ...productRoutes,
 {% endif %}
+{% if enabled('api.agent') %}
+  ...governanceRoutes,
+{% endif %}
 ];
 
 {% if enabled('api.auth') %}
@@ -23,11 +29,17 @@ export const projectNavItems: AuthedNavItem[] = [
 {% if enabled('ui.web.products') %}
   ...productNavItems,
 {% endif %}
+{% if enabled('api.agent') %}
+  ...governanceNavItems,
+{% endif %}
 ];
 {% else %}
 export const projectNavItems: NavItem[] = [
 {% if enabled('ui.web.products') %}
   ...productNavItems,
+{% endif %}
+{% if enabled('api.agent') %}
+  ...governanceNavItems,
 {% endif %}
 ];
 {% endif %}

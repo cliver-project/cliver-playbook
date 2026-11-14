@@ -1,0 +1,76 @@
+"""Golden-set snapshots and prompt-config version history.
+
+Revision ID: {{ "0006_agent_versions" if enabled('api.products') else "0005_agent_versions" }}
+Revises:{% if enabled('api.products') %} 0005_agent_regression_gate{% else %} 0004_agent_regression_gate{% endif %}
+Create Date: 2026-01-01 00:00:00
+"""
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
+
+revision = "{{ "0006_agent_versions" if enabled('api.products') else "0005_agent_versions" }}"
+down_revision = "{{ "0005_agent_regression_gate" if enabled('api.products') else "0004_agent_regression_gate" }}"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "agent_golden_set_versions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False),
+        sa.Column("cases", JSONB(), nullable=False),
+        sa.Column("note", sa.Text(), nullable=False),
+        sa.Column("created_by", sa.BigInteger(), nullable=True),
+        sa.Column(
+            "is_active",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.UniqueConstraint("agent", "version", name="uq_agent_golden_set_version"),
+    )
+    op.create_index(
+        "ix_agent_golden_set_versions_agent",
+        "agent_golden_set_versions",
+        ["agent"],
+    )
+    op.create_index(
+        "uq_agent_golden_set_active",
+        "agent_golden_set_versions",
+        ["agent"],
+        unique=True,
+        postgresql_where=sa.text("is_active"),
+    )
+
+    op.create_table(
+        "agent_config_versions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False),
+        sa.Column("prompt_overlay", sa.Text(), nullable=False),
+        sa.Column("source_proposal_id", sa.String(length=32), nullable=True),
+        sa.Column("note", sa.Text(), nullable=False),
+        sa.Column("created_by", sa.BigInteger(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.UniqueConstraint("agent", "version", name="uq_agent_config_version"),
+    )
+    op.create_index("ix_agent_config_versions_agent", "agent_config_versions", ["agent"])
+
+
+def downgrade() -> None:
+    op.drop_table("agent_config_versions")
+    op.drop_table("agent_golden_set_versions")

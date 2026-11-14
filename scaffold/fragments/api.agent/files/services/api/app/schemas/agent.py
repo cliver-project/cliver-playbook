@@ -99,6 +99,60 @@ class AgentRegressionRead(BaseModel):
     created_at: datetime
 
 
+class AgentGoldenSetPublishRequest(BaseModel):
+    agent: str = Field(min_length=1, max_length=64)
+    note: str = Field(default="", max_length=2000)
+
+
+class AgentGoldenSetVersionRead(BaseModel):
+    id: int
+    agent: str
+    version: int
+    cases: list[dict[str, Any]]
+    note: str
+    created_by: int | None = None
+    is_active: bool
+    created_at: datetime
+
+
+class AgentGoldenSetVersionList(BaseModel):
+    versions: list[AgentGoldenSetVersionRead]
+
+
+class AgentConfigVersionRead(BaseModel):
+    id: int
+    agent: str
+    version: int
+    prompt_overlay: str
+    source_proposal_id: str | None = None
+    note: str
+    created_by: int | None = None
+    created_at: datetime
+
+
+class AgentConfigVersionList(BaseModel):
+    versions: list[AgentConfigVersionRead]
+
+
+class AgentConfigRollbackRequest(BaseModel):
+    note: str = Field(default="", max_length=2000)
+
+
+class AgentLearningSummaryRead(BaseModel):
+    agent: str
+    config_version: int | None = None
+    config_versions: int
+    prompt_overlay: str
+    active_golden_version: int | None = None
+    golden_versions: int
+    proposal_counts: dict[str, int]
+    feedback_count: int
+    positive_feedback: int
+    recent_pass_rate: float | None = None
+    recent_evaluations: int
+    generated_at: datetime
+
+
 class AgentProposalDecision(BaseModel):
     proposal: AgentProposalRead
     applied: bool

@@ -244,6 +244,52 @@ class AgentGoldenCase(Base):
     )
 
 
+class AgentGoldenSetVersion(Base):
+    """An immutable snapshot of an agent's enabled golden cases."""
+
+    __tablename__ = "agent_golden_set_versions"
+    __table_args__ = (
+        UniqueConstraint("agent", "version", name="uq_agent_golden_set_version"),
+        Index(
+            "uq_agent_golden_set_active",
+            "agent",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    agent: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    cases: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AgentConfigVersion(Base):
+    """Append-only prompt-overlay history for rollback and audit."""
+
+    __tablename__ = "agent_config_versions"
+    __table_args__ = (UniqueConstraint("agent", "version", name="uq_agent_config_version"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    agent: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    prompt_overlay: Mapped[str] = mapped_column(Text, nullable=False)
+    source_proposal_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class AgentRegressionRun(Base):
     """The latest offline gate result for one improvement proposal."""
 

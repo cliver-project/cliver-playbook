@@ -279,6 +279,161 @@ paths:
           description: Reviewer permission required
         "404":
           description: Proposal or report not found
+  /api/v1/agent/golden-set/publish:
+    post:
+      tags: [agent]
+      summary: Publish the current golden cases as an immutable version
+      operationId: publishAgentGoldenSet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentGoldenSetPublishRequest"
+      responses:
+        "201":
+          description: Published golden-set version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentGoldenSetVersion"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Agent not found
+        "422":
+          description: No enabled cases to publish
+  /api/v1/agent/golden-set/versions:
+    get:
+      tags: [agent]
+      summary: List golden-set versions for one agent
+      operationId: listAgentGoldenSetVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agent
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Golden-set versions, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentGoldenSetVersionList"
+        "403":
+          description: Reviewer permission required
+  /api/v1/agent/golden-set/versions/{version_id}/activate:
+    parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      tags: [agent]
+      summary: Activate, or roll back to, a golden-set version
+      operationId: activateAgentGoldenSetVersion
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active golden-set version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentGoldenSetVersion"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Version not found
+  /api/v1/agent/agents/{name}/learning:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [agent]
+      summary: Per-agent learning, proposal and version summary
+      operationId: getAgentLearningSummary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Agent learning summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentLearningSummary"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Agent not found
+  /api/v1/agent/agents/{name}/config/versions:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [agent]
+      summary: List prompt-configuration versions
+      operationId: listAgentConfigVersions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Config versions, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentConfigVersionList"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Agent not found
+  /api/v1/agent/agents/{name}/config/rollback/{version}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      tags: [agent]
+      summary: Roll the active prompt configuration back to a version
+      operationId: rollbackAgentConfig
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentConfigRollbackRequest"
+      responses:
+        "200":
+          description: Learning summary after rollback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentLearningSummary"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Agent or config version not found
   /api/v1/agent/agents:
     get:
       tags: [agent]
@@ -546,6 +701,119 @@ components:
         error:
           type: string
         created_at:
+          type: string
+          format: date-time
+    AgentGoldenSetPublishRequest:
+      type: object
+      required: [agent]
+      properties:
+        agent:
+          type: string
+          minLength: 1
+          maxLength: 64
+        note:
+          type: string
+          maxLength: 2000
+    AgentGoldenSetVersion:
+      type: object
+      required:
+        [id, agent, version, cases, note, is_active, created_at]
+      properties:
+        id:
+          type: integer
+        agent:
+          type: string
+        version:
+          type: integer
+        cases:
+          type: array
+          items:
+            type: object
+        note:
+          type: string
+        created_by:
+          type: [integer, "null"]
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    AgentGoldenSetVersionList:
+      type: object
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentGoldenSetVersion"
+    AgentConfigVersion:
+      type: object
+      required:
+        [id, agent, version, prompt_overlay, note, created_at]
+      properties:
+        id:
+          type: integer
+        agent:
+          type: string
+        version:
+          type: integer
+        prompt_overlay:
+          type: string
+        source_proposal_id:
+          type: [string, "null"]
+        note:
+          type: string
+        created_by:
+          type: [integer, "null"]
+        created_at:
+          type: string
+          format: date-time
+    AgentConfigVersionList:
+      type: object
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentConfigVersion"
+    AgentConfigRollbackRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+    AgentLearningSummary:
+      type: object
+      required:
+        [agent, config_versions, prompt_overlay, golden_versions,
+         proposal_counts, feedback_count, positive_feedback,
+         recent_evaluations, generated_at]
+      properties:
+        agent:
+          type: string
+        config_version:
+          type: [integer, "null"]
+        config_versions:
+          type: integer
+        prompt_overlay:
+          type: string
+        active_golden_version:
+          type: [integer, "null"]
+        golden_versions:
+          type: integer
+        proposal_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        feedback_count:
+          type: integer
+        positive_feedback:
+          type: integer
+        recent_pass_rate:
+          type: [number, "null"]
+        recent_evaluations:
+          type: integer
+        generated_at:
           type: string
           format: date-time
     AgentDescriptor:

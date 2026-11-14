@@ -1,0 +1,139 @@
+{% if enabled('api.agent') and enabled('api.auth') %}
+import { expect, test } from "@playwright/test";
+
+const user = {
+  id: 1,
+  username: "reviewer",
+  email: null,
+  phone: null,
+  display_name: "Reviewer",
+  is_active: true,
+  must_change_password: false,
+  created_at: "2026-01-01T00:00:00Z",
+  role_codes: ["admin"],
+  permissions: ["*"],
+};
+
+const summary = {
+  agent: "products",
+  config_version: 2,
+  config_versions: 2,
+  prompt_overlay: "Always cite the price.",
+  active_golden_version: 1,
+  golden_versions: 1,
+  proposal_counts: { pending: 1, applied: 0 },
+  feedback_count: 4,
+  positive_feedback: 3,
+  recent_pass_rate: 0.75,
+  recent_evaluations: 8,
+  generated_at: "2026-01-01T00:00:00Z",
+};
+
+const proposal = {
+  id: "p1",
+  agent: "products",
+  kind: "prompt",
+  status: "pending",
+  title: "Cite product prices",
+  rationale: "Users report that prices are missing.",
+  patch: { prompt_append: "Always cite the price." },
+  evidence: {},
+  created_at: "2026-01-01T00:00:00Z",
+};
+
+test("learning dashboard shows summary and approves a proposal", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("cliver-token", "e2e-token");
+  });
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user }) }),
+  );
+  await page.route("**/api/v1/agent/agents", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        agents: [
+          {
+            name: "products",
+            description: "Products",
+            capabilities: ["products.list"],
+            autonomy_mode: "proposal",
+            has_pipeline: true,
+          },
+        ],
+      }),
+    }),
+  );
+  await page.route("**/api/v1/agent/agents/products/learning", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(summary) }),
+  );
+  await page.route("**/api/v1/agent/agents/products/config/versions", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        versions: [
+          {
+            id: 2,
+            agent: "products",
+            version: 2,
+            prompt_overlay: "Always cite the price.",
+            source_proposal_id: "p0",
+            note: "Approved improvement proposal.",
+            created_by: 1,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    }),
+  );
+  await page.route("**/api/v1/agent/proposals**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ proposals: [proposal] }),
+    }),
+  );
+  await page.route("**/api/v1/agent/golden-set/versions**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        versions: [
+          {
+            id: 1,
+            agent: "products",
+            version: 1,
+            cases: [{ id: 1 }],
+            note: "v1",
+            created_by: 1,
+            is_active: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    }),
+  );
+  const approved = page.waitForRequest("**/api/v1/agent/proposals/p1/approve");
+  await page.route("**/api/v1/agent/proposals/p1/approve", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        proposal: { ...proposal, status: "applied" },
+        applied: true,
+        requires_manual_apply: false,
+        regression: null,
+      }),
+    }),
+  );
+
+  await page.goto("/learning");
+  await expect(page.getByRole("heading", { name: "Agent learning" })).toBeVisible();
+  await expect(page.getByText("Cite product prices")).toBeVisible();
+  await expect(page.getByText("75%")).toBeVisible();
+  await page.getByRole("button", { name: "Approve" }).click();
+  await approved;
+});
+{% endif %}

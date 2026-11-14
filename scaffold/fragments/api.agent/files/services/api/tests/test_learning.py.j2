@@ -26,10 +26,12 @@ from app.agents.learning import (
 )
 from app.agents.models import (
     AgentConfig,
+    AgentConfigVersion,
     AgentEvaluation,
     AgentExperience,
     AgentFeedback,
     AgentGoldenCase,
+    AgentGoldenSetVersion,
     AgentImprovement,
     AgentImprovementEvent,
     AgentRegressionRun,
@@ -40,6 +42,13 @@ from app.agents.regression import (
     get_regression_run,
 )
 from app.agents.runner import AgentCoreRunner
+from app.agents.versions import (
+    activate_golden_version,
+    active_golden_cases,
+    list_config_versions,
+    publish_golden_set,
+    rollback_config,
+)
 from app.settings import Settings
 
 
@@ -49,6 +58,8 @@ async def clean_learning():
 
     async with open_session() as db:
         for model in (
+            AgentConfigVersion,
+            AgentGoldenSetVersion,
             AgentRegressionRun,
             AgentImprovementEvent,
             AgentImprovement,
@@ -590,6 +601,58 @@ async def test_regression_gate_fails_closed_without_a_runner(db_session):
     assert report.status == "error"
 
 
+@pytest.mark.asyncio
+async def test_golden_set_versions_are_immutable_and_can_be_reactivated(db_session):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="first case",
+        message="list products",
+        expected_contains=["Found"],
+    )
+    first = await publish_golden_set(db_session, "products", actor_id=7, note="first")
+    assert first.is_active is True
+
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="second case",
+        message="list products again",
+        expected_contains=["product"],
+    )
+    second = await publish_golden_set(db_session, "products", actor_id=7, note="second")
+    assert second.version == 2
+    assert second.is_active is True
+    active = await active_golden_cases(db_session, "products")
+    assert active is not None
+    assert len(active) == 2
+
+    await activate_golden_version(db_session, first.id)
+    active = await active_golden_cases(db_session, "products")
+    assert active is not None
+    assert len(active) == 1
+    assert active[0].name == "first case"
+
+
+@pytest.mark.asyncio
+async def test_prompt_config_versions_can_be_rolled_back(db_session):
+    first = await _pending_proposal(db_session, prompt="First guidance.")
+    await approve_proposal(db_session, first.id, actor_id=7)
+    second = await _pending_proposal(db_session, prompt="Second guidance.")
+    await approve_proposal(db_session, second.id, actor_id=7)
+
+    versions = await list_config_versions(db_session, "products")
+    assert [version.version for version in versions] == [2, 1]
+    assert versions[0].prompt_overlay == ("First guidance.\n\nSecond guidance.")
+
+    config = await rollback_config(db_session, "products", 1, actor_id=7, note="restore first")
+    assert config.version == 3
+    assert config.prompt_overlay == "First guidance."
+    restored = await list_config_versions(db_session, "products")
+    assert [version.version for version in restored] == [3, 2, 1]
+    assert restored[0].note == "restore first"
+
+
 class _OverlayAgent:
     name = "products"
     description = "Test agent."
@@ -853,6 +916,43 @@ async def test_golden_case_api_round_trip_and_reviewer_gate(client, auth_headers
         assert deleted.status_code == 200, deleted.text
         empty = await client.get("/api/v1/agent/golden-cases?agent=products", headers=auth_headers)
         assert empty.json()["cases"] == []
+
+
+@pytest.mark.asyncio
+async def test_golden_versions_and_learning_summary_api(client, auth_headers, app_instance):
+    async with _admin_reviewer(app_instance):
+        created = await client.post(
+            "/api/v1/agent/golden-cases",
+            json={
+                "agent": "products",
+                "name": "summary case",
+                "message": "list products",
+                "expected_contains": ["Found"],
+            },
+            headers=auth_headers,
+        )
+        assert created.status_code == 201, created.text
+        published = await client.post(
+            "/api/v1/agent/golden-set/publish",
+            json={"agent": "products", "note": "v1"},
+            headers=auth_headers,
+        )
+        assert published.status_code == 201, published.text
+        version_id = published.json()["id"]
+        versions = await client.get(
+            "/api/v1/agent/golden-set/versions?agent=products",
+            headers=auth_headers,
+        )
+        assert versions.status_code == 200, versions.text
+        assert versions.json()["versions"][0]["is_active"] is True
+        activated = await client.post(
+            f"/api/v1/agent/golden-set/versions/{version_id}/activate",
+            headers=auth_headers,
+        )
+        assert activated.status_code == 200, activated.text
+        summary = await client.get("/api/v1/agent/agents/products/learning", headers=auth_headers)
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["active_golden_version"] == 1
 
 
 @pytest.mark.asyncio

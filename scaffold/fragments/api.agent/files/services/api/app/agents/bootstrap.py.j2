@@ -9,6 +9,20 @@ from app.agents.subagents.products import ProductsAgent
 {% endif %}
 {% if enabled('api.auth') %}
 from app.agents.subagents.profile import ProfileAgent
+from cliver_playbook.app.user.auth.permissions import (
+    Permission,
+    register_permission_codes,
+)
+
+register_permission_codes(
+    [
+        Permission(
+            code="agent:improve",
+            name="Review, publish and roll back agent learning changes",
+            group="Agents",
+        )
+    ]
+)
 {% endif %}
 
 

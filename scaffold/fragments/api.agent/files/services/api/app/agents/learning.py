@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.contracts import AgentContext, AgentResult, AutonomyPolicy
 from app.agents.models import (
     AgentConfig,
+    AgentConfigVersion,
     AgentEvaluation,
     AgentExperience,
     AgentFeedback,
@@ -636,6 +637,16 @@ async def approve_proposal(
                 raise LearningError("Agent prompt overlay limit reached", 422)
             config.prompt_overlay = overlay
             config.version += 1
+        db.add(
+            AgentConfigVersion(
+                agent=proposal.agent,
+                version=config.version,
+                prompt_overlay=config.prompt_overlay,
+                source_proposal_id=proposal.id,
+                note="Approved improvement proposal.",
+                created_by=actor_id,
+            )
+        )
         proposal.status = "applied"
         proposal.applied_at = now
         applied = True

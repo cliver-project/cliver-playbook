@@ -4,7 +4,8 @@
   },
   "nav": {
     "home": "Home",
-    "products": "Products"
+    "products": "Products",
+    "learning": "Agent learning"
   },
   "home": {
     "title": "Welcome",
@@ -42,5 +43,25 @@
     "notHelpful": "Not helpful",
     "feedbackThanks": "Thanks for the feedback.",
     "feedbackFailed": "Could not send feedback. Try again."
+  },
+  "governance": {
+    "title": "Agent learning",
+    "subtitle": "Review proposals, golden sets and prompt history; approve, roll back and publish with audit.",
+    "configVersion": "Config version",
+    "goldenVersion": "Golden version",
+    "passRate": "Recent pass rate",
+    "feedback": "Positive feedback",
+    "proposals": "Improvement proposals",
+    "noProposals": "No proposals for this agent.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "goldenSet": "Golden set versions",
+    "publish": "Publish current cases",
+    "noGolden": "No published golden sets.",
+    "active": "Active",
+    "activate": "Activate",
+    "configHistory": "Prompt config history",
+    "noConfig": "No prompt config versions yet.",
+    "rollback": "Roll back"
   }
 }

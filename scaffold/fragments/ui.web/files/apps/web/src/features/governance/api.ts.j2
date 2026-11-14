@@ -1,0 +1,115 @@
+{% if enabled('api.agent') %}
+import { api } from "cliver-playbook-app-basic";
+
+export interface AgentDescriptor {
+  name: string;
+  description: string;
+  capabilities: string[];
+  autonomy_mode: string;
+  has_pipeline: boolean;
+}
+
+export interface AgentLearningSummary {
+  agent: string;
+  config_version: number | null;
+  config_versions: number;
+  prompt_overlay: string;
+  active_golden_version: number | null;
+  golden_versions: number;
+  proposal_counts: Record<string, number>;
+  feedback_count: number;
+  positive_feedback: number;
+  recent_pass_rate: number | null;
+  recent_evaluations: number;
+  generated_at: string;
+}
+
+export interface AgentProposal {
+  id: string;
+  agent: string;
+  kind: string;
+  status: string;
+  title: string;
+  rationale: string;
+  patch: Record<string, unknown>;
+  evidence: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface GoldenVersion {
+  id: number;
+  agent: string;
+  version: number;
+  cases: Array<Record<string, unknown>>;
+  note: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ConfigVersion {
+  id: number;
+  agent: string;
+  version: number;
+  prompt_overlay: string;
+  source_proposal_id: string | null;
+  note: string;
+  created_at: string;
+}
+
+export async function listAgents(): Promise<AgentDescriptor[]> {
+  const response = await api.get<{ agents: AgentDescriptor[] }>("/agent/agents");
+  return response.data.agents;
+}
+
+export async function getLearningSummary(agent: string): Promise<AgentLearningSummary> {
+  const response = await api.get<AgentLearningSummary>(`/agent/agents/${agent}/learning`);
+  return response.data;
+}
+
+export async function listProposals(agent: string): Promise<AgentProposal[]> {
+  const response = await api.get<{ proposals: AgentProposal[] }>("/agent/proposals", {
+    params: { agent },
+  });
+  return response.data.proposals;
+}
+
+export async function listGoldenVersions(agent: string): Promise<GoldenVersion[]> {
+  const response = await api.get<{ versions: GoldenVersion[] }>(
+    "/agent/golden-set/versions",
+    { params: { agent } },
+  );
+  return response.data.versions;
+}
+
+export async function listConfigVersions(agent: string): Promise<ConfigVersion[]> {
+  const response = await api.get<{ versions: ConfigVersion[] }>(
+    `/agent/agents/${agent}/config/versions`,
+  );
+  return response.data.versions;
+}
+
+export async function approveProposal(id: string): Promise<void> {
+  await api.post(`/agent/proposals/${id}/approve`);
+}
+
+export async function rejectProposal(id: string): Promise<void> {
+  await api.post(`/agent/proposals/${id}/reject`, { note: "Rejected from dashboard" });
+}
+
+export async function publishGoldenSet(agent: string): Promise<void> {
+  await api.post("/agent/golden-set/publish", {
+    agent,
+    note: "Published from dashboard",
+  });
+}
+
+export async function activateGoldenVersion(versionId: number): Promise<void> {
+  await api.post(`/agent/golden-set/versions/${versionId}/activate`);
+}
+
+export async function rollbackConfig(agent: string, version: number): Promise<void> {
+  await api.post(`/agent/agents/${agent}/config/rollback/${version}`, {
+    note: `Rollback to v${version} from dashboard`,
+  });
+}
+{% endif %}

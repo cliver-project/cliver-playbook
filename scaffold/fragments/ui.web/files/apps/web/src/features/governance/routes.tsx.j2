@@ -1,0 +1,25 @@
+{% if enabled('api.agent') %}
+import type { RouteObject } from "react-router-dom";
+
+{% if enabled('api.auth') %}
+import type { AuthedNavItem } from "cliver-playbook-app-user";
+{% else %}
+import type { NavItem } from "cliver-playbook-app-basic";
+{% endif %}
+
+import GovernancePage from "./GovernancePage";
+
+export const governanceRoutes: RouteObject[] = [
+  { path: "learning", element: <GovernancePage /> },
+];
+
+{% if enabled('api.auth') %}
+export const governanceNavItems: AuthedNavItem[] = [
+  { to: "/learning", labelKey: "nav.learning", perm: "agent:improve" },
+];
+{% else %}
+export const governanceNavItems: NavItem[] = [
+  { to: "/learning", labelKey: "nav.learning" },
+];
+{% endif %}
+{% endif %}

@@ -34,7 +34,9 @@ from app.agents.learning import (
     reject_proposal,
 )
 from app.agents.models import (
+    AgentConfigVersion,
     AgentGoldenCase,
+    AgentGoldenSetVersion,
     AgentImprovement,
     AgentRegressionRun,
 )
@@ -51,14 +53,30 @@ from app.agents.regression import (
 from app.agents.regression_runner import build_regression_runner
 from app.agents.runner import build_runner
 from app.agents.runs import TERMINAL_STATUSES, DatabaseRunStore, RunStore
+from app.agents.versions import (
+    VersionError,
+    activate_golden_version,
+    agent_learning_summary,
+    list_config_versions,
+    list_golden_versions,
+    publish_golden_set,
+    rollback_config,
+)
 from app.agents.worker import TERMINAL_EVENT_TYPES, has_local_worker, start_run_worker
 from app.schemas.agent import (
+    AgentConfigRollbackRequest,
+    AgentConfigVersionList,
+    AgentConfigVersionRead,
     AgentDescriptorRead,
     AgentFeedbackCreated,
     AgentFeedbackRequest,
     AgentGoldenCaseCreate,
     AgentGoldenCaseList,
     AgentGoldenCaseRead,
+    AgentGoldenSetPublishRequest,
+    AgentGoldenSetVersionList,
+    AgentGoldenSetVersionRead,
+    AgentLearningSummaryRead,
     AgentListRead,
     AgentProposalDecision,
     AgentProposalList,
@@ -147,6 +165,34 @@ def _regression_read(run: AgentRegressionRun) -> AgentRegressionRead:
         case_results=run.case_results,
         error=run.error,
         created_at=run.created_at,
+    )
+
+
+def _golden_version_read(
+    version: AgentGoldenSetVersion,
+) -> AgentGoldenSetVersionRead:
+    return AgentGoldenSetVersionRead(
+        id=version.id,
+        agent=version.agent,
+        version=version.version,
+        cases=version.cases,
+        note=version.note,
+        created_by=version.created_by,
+        is_active=version.is_active,
+        created_at=version.created_at,
+    )
+
+
+def _config_version_read(version: AgentConfigVersion) -> AgentConfigVersionRead:
+    return AgentConfigVersionRead(
+        id=version.id,
+        agent=version.agent,
+        version=version.version,
+        prompt_overlay=version.prompt_overlay,
+        source_proposal_id=version.source_proposal_id,
+        note=version.note,
+        created_by=version.created_by,
+        created_at=version.created_at,
     )
 
 
@@ -490,6 +536,151 @@ async def get_agent_proposal_regression(
     if run is None:
         raise HTTPException(status_code=404, detail="Regression report not found")
     return _regression_read(run)
+
+
+@router.post(
+    "/golden-set/publish",
+    response_model=AgentGoldenSetVersionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def publish_agent_golden_set(
+    payload: AgentGoldenSetPublishRequest,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentGoldenSetVersionRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    if registry.get(payload.agent) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+{% if enabled('api.auth') %}
+    actor_id = _viewer.user_id
+{% else %}
+    actor_id = None
+{% endif %}
+    try:
+        version = await publish_golden_set(
+            db, payload.agent, actor_id=actor_id, note=payload.note
+        )
+    except VersionError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return _golden_version_read(version)
+
+
+@router.get(
+    "/golden-set/versions",
+    response_model=AgentGoldenSetVersionList,
+)
+async def get_agent_golden_versions(
+    agent: str,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentGoldenSetVersionList:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    versions = await list_golden_versions(db, agent)
+    return AgentGoldenSetVersionList(
+        versions=[_golden_version_read(version) for version in versions]
+    )
+
+
+@router.post(
+    "/golden-set/versions/{version_id}/activate",
+    response_model=AgentGoldenSetVersionRead,
+)
+async def activate_agent_golden_version(
+    version_id: int,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentGoldenSetVersionRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    try:
+        version = await activate_golden_version(db, version_id)
+    except VersionError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return _golden_version_read(version)
+
+
+@router.get(
+    "/agents/{name}/learning",
+    response_model=AgentLearningSummaryRead,
+)
+async def get_agent_learning_summary(
+    name: str,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentLearningSummaryRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    if registry.get(name) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return AgentLearningSummaryRead(**await agent_learning_summary(db, name))
+
+
+@router.get(
+    "/agents/{name}/config/versions",
+    response_model=AgentConfigVersionList,
+)
+async def get_agent_config_versions(
+    name: str,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentConfigVersionList:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    if registry.get(name) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    versions = await list_config_versions(db, name)
+    return AgentConfigVersionList(
+        versions=[_config_version_read(version) for version in versions]
+    )
+
+
+@router.post(
+    "/agents/{name}/config/rollback/{version}",
+    response_model=AgentLearningSummaryRead,
+)
+async def rollback_agent_config(
+    name: str,
+    version: int,
+    payload: AgentConfigRollbackRequest | None = None,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentLearningSummaryRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+    actor_id = _viewer.user_id
+{% else %}
+    actor_id = None
+{% endif %}
+    if registry.get(name) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    note = payload.note if payload is not None else ""
+    try:
+        await rollback_config(db, name, version, actor_id=actor_id, note=note)
+    except VersionError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return AgentLearningSummaryRead(**await agent_learning_summary(db, name))
 
 
 @router.post(
