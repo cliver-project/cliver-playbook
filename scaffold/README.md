@@ -25,13 +25,15 @@ Phase 2 is in progress:
   sees earlier results) and each step runs one sub-agent's Re-Act tool loop;
   without one it uses deterministic single-step routing and the direct
   business method. Sub-agents scope their own tools, skills and MCP servers,
-  and every runner event carries the executing agent. An optional System One
+  and every runner event carries the executing agent. MCP server selection
+  narrows the connected servers by intent. The web `/learning` dashboard
+  exposes proposals, golden-set versions and prompt rollback. An optional System One
   selector (local laya, Bailian, TypeSafe or HTTP) narrows large tool/skill
   catalogues as AgentCore's `candidate_selector`; it is fail-open and has a
   `make system-one-smoke` live check. Runs are durable: events land in
-  `agent_run_events`, one worker executes each run while streams replay and
-  tail it, SSE frames carry `id: <sequence>` for `Last-Event-ID` resume, quiet
-  periods get keepalives,
+  `agent_run_events`, a PostgreSQL queue leases each run with `FOR UPDATE
+  SKIP LOCKED` while streams replay and tail it, SSE frames carry
+  `id: <sequence>` for `Last-Event-ID` resume, quiet periods get keepalives,
   and vanished workers are marked orphaned instead of retried. Tool, skill,
   MCP and permission seams are opt-in. Each result is also observed into a
   redacted, source-checked experience, scored against a 0.6 launch bar and,

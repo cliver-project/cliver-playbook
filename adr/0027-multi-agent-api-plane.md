@@ -243,15 +243,41 @@ the offline gate. Distillation currently runs synchronously in the learning
 hook; moving it to the job runtime is the next scale step. Projects can replace
 the generator through the seam without changing the API or approval path.
 
-Still later: per-agent dashboards and rollout/rollback controls, golden-set
-versioning, and `feedback_dataset` wiring. Until then the scaffold does not
-auto-apply improvements, and evaluator, generator and gate remain replaceable
-seams.
+### Multi-process queue, MCP selection and version controls (2026-11-14)
 
-Verified with 71 API tests in ai-web (25 learning/gate tests: redaction/source
+`POST /runs` now only persists a queued run. `app/agents/job_queue.py` runs a
+consumer in each API process; `DatabaseRunStore.claim_next` leases the oldest
+queued run with `FOR UPDATE SKIP LOCKED`, so adding processes adds consumers
+without duplicate execution. Concurrency and polling are settings. The stream
+endpoint no longer consults a process-local task registry: a running run is
+orphaned only when its heartbeat is stale. Queued runs wait for a consumer;
+they are not failed as orphans.
+
+MCP server selection is a separate seam from the System One tool/skill
+selector. The agent's static `mcp_servers` list is an allow-list, the run's
+`mcp_servers` resource is the deployed catalogue, and a replaceable
+`McpServerSelector` narrows the intersection by intent. The default keyword
+selector fails open to all allowed servers, and selector errors return the
+allow-list rather than breaking a run.
+
+Golden cases can be published as immutable `agent_golden_set_versions` and
+reactivated; the gate uses the active snapshot and falls back to the mutable
+draft only when no version exists. Prompt approvals append to
+`agent_config_versions`; reviewers can list and roll back to an earlier
+version. `GET /agent/agents/{name}/learning` summarizes pass rate, feedback,
+proposal counts, active versions and prompt overlay, and the web `/learning`
+page exposes proposals, golden versions and prompt rollback behind the
+`agent:improve` permission.
+
+Still later: auto-apply, an LLM judge for golden cases, richer rollout/staged
+rollout controls and `feedback_dataset` wiring. Until then the scaffold does
+not auto-apply improvements, and evaluator, generator and gate remain
+replaceable seams.
+
+Verified with 78 API tests in ai-web (28 learning/gate tests: redaction/source
 enforcement, launch-bar evaluation, anonymous feedback upsert, proposal
 creation/approval/rejection, model distillation and deterministic fallback,
 runtime overlay injection, golden-case CRUD, gate pass/fail/skip/fail-closed,
-and reviewer scoping) and 56 passed + 1 skipped in the agent-only variant. The
+and reviewer scoping) and 62 passed + 1 skipped in the agent-only variant. The
 web typecheck, lint, seam-check, build and Playwright chat E2E (feedback
 button included) pass.

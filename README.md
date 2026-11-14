@@ -187,16 +187,17 @@ proposals, optional model-based experience distillation, a golden-set offline
 regression gate, reviewer approval/audit and a prompt overlay applied to later
 runs.
 Sub-agents scope their own tools, skills (`skills/shared` + `skills/<agent>`)
-and MCP servers, and runner events carry the executing agent. An optional
-System One/Laya selector (local laya, Aliyun Bailian, TypeSafe or a generic
+and MCP servers; a fail-open selector narrows the connected MCP servers by
+intent. The web `/learning` dashboard exposes proposals, golden-set versions
+and prompt rollback. An optional System One/Laya selector (local laya, Aliyun Bailian, TypeSafe or a generic
 HTTP decision model) narrows large tool/skill catalogues as AgentCore's
 `candidate_selector`; it is fail-open and only activates above configured
 thresholds. When `CLIVER_AGENT_LLM_*` is configured, the coordinator plans
 through AgentCore structured output and each sub-agent runs a
 tool loop with its own toolkit; with no model configured it falls back to
 deterministic routing and direct business methods. Runs are durable: every
-event is persisted to `agent_run_events`, a single worker executes each run
-while streams replay and tail the log, SSE frames carry `id:` sequence for
+event is persisted to `agent_run_events`, a PostgreSQL queue leases each run
+with `FOR UPDATE SKIP LOCKED` while streams replay and tail the log, SSE frames carry `id:` sequence for
 `Last-Event-ID` resume, quiet periods get keepalive comments, and a vanished
 worker is marked orphaned rather than retried. Skills, MCP clients and
 permission callbacks are opt-in seams. The web reference implements the
