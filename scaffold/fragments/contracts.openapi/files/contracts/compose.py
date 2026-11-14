@@ -43,6 +43,16 @@ def main(argv: list[str]) -> int:
         if not isinstance(extra, dict):
             raise SystemExit(f"{path}: fragment must be a mapping")
         merge(base, extra, path)
+    paths = base.get("paths")
+    if not isinstance(paths, dict) or not paths:
+        raise SystemExit("contract must declare at least one path")
+    for path in paths:
+        if not str(path).startswith("/api/v1/"):
+            raise SystemExit(
+                f"{path}: public paths must start with /api/v1/; "
+                "use a new version for breaking changes"
+            )
+
     rendered = yaml.safe_dump(base, sort_keys=False)
     if "--check" in argv[1:]:
         if not OUT.is_file() or OUT.read_text(encoding="utf-8") != rendered:

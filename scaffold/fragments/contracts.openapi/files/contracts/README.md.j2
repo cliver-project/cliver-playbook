@@ -12,6 +12,28 @@ hand for module endpoints: edit the matching fragment under
 - `contracts/events.json` — streaming event union used by the agent run
   endpoint and the UI.
 
-Generated clients (TypeScript, Swift, Kotlin, Python and Rust) are added in a
-later phase. Until then the clients in the scaffold are hand-written to the
+Generated clients:
+
+- `apps/web/src/contracts/schema.d.ts` — TypeScript types from
+  `openapi-typescript`; regenerate with `make contracts`.
+- `contracts/generated/python/models.py` — Pydantic models from
+  `datamodel-code-generator`; regenerate with `make contracts`.
+
+Both are checked for staleness by `make contracts-check`. Swift, Kotlin and
+Rust clients remain later; the native apps use hand-written DTOs against the
 same shapes.
+
+## Versioning and deprecation
+
+- Public paths live under `/api/v1/`; `compose.py` rejects other prefixes.
+- Within a version, changes are additive: new optional fields, endpoints and
+  event types. Existing field names, types and status codes do not change.
+- Breaking changes ship as a new version (`/api/v2/`) and run in parallel
+  through a documented deprecation window. The old version is removed only
+  after consumers have migrated.
+- A deprecated endpoint or field is marked `deprecated: true` in the fragment
+  and named in release notes with its replacement and removal target.
+- Event types are append-only. Clients must ignore unknown event types and
+  unknown fields; an existing type is never repurposed.
+- Generated clients are updated in the same change as the contract, and
+  `make contracts-check` plus `make contract-test` must pass.
