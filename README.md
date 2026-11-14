@@ -174,10 +174,12 @@ manifests, and
 `scripts/scaffold_project.py --apply MANIFEST --target DIR` writes the project.
 The web app installs and builds against the pinned tag, includes a chat-first
 home, enforces its `src/ui` seam in CI and has a Playwright chat E2E; the iOS
-app builds with XcodeGen/Xcode unsigned and exposes an `AppComponents`
-environment seam; the Android app builds with JDK 17, API 35 and Gradle 8.10.2.
-The native scaffold includes auth, profile, reference product CRUD and
-phone/pad layouts.
+app builds with XcodeGen/Xcode unsigned, exposes an `AppComponents`
+environment seam and passed a simulator register → chat → feedback smoke; the
+Android app ships a Gradle 8.10.2 wrapper, builds with JDK 17/API 35 and passed
+the same flow on an emulator. `make package` produces a host desktop bundle,
+an unsigned simulator app and a debug APK from a fresh project. The native
+scaffold includes auth, profile, reference product CRUD and phone/pad layouts.
 The generated Python API is a multi-agent collaboration platform: a coordinator
 plans an ordered sequence of business-point sub-agents, runs the steps
 sequentially with each later step receiving the earlier results as handoff,
@@ -207,7 +209,7 @@ reachable. All web visuals sit behind `apps/web/src/ui`, and a seam check
 rejects deep visual imports from pages or features. iOS exposes the same
 `AppComponents` seam and a chat-first Assistant tab; Android has the component
 seam, the same chat-first shape and a passing Gradle build. The desktop shell
-is minimal until its sidecar phase. See
+builds a host bundle; sidecars and the updater remain later. See
 `adr/0026-ai-native-project-scaffold.md`, `adr/0027-multi-agent-api-plane.md` and
 `scaffold/README.md`.
 

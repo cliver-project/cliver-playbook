@@ -49,10 +49,14 @@ Phase 2 is in progress:
   Helpful / Not helpful after a run.
 - The Android and iOS fragments generate module-per-feature apps with auth,
   profile, product CRUD and adaptive phone/tablet layouts. The iOS app builds
-  with XcodeGen/Xcode unsigned; the Android app builds and unit-tests with
-  JDK 17, API 35, Build-Tools 35.0.0 and Gradle 8.10.2.
-- The desktop Tauri shell is minimal; local sidecars, signing and the updater
-  are the next desktop phase.
+  with XcodeGen/Xcode unsigned, its Core package has SSE-decoder tests, and the
+  generated simulator app passed register → chat → Helpful feedback against a
+  local API. The Android app includes a checked-in Gradle 8.10.2 wrapper,
+  builds and unit-tests with JDK 17, API 35 and Build-Tools 35.0.0, and passed
+  the same flow on an API 37 emulator.
+- The desktop Tauri shell has an active macOS bundle and generated icon set;
+  local sidecars, signing/notarization and the updater remain the next desktop
+  phase.
 - The `ai-rust-bff` profile is planned but not implemented; `--plan` works, while
   `--apply` fails with a clear "not implemented" error until the Rust BFF and
   Python AgentCore service fragments exist.
@@ -95,6 +99,25 @@ uv run --with pyyaml --with jsonschema --with jinja2 \
 
 `make scaffold-check` runs the self-test and catalog validation.
 `make scaffold-plan MANIFEST=scaffold/examples/ai-web.yaml` prints a plan.
+
+## Packaging a generated project
+
+A generated `ai-full` project has working local packaging targets:
+
+```sh
+make init          # install Python, model-service and web dependencies
+make db-init       # PostgreSQL + migrations
+make check         # API, web, iOS Core and Android unit tests
+make package       # desktop bundle + unsigned simulator app + debug APK
+```
+
+Artifacts land in `services/api/dist/`, `apps/web/dist/`,
+`apps/ios/build/Build/Products/Debug-iphonesimulator/`,
+`apps/android/app/build/outputs/apk/debug/` and
+`apps/desktop/src-tauri/target/release/bundle/`. They are unsigned local
+artifacts; device/store distribution still needs the platform signing identity.
+The Android wrapper is checked in, and the Makefile falls back to the standard
+Xcode install when only Command Line Tools are selected.
 
 ## Manifest in one screen
 
