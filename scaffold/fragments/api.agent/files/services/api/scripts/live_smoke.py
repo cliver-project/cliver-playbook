@@ -10,7 +10,6 @@ permission callback; MCP is exercised when CLIVER_AGENT_MCP_ENABLED is set.
 from __future__ import annotations
 
 import asyncio
-import sys
 
 from cliver_core import AgentCore, ModelBindings, tool
 from cliver_core.compaction import CompactionContext
@@ -31,9 +30,7 @@ async def _chat(settings: Settings) -> None:
     if binding is None:
         raise SystemExit("CLIVER_AGENT_LLM_MODEL/BASE_URL/API_KEY are required")
     async with AgentCore.open(ModelBindings(llm=binding)) as core:
-        response = await core.chat(
-            "Reply with exactly: LIVE_OK", max_iterations=1, run_timeout=60
-        )
+        response = await core.chat("Reply with exactly: LIVE_OK", max_iterations=1, run_timeout=60)
     content = response.message.content or ""
     if "LIVE_OK" not in content:
         raise SystemExit(f"chat smoke failed: {content[:120]!r}")
