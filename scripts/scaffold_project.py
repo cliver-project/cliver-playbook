@@ -1461,6 +1461,7 @@ def _self_test() -> int:
         assert "package-desktop: build-web" in makefile
         assert "test-ios" in makefile
         assert "test-android" in makefile
+        assert "test-model" in makefile
         desktop_ci = (
             full_target / ".github/workflows/desktop.yml"
         ).read_text(encoding="utf-8")

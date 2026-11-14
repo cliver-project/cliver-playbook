@@ -27,7 +27,7 @@ XCODE_DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
 endif
 
 DEV_TARGETS :={% if enabled('api.python') %} dev-api{% endif %}{% if enabled('model.python') %} dev-model{% endif %}{% if enabled('ui.web') %} dev-web{% endif %}
-CHECK_TARGETS :={% if enabled('api.python') %} lint-api test-api{% endif %}{% if enabled('ui.web') %} web-check{% endif %}{% if enabled('ui.mobile.ios') %} test-ios{% endif %}{% if enabled('ui.mobile.android') %} test-android{% endif %}{% if enabled('contracts.openapi') %} contracts-check{% endif %}
+CHECK_TARGETS :={% if enabled('api.python') %} lint-api test-api{% endif %}{% if enabled('model.python') %} test-model{% endif %}{% if enabled('ui.web') %} web-check{% endif %}{% if enabled('ui.mobile.ios') %} test-ios{% endif %}{% if enabled('ui.mobile.android') %} test-android{% endif %}{% if enabled('contracts.openapi') %} contracts-check{% endif %}
 BUILD_TARGETS :={% if enabled('api.python') %} build-api{% endif %}{% if enabled('ui.web') %} build-web{% endif %}{% if enabled('ui.mobile.ios') %} build-ios{% endif %}{% if enabled('ui.mobile.android') %} build-android{% endif %}
 
 .PHONY: help
@@ -143,6 +143,12 @@ lint-api: ## Check API formatting and imports
 .PHONY: test-api
 test-api:{% if enabled('infra.docker') %} db-up{% endif %} ## Run the API tests
 	cd services/api && uv run pytest
+{% endif %}
+
+{% if enabled('model.python') %}
+.PHONY: test-model
+test-model: ## Run the model-service tests
+	cd services/model && uv run pytest
 {% endif %}
 
 {% if enabled('api.agent') %}
