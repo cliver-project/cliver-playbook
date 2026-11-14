@@ -1242,3 +1242,47 @@ async def test_run_rejects_overlong_session_id(client, auth_headers) -> None:
         headers=auth_headers,
     )
     assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_event_contract_envelope_sequence_and_terminal(client, auth_headers) -> None:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "contract event shape"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 202, created.text
+    run_id = created.json()["run_id"]
+    await _wait_status(run_id, "completed")
+
+    response = await client.get(
+        f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers
+    )
+    assert response.status_code == 200, response.text
+    events = _events_from_sse(response.text)
+    assert events, "the stream must contain at least one event"
+    sequences = [event["sequence"] for event in events]
+    assert sequences == list(range(len(sequences))), "sequences must be contiguous"
+    assert all(event["run_id"] == run_id for event in events)
+    assert events[0]["type"] == "run.started"
+    assert events[-1]["type"] == "run.completed"
+    allowed = {
+        "run.started",
+        "coordinator.plan",
+        "agent.selected",
+        "agent.delegated",
+        "agent.result",
+        "pipeline.evaluated",
+        "pipeline.improvement",
+        "message.delta",
+        "tool.call",
+        "tool.result",
+        "skill.selected",
+        "mcp.request",
+        "mcp.response",
+        "artifact",
+        "usage",
+        "run.completed",
+        "run.failed",
+    }
+    assert {event["type"] for event in events} <= allowed

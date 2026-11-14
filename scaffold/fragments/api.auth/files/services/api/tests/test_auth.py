@@ -67,3 +67,28 @@ async def test_login_rejects_a_wrong_password(client):
         json={"username": username, "password": "wrong-password"},
     )
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_profile_can_clear_optional_fields(client):
+    username = f"user_{uuid.uuid4().hex[:10]}"
+    registered = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "password": "secret123",
+            "email": f"{username}@example.com",
+            "display_name": "Clear Me",
+        },
+    )
+    assert registered.status_code == 201, registered.text
+    headers = {"Authorization": f"Bearer {registered.json()['token']}"}
+
+    cleared = await client.patch(
+        "/api/v1/auth/profile",
+        json={"email": None, "phone": None},
+        headers=headers,
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["user"]["email"] is None
+    assert cleared.json()["user"]["phone"] is None
