@@ -141,7 +141,7 @@ lint-api: ## Check API formatting and imports
 	cd services/api && uv run ruff format --check
 
 .PHONY: test-api
-test-api:{% if enabled('infra.docker') %} db-up{% endif %} ## Run the API tests
+test-api: ## Run the API tests (PostgreSQL must be running)
 	cd services/api && uv run pytest
 {% endif %}
 
