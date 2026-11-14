@@ -1312,7 +1312,8 @@ def test_context_compaction_is_opt_in_and_model_backed():
     assert build_context_compactor(no_model) is None
 
 
-def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
+@pytest.mark.asyncio
+async def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
     from cliver_core import tool
     from cliver_core.policy import DecisionAction, ToolCallContext, ToolCategory
 
@@ -1328,7 +1329,7 @@ def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
     toolkit = AgentToolkit(system_prompt="", tools=[declared_tool], mcp_servers=[])
     callback = build_permission_callback(toolkit, context)
 
-    allowed = callback(
+    allowed = await callback(
         ToolCallContext(
             tool_name="declared_tool",
             args={},
@@ -1338,7 +1339,7 @@ def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
     )
     assert allowed.action is DecisionAction.ALLOW
 
-    unknown = callback(
+    unknown = await callback(
         ToolCallContext(
             tool_name="not_declared",
             args={},
@@ -1348,7 +1349,7 @@ def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
     )
     assert unknown.action is DecisionAction.DENY
 
-    mcp_allowed = callback(
+    mcp_allowed = await callback(
         ToolCallContext(
             tool_name="mcp__crm__search",
             args={},
@@ -1358,7 +1359,7 @@ def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
     )
     assert mcp_allowed.action is DecisionAction.ALLOW
 
-    mcp_denied = callback(
+    mcp_denied = await callback(
         ToolCallContext(
             tool_name="mcp__other__search",
             args={},
@@ -1369,7 +1370,8 @@ def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
     assert mcp_denied.action is DecisionAction.DENY
 
 
-def test_read_only_permission_mode_denies_ask_tools():
+@pytest.mark.asyncio
+async def test_read_only_permission_mode_denies_ask_tools():
     from cliver_core import tool
     from cliver_core.policy import DecisionAction, ToolCallContext, ToolCategory
 
@@ -1382,7 +1384,7 @@ def test_read_only_permission_mode_denies_ask_tools():
 
     toolkit = AgentToolkit(system_prompt="", tools=[mutating_tool], permission_mode="read_only")
     callback = build_permission_callback(toolkit, _context())
-    denied = callback(
+    denied = await callback(
         ToolCallContext(
             tool_name="mutating_tool",
             args={},

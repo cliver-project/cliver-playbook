@@ -170,6 +170,10 @@ contract-test: ## Run Schemathesis against the live API on a scratch database
 {% endif %}
 
 {% if enabled('api.agent') %}
+.PHONY: live-smoke
+live-smoke: ## Opt-in live model judge/compaction/MCP/permission smoke (local key)
+	cd services/api && uv run python scripts/live_smoke.py
+
 .PHONY: system-one-smoke
 system-one-smoke: ## Live System One selector check (local laya or a remote provider)
 	cd services/api && uv run --extra local-system-one python scripts/system_one_smoke.py

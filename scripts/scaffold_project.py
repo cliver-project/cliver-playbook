@@ -1464,6 +1464,7 @@ def _self_test() -> int:
         assert "test-android" in makefile
         assert "test-model" in makefile
         assert "contract-test" in makefile
+        assert "live-smoke" in makefile
         assert (full_target / "services/api/scripts/contract_test.py").is_file()
         assert (full_target / "apps/web/src/contracts/schema.d.ts").is_file()
         assert (full_target / "contracts/generated/python/models.py").is_file()

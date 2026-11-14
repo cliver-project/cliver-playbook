@@ -154,6 +154,11 @@ Long runs can enable context compaction with
 through a separate tool-free model call when the previous call's input usage
 crosses the threshold; it is off by default and requires the API-plane model.
 
+`make live-smoke` is an opt-in local check for the configured model: chat,
+LLM judge, context compaction, the scoped permission callback and (when
+enabled) MCP discovery. It reads `CLIVER_AGENT_LLM_*` from the environment;
+never commit the key or run it in CI.
+
 MCP is opt-in. Put deployment server configs in a gitignored `.cliver/mcp.json`
 (or point `CLIVER_AGENT_MCP_CONFIG` at a file) using the `mcpServers` shape,
 then set `CLIVER_AGENT_MCP_ENABLED=true`. `${VAR}` values expand from the

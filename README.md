@@ -182,6 +182,10 @@ Android app ships a Gradle 8.10.2 wrapper, builds with JDK 17/API 35 and passed
 the same flow on an emulator. `make package` produces a host desktop bundle,
 an unsigned simulator app and a debug APK from a fresh project. The native
 scaffold includes auth, profile, reference product CRUD and phone/pad layouts.
+`make contract-test` runs Schemathesis against a live scratch-DB API,
+`make contracts-check` rejects stale TypeScript/Python clients, and the opt-in
+`make live-smoke` exercises the configured model, judge, compaction,
+permissions and MCP locally.
 The generated Python API is a multi-agent collaboration platform: a coordinator
 plans an ordered sequence of business-point sub-agents, runs the steps
 sequentially with each later step receiving the earlier results as handoff,

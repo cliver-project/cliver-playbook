@@ -24,7 +24,7 @@ def build_permission_callback(toolkit: AgentToolkit, context: AgentContext):
     allowed_tools = set(toolkit.allowed_tools) if toolkit.allowed_tools else declared
     selected_mcp = set(select_mcp_servers(context, toolkit) or [])
 
-    def callback(call: ToolCallContext) -> Decision:
+    async def callback(call: ToolCallContext) -> Decision:
         if mode == "allow_all":
             return Decision.allow()
         if mode == "read_only":
