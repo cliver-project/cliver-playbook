@@ -1,0 +1,1075 @@
+import asyncio
+import json
+import time
+import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+
+import pytest
+from cliver_core import (
+    AgentCore,
+    CLIverMessage,
+    ModelBinding,
+    ModelBindings,
+    tool,
+)
+from cliver_core.events import InferenceEvent, InferenceEventType, ToolEvent, ToolEventType
+from cliver_core.messages import CLIverMessageChunk
+from cliver_core.provider import CLIverResponse, Provider
+
+from app.agents.contracts import (
+    AgentContext,
+    AgentDescriptor,
+    AgentIntent,
+    AgentResult,
+    AgentToolkit,
+    AutonomyPolicy,
+)
+from app.agents.coordinator import Coordinator
+from app.agents.core import (
+    build_llm_binding,
+    build_system_one_binding,
+    build_system_one_selector,
+)
+from app.agents.pipeline import NoopPipeline
+from app.agents.planner import (
+    AgentCorePlanModel,
+    AgentCorePlanner,
+    DeterministicPlanner,
+    PlanChoice,
+    PlanDecision,
+    PlanStepChoice,
+    build_planner,
+)
+from app.agents.registry import AgentRegistry
+from app.agents.runner import (
+    AgentCoreRunner,
+    DeterministicRunner,
+    build_runner,
+)
+{% if enabled('api.products') %}
+from app.agents.subagents.products import ProductsAgent
+{% endif %}
+from app.settings import Settings
+
+AUTH_ENABLED = {{ "True" if enabled('api.auth') else "False" }}
+
+
+class GateRunner:
+    """Test runner that blocks on a gate before yielding one result event."""
+
+    def __init__(self, gate: asyncio.Event, calls: list[str] | None = None) -> None:
+        self.gate = gate
+        self.calls = calls
+
+    async def run(self, agent, context):
+        if self.calls is not None:
+            self.calls.append(context.run_id)
+        await self.gate.wait()
+        yield {
+            "type": "agent.result",
+            "agent": agent.name,
+            "message": "gated result",
+            "data": {},
+        }
+
+
+async def _wait_status(run_id: str, expected: str, timeout: float = 5.0):
+    from app.agents.runs import DatabaseRunStore
+    from cliver_playbook.app.basic.db.session import open_session
+
+    deadline = time.monotonic() + timeout
+    while True:
+        async with open_session() as db:
+            record = await DatabaseRunStore(db).get(run_id)
+        if record is not None and record.status == expected:
+            return record
+        if time.monotonic() >= deadline:
+            pytest.fail(f"run {run_id} never reached status {expected!r}: {record}")
+        await asyncio.sleep(0.05)
+
+
+def _events_from_sse(body: str) -> list[dict]:
+    events = []
+    for block in body.split("\n\n"):
+        data = "\n".join(line[5:] for line in block.splitlines() if line.startswith("data:"))
+        if data:
+            events.append(json.loads(data))
+    return events
+
+
+class EchoAgent:
+    name = "echo"
+    description = "Echo the message."
+    capabilities = ("echo",)
+    autonomy = AutonomyPolicy()
+    pipeline = NoopPipeline()
+
+    def can_handle(self, intent: AgentIntent) -> bool:
+        return str(intent.payload.get("message", "")).lower().startswith("echo")
+
+    def toolkit(self, context: AgentContext) -> AgentToolkit:
+        return AgentToolkit(system_prompt="Echo the request.", tools=[])
+
+    async def run(self, context: AgentContext) -> AgentResult:
+        return AgentResult(agent=self.name, message=f"echo: {context.message}")
+
+
+class FakePlanModel:
+    def __init__(
+        self,
+        choice: PlanChoice | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self.choice = choice
+        self.error = error
+
+    async def choose(self, message: str, agents: list[AgentDescriptor]) -> PlanChoice:
+        if self.error is not None:
+            raise self.error
+        assert self.choice is not None
+        return self.choice
+
+
+class RecordingAgent(EchoAgent):
+    """Appends the prior-step agents into its result for handoff assertions."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    async def run(self, context: AgentContext) -> AgentResult:
+        return AgentResult(
+            agent=self.name,
+            message=f"{self.name} done",
+            data={"prior": [result.agent for result in context.prior_results]},
+        )
+
+
+class ToolRunner:
+    """Yields tool and delta events so attribution can be asserted."""
+
+    async def run(self, agent, context):
+        yield {"type": "tool.call", "tool_call_id": "c1", "name": "t", "arguments": {}}
+        yield {"type": "message.delta", "delta": "hi"}
+        yield {"type": "agent.result", "agent": agent.name, "message": "done", "data": {}}
+
+
+class FakePlanProvider(Provider):
+    protocol = "openai"
+    brand = "fake"
+
+    def __init__(self, content: str) -> None:
+        super().__init__("test-key", "http://127.0.0.1:9/v1")
+        self.content = content
+
+    async def chat(self, request) -> CLIverResponse:
+        return CLIverResponse(message=CLIverMessage(role="assistant", content=self.content))
+
+    async def stream(self, request) -> AsyncIterator[CLIverMessageChunk]:
+        yield CLIverMessageChunk(content=self.content)
+
+
+class ToolEchoAgent(EchoAgent):
+    def toolkit(self, context: AgentContext) -> AgentToolkit:
+        @tool(
+            name="echo_tool",
+            description="Echo text back to the caller.",
+            safety="safe",
+        )
+        async def echo_tool(text: str) -> list[dict]:
+            return [{"text": text}]
+
+        return AgentToolkit(
+            system_prompt="Use the echo tool when the request asks for it.",
+            tools=[echo_tool],
+        )
+
+
+class FakeToolProvider(Provider):
+    protocol = "openai"
+    brand = "fake"
+
+    def __init__(self) -> None:
+        super().__init__("test-key", "http://127.0.0.1:9/v1")
+        self.calls = 0
+
+    async def chat(self, request) -> CLIverResponse:
+        raise AssertionError("the streaming path is expected")
+
+    async def stream(self, request) -> AsyncIterator[CLIverMessageChunk]:
+        self.calls += 1
+        if self.calls == 1:
+            yield CLIverMessageChunk(
+                native={
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call-1",
+                            "type": "function",
+                            "function": {
+                                "name": "echo_tool",
+                                "arguments": '{"text": "hi"}',
+                            },
+                        }
+                    ],
+                }
+            )
+            return
+        yield CLIverMessageChunk(content="Hello from tools")
+        yield CLIverMessageChunk(native={"role": "assistant", "content": "Hello from tools"})
+
+
+class FakeCore:
+    def __init__(self) -> None:
+        self.toolkit: AgentToolkit | None = None
+        self.kwargs: dict[str, object] = {}
+        self.user_input = ""
+
+    async def stream(self, user_input: str, **kwargs: object) -> AsyncIterator[CLIverMessageChunk]:
+        self.kwargs = kwargs
+        self.user_input = user_input
+        on_event = kwargs["on_event"]
+        await on_event(
+            ToolEvent(
+                event=ToolEventType.START,
+                tool_name="echo_tool",
+                tool_call_id="call-1",
+                args={"text": "hi"},
+            )
+        )
+        await on_event(
+            ToolEvent(
+                event=ToolEventType.END,
+                tool_name="echo_tool",
+                tool_call_id="call-1",
+                result="ok",
+            )
+        )
+        await on_event(
+            InferenceEvent(
+                event=InferenceEventType.COMPLETED,
+                model="test-model",
+                provider="test-provider",
+                data={"usage": {"input_tokens": 3, "output_tokens": 2}},
+            )
+        )
+        yield CLIverMessageChunk(content="Hello ")
+        yield CLIverMessageChunk(content="world")
+
+
+class BrokenCore:
+    async def stream(self, user_input: str, **kwargs: object) -> AsyncIterator[CLIverMessageChunk]:
+        raise RuntimeError("model down")
+        yield CLIverMessageChunk()
+
+
+def _context(message: str = "echo hello") -> AgentContext:
+    return AgentContext(run_id="run-test", message=message)
+
+
+def _runner_settings() -> SimpleNamespace:
+    return SimpleNamespace(
+        agent_llm_model="test-model",
+        agent_max_iterations=8,
+        agent_llm_timeout=30.0,
+        agent_tool_timeout=10.0,
+    )
+
+
+def _core_factory(core: FakeCore | BrokenCore):
+    @asynccontextmanager
+    async def open_core(context, toolkit, settings):
+        if isinstance(core, FakeCore):
+            core.toolkit = toolkit
+        yield core
+
+    return open_core
+
+
+@asynccontextmanager
+async def _real_core_factory(context, toolkit, settings):
+    binding = ModelBinding.llm(
+        model="fake-model",
+        provider=FakeToolProvider(),
+    )
+    async with AgentCore.open(
+        ModelBindings(llm=binding),
+        builtin_tools=toolkit.tools,
+    ) as core:
+        yield core
+
+
+def test_registry_rejects_duplicate_names() -> None:
+    registry = AgentRegistry()
+    registry.register(EchoAgent())
+    with pytest.raises(ValueError, match="already registered"):
+        registry.register(EchoAgent())
+
+
+def test_agent_model_requires_an_endpoint() -> None:
+    with pytest.raises(ValueError, match="CLIVER_AGENT_LLM_BASE_URL"):
+        Settings(_env_file=None, agent_llm_model="test-model")
+
+
+def test_agent_settings_build_the_llm_binding() -> None:
+    settings = Settings(
+        _env_file=None,
+        agent_llm_model="test-model",
+        agent_llm_api_key="test-key",
+        agent_llm_base_url="http://127.0.0.1:9/v1",
+        agent_llm_temperature=0.2,
+        agent_llm_max_tokens=64,
+        agent_llm_timeout=5.0,
+    )
+    binding = build_llm_binding(settings)
+    assert binding is not None
+    assert binding.model == "test-model"
+    assert binding.base_url == "http://127.0.0.1:9/v1"
+    assert binding.api_key == "test-key"
+    assert binding.protocol == "openai"
+    assert binding.client_timeout == 5.0
+    assert binding.params == {"temperature": 0.2, "max_tokens": 64}
+
+
+def test_configuration_selects_the_matching_planner_and_runner() -> None:
+    offline = Settings(_env_file=None, agent_llm_model="")
+    assert isinstance(build_planner(offline), DeterministicPlanner)
+    assert isinstance(build_runner(offline), DeterministicRunner)
+
+    online = Settings(
+        _env_file=None,
+        agent_llm_model="test-model",
+        agent_llm_base_url="http://127.0.0.1:9/v1",
+    )
+    assert isinstance(build_planner(online), AgentCorePlanner)
+    assert isinstance(build_runner(online), AgentCoreRunner)
+
+
+def test_system_one_is_opt_in() -> None:
+    settings = Settings(_env_file=None, agent_system_one_provider="")
+    assert build_system_one_binding(settings) is None
+    assert build_system_one_selector(settings) is None
+
+
+def test_bailian_system_one_binding_maps_settings() -> None:
+    settings = Settings(
+        _env_file=None,
+        agent_system_one_provider="bailian",
+        agent_system_one_workspace_id="workspace-test",
+        agent_system_one_api_key="test-key",
+        agent_system_one_model="decision-model-preview",
+        agent_system_one_region="cn-beijing",
+        agent_system_one_min_tools=2,
+        agent_system_one_top_k_tools=2,
+        agent_system_one_min_skills=2,
+        agent_system_one_top_k_skills=2,
+    )
+    binding = build_system_one_binding(settings)
+    assert binding is not None
+    assert binding.purpose == "system_one"
+    assert binding.model == "decision-model-preview"
+    assert "workspace-test.cn-beijing" in binding.base_url
+
+    selector = build_system_one_selector(settings, binding=binding)
+    assert selector is not None
+    assert selector.fit_threshold == 0.3
+    assert selector.min_tools == 2
+    assert selector.top_k_tools == 2
+
+
+def test_system_one_http_binding_requires_an_endpoint() -> None:
+    with pytest.raises(ValueError, match="CLIVER_AGENT_SYSTEM_ONE_BASE_URL"):
+        Settings(
+            _env_file=None,
+            agent_system_one_provider="http",
+            agent_system_one_model="custom-decision",
+        )
+
+
+def test_local_system_one_binding_uses_the_laya_provider() -> None:
+    pytest.importorskip("laya")
+    settings = Settings(
+        _env_file=None,
+        agent_system_one_provider="local",
+        agent_system_one_model="multilingual",
+    )
+    binding = build_system_one_binding(settings)
+    assert binding is not None
+    assert binding.protocol == "local"
+    assert binding.model == "multilingual"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_delegates_to_a_sub_agent() -> None:
+    registry = AgentRegistry()
+    registry.register(EchoAgent())
+    coordinator = Coordinator(registry, default_agent="echo")
+    context = AgentContext(run_id="run-1", message="echo hello")
+    events = [event async for event in coordinator.stream(context)]
+    types = [event["type"] for event in events]
+    assert types[0] == "run.started"
+    assert "coordinator.plan" in types
+    assert "agent.selected" in types
+    assert "agent.result" in types
+    assert "pipeline.evaluated" in types
+    assert types[-1] == "run.completed"
+    result = next(event for event in events if event["type"] == "agent.result")
+    assert result["agent"] == "echo"
+    assert result["message"] == "echo: echo hello"
+
+
+@pytest.mark.asyncio
+async def test_agentcore_planner_selects_each_model_step() -> None:
+    planner = AgentCorePlanner(
+        FakePlanModel(
+            PlanChoice(
+                steps=[
+                    PlanStepChoice(
+                        agent="echo",
+                        confidence=0.9,
+                        reason="the request starts with echo",
+                    ),
+                    PlanStepChoice(agent="echo"),
+                ]
+            )
+        ),
+        fallback=DeterministicPlanner(),
+    )
+    decision = await planner.plan(_context(), (EchoAgent(),))
+    assert decision.planner == "agentcore"
+    assert [intent.name for intent in decision.steps] == ["echo", "echo"]
+    assert decision.steps[0].confidence == 0.9
+    assert decision.steps[0].payload["reason"] == "the request starts with echo"
+    assert decision.fallback_reason is None
+
+
+@pytest.mark.asyncio
+async def test_agentcore_plan_model_uses_the_real_agentcore_path(
+    monkeypatch,
+) -> None:
+    binding = ModelBinding.llm(
+        model="fake-model",
+        provider=FakePlanProvider(
+            '{"steps": [{"agent": "echo", "confidence": 0.7, "reason": "echo request"}]}'
+        ),
+    )
+    monkeypatch.setattr("app.agents.planner.build_llm_binding", lambda settings: binding)
+    model = AgentCorePlanModel(SimpleNamespace(agent_llm_timeout=5.0))
+    choice = await model.choose(
+        "echo hi",
+        [
+            AgentDescriptor(
+                name="echo",
+                description="Echo the message.",
+                capabilities=("echo",),
+                autonomy_mode="off",
+                has_pipeline=True,
+            )
+        ],
+    )
+    assert [step.agent for step in choice.steps] == ["echo"]
+    assert choice.steps[0].confidence == 0.7
+
+
+@pytest.mark.asyncio
+async def test_agentcore_planner_falls_back_when_the_model_fails() -> None:
+    planner = AgentCorePlanner(
+        FakePlanModel(error=RuntimeError("offline")),
+        fallback=DeterministicPlanner(),
+    )
+    decision = await planner.plan(_context(), (EchoAgent(),))
+    assert decision.planner == "deterministic"
+    assert decision.steps[0].name == "echo"
+    assert "offline" in str(decision.fallback_reason)
+
+
+@pytest.mark.asyncio
+async def test_agentcore_planner_rejects_an_unknown_agent() -> None:
+    planner = AgentCorePlanner(
+        FakePlanModel(PlanChoice(steps=[PlanStepChoice(agent="missing")])),
+        fallback=DeterministicPlanner(),
+    )
+    decision = await planner.plan(_context(), (EchoAgent(),))
+    assert decision.planner == "deterministic"
+    assert decision.steps[0].name == "echo"
+    assert "missing" in str(decision.fallback_reason)
+
+
+@pytest.mark.asyncio
+async def test_agentcore_planner_rejects_an_overlong_plan() -> None:
+    planner = AgentCorePlanner(
+        FakePlanModel(
+            PlanChoice(steps=[PlanStepChoice(agent="echo"), PlanStepChoice(agent="echo")])
+        ),
+        fallback=DeterministicPlanner(),
+        max_steps=1,
+    )
+    decision = await planner.plan(_context(), (EchoAgent(),))
+    assert decision.planner == "deterministic"
+    assert len(decision.steps) == 1
+    assert "agent_plan_max_steps" in str(decision.fallback_reason)
+
+
+@pytest.mark.asyncio
+async def test_coordinator_runs_a_multi_step_plan_with_handoff() -> None:
+    class TwoStepPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="first", confidence=1.0, payload={}),
+                    AgentIntent(name="second", confidence=1.0, payload={}),
+                ),
+                planner="test",
+            )
+
+    registry = AgentRegistry()
+    registry.register(RecordingAgent("first"))
+    registry.register(RecordingAgent("second"))
+    coordinator = Coordinator(registry, planner=TwoStepPlanner())
+
+    events = [event async for event in coordinator.stream(_context("do both"))]
+    selected = [event for event in events if event["type"] == "agent.selected"]
+    assert [event["agent"] for event in selected] == ["first", "second"]
+    assert [event["step"] for event in selected] == [0, 1]
+    results = [event for event in events if event["type"] == "agent.result"]
+    assert [event["agent"] for event in results] == ["first", "second"]
+    assert results[1]["data"]["prior"] == ["first"]
+    assert events[-1]["type"] == "run.completed"
+
+
+@pytest.mark.asyncio
+async def test_multi_step_sources_are_isolated_per_agent() -> None:
+    class TwoStepPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="first", confidence=1.0, payload={}),
+                    AgentIntent(name="second", confidence=1.0, payload={}),
+                ),
+                planner="test",
+            )
+
+    class SourceAgent(EchoAgent):
+        def __init__(self, name: str, source: str, captured: list[tuple[str, tuple]]):
+            self.name = name
+            self.source = source
+            self.captured = captured
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            sources = [*context.metadata.get("sources", ()), self.source]
+            context.metadata["sources"] = sources
+            self.captured.append((self.name, tuple(sources)))
+            return AgentResult(agent=self.name, message=f"{self.name} done")
+
+    captured: list[tuple[str, tuple]] = []
+    registry = AgentRegistry()
+    registry.register(SourceAgent("first", "orders", captured))
+    registry.register(SourceAgent("second", "profile", captured))
+    coordinator = Coordinator(registry, planner=TwoStepPlanner())
+    context = AgentContext(
+        run_id="run-sources",
+        message="do both",
+        metadata={"sources": ["crm"]},
+    )
+
+    events = [event async for event in coordinator.stream(context)]
+    assert events[-1]["type"] == "run.completed"
+    assert captured == [
+        ("first", ("crm", "orders")),
+        ("second", ("crm", "profile")),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_coordinator_completes_when_the_pipeline_fails() -> None:
+    class FailingPipeline:
+        async def observe(self, context, result):
+            raise RuntimeError("observe failed")
+
+        async def evaluate(self, context, result):
+            raise RuntimeError("evaluate failed")
+
+        async def improve(self, context, evaluation):
+            raise RuntimeError("improve failed")
+
+    class FailingAgent(EchoAgent):
+        pipeline = FailingPipeline()
+
+    registry = AgentRegistry()
+    registry.register(FailingAgent())
+    coordinator = Coordinator(registry, default_agent="echo")
+
+    events = [
+        event async for event in coordinator.stream(_context("echo through a broken pipeline"))
+    ]
+    evaluation = next(event for event in events if event["type"] == "pipeline.evaluated")
+
+    assert evaluation["evaluation"]["status"] == "error"
+    assert events[-1]["type"] == "run.completed"
+
+
+@pytest.mark.asyncio
+async def test_multi_step_plan_fails_cleanly_on_a_missing_step_agent() -> None:
+    class MissingStepPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="echo", confidence=1.0, payload={}),
+                    AgentIntent(name="ghost", confidence=1.0, payload={}),
+                ),
+                planner="test",
+            )
+
+    registry = AgentRegistry()
+    registry.register(EchoAgent())
+    coordinator = Coordinator(registry, planner=MissingStepPlanner())
+    events = [event async for event in coordinator.stream(_context("echo"))]
+    assert events[-1]["type"] == "run.failed"
+    assert events[-1]["code"] == "no_agent"
+    assert "ghost" in events[-1]["message"]
+
+
+@pytest.mark.asyncio
+async def test_runner_events_carry_agent_attribution() -> None:
+    registry = AgentRegistry()
+    registry.register(EchoAgent())
+    coordinator = Coordinator(registry, runner=ToolRunner())
+    events = [event async for event in coordinator.stream(_context("echo"))]
+    tool_call = next(event for event in events if event["type"] == "tool.call")
+    delta = next(event for event in events if event["type"] == "message.delta")
+    assert tool_call["agent"] == "echo"
+    assert delta["agent"] == "echo"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_marks_the_agentcore_planner() -> None:
+    registry = AgentRegistry()
+    registry.register(EchoAgent())
+    coordinator = Coordinator(
+        registry,
+        planner=AgentCorePlanner(
+            FakePlanModel(PlanChoice(steps=[PlanStepChoice(agent="echo", confidence=0.8)])),
+        ),
+    )
+    events = [event async for event in coordinator.stream(_context("echo hi"))]
+    selected = next(event for event in events if event["type"] == "agent.selected")
+    assert selected["reason"] == "planner:agentcore"
+    result = next(event for event in events if event["type"] == "agent.result")
+    assert result["message"] == "echo: echo hi"
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_streams_tool_and_message_events() -> None:
+    core = FakeCore()
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+    events = [event async for event in runner.run(EchoAgent(), _context())]
+    types = [event["type"] for event in events]
+    assert types == [
+        "tool.call",
+        "tool.result",
+        "usage",
+        "message.delta",
+        "message.delta",
+        "agent.result",
+    ]
+    call = next(event for event in events if event["type"] == "tool.call")
+    assert call["name"] == "echo_tool"
+    assert call["arguments"] == {"text": "hi"}
+    result = events[-1]
+    assert result["message"] == "Hello world"
+    assert result["data"]["mode"] == "agentcore"
+    assert core.toolkit is not None
+    assert core.toolkit.system_prompt == "Echo the request."
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_executes_a_tool_round_trip() -> None:
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_real_core_factory)
+    events = [event async for event in runner.run(ToolEchoAgent(), _context())]
+    types = [event["type"] for event in events]
+    assert "tool.call" in types
+    assert "tool.result" in types
+    assert "message.delta" in types
+    call = next(event for event in events if event["type"] == "tool.call")
+    assert call["name"] == "echo_tool"
+    assert call["arguments"] == {"text": "hi"}
+    result = events[-1]
+    assert result["message"] == "Hello from tools"
+    assert result["data"]["mode"] == "agentcore"
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_folds_prior_results_into_the_prompt() -> None:
+    core = FakeCore()
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+    context = _context("summarize both")
+    context.prior_results = [
+        AgentResult(agent="first", message="first done"),
+        AgentResult(agent="second", message="second done"),
+    ]
+    events = [event async for event in runner.run(EchoAgent(), context)]
+    assert events[-1]["type"] == "agent.result"
+    assert "summarize both" in core.user_input
+    assert "first done" in core.user_input
+    assert "second done" in core.user_input
+
+
+@pytest.mark.asyncio
+async def test_toolkit_mcp_servers_reach_the_core() -> None:
+    core = FakeCore()
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+
+    class McpAgent(EchoAgent):
+        def toolkit(self, context: AgentContext) -> AgentToolkit:
+            base = super().toolkit(context)
+            base.mcp_servers = ["crm"]
+            return base
+
+    events = [event async for event in runner.run(McpAgent(), _context())]
+    assert events[-1]["type"] == "agent.result"
+    assert core.kwargs["mcp_servers"] == ["crm"]
+
+
+def test_skills_are_scoped_per_agent(tmp_path) -> None:
+    from app.agents.core import build_skill_manager
+
+    def write_skill(path, name, description):
+        path.mkdir(parents=True)
+        (path / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: {description}\n---\nUse it.\n",
+            encoding="utf-8",
+        )
+
+    write_skill(tmp_path / "shared" / "greet", "greet", "Shared greeting skill.")
+    write_skill(tmp_path / "products" / "price", "price", "Product pricing skill.")
+    settings = Settings(_env_file=None, agent_skills_dir=str(tmp_path))
+
+    general = build_skill_manager(settings, "general")
+    products = build_skill_manager(settings, "products")
+    assert general is not None and products is not None
+    assert general.get_skill_names() == ["greet"]
+    assert sorted(products.get_skill_names()) == ["greet", "price"]
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_falls_back_before_emitting_output() -> None:
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(BrokenCore()))
+    events = [event async for event in runner.run(EchoAgent(), _context())]
+    assert [event["type"] for event in events] == ["agent.result"]
+    result = events[0]
+    assert result["message"] == "echo: echo hello"
+    assert result["data"]["mode"] == "deterministic"
+    assert "model down" in result["data"]["fallback_reason"]
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_uses_the_business_path_without_a_model() -> None:
+    runner = AgentCoreRunner(SimpleNamespace(agent_llm_model=""))
+    events = [event async for event in runner.run(EchoAgent(), _context())]
+    assert [event["type"] for event in events] == ["agent.result"]
+    assert events[0]["message"] == "echo: echo hello"
+    assert events[0]["data"]["mode"] == "deterministic"
+
+
+@pytest.mark.asyncio
+async def test_run_state_persists_across_sessions(client, auth_headers) -> None:
+    from app.agents.runs import DatabaseRunStore
+    from cliver_playbook.app.basic.db.session import open_session
+
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "persist this run"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 202, created.text
+    run_id = created.json()["run_id"]
+
+    streamed = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert streamed.status_code == 200, streamed.text
+
+    record = await _wait_status(run_id, "completed")
+    assert record.message == "persist this run"
+
+    async with open_session() as db:
+        again = await DatabaseRunStore(db).get(run_id)
+    assert again is not None
+    assert again.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_stream_replays_a_completed_run(client, auth_headers) -> None:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "replay me"},
+        headers=auth_headers,
+    )
+    run_id = created.json()["run_id"]
+    await _wait_status(run_id, "completed")
+
+    first = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    second = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert first.status_code == 200, first.text
+    assert second.text == first.text, "replay must be stable"
+    assert "run.completed" in second.text
+
+
+@pytest.mark.asyncio
+async def test_stream_resumes_from_last_event_id(client, auth_headers) -> None:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "resume me"},
+        headers=auth_headers,
+    )
+    run_id = created.json()["run_id"]
+    await _wait_status(run_id, "completed")
+
+    full = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    events = _events_from_sse(full.text)
+    sequences = [event["sequence"] for event in events]
+    assert sequences == sorted(sequences)
+    cut = sequences[2]
+
+    resumed = await client.get(
+        f"/api/v1/agent/runs/{run_id}/events",
+        headers={**auth_headers, "Last-Event-ID": str(cut)},
+    )
+    assert resumed.status_code == 200, resumed.text
+    resumed_events = _events_from_sse(resumed.text)
+    assert [event["sequence"] for event in resumed_events] == [
+        sequence for sequence in sequences if sequence > cut
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_executes_once_for_concurrent_streams(client, auth_headers, monkeypatch) -> None:
+    gate = asyncio.Event()
+    calls: list[str] = []
+    monkeypatch.setattr("app.api.agent.build_runner", lambda settings: GateRunner(gate, calls))
+
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "only once"},
+        headers=auth_headers,
+    )
+    run_id = created.json()["run_id"]
+
+    async def consume() -> str:
+        response = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+        assert response.status_code == 200, response.text
+        return response.text
+
+    first_task = asyncio.create_task(consume())
+    second_task = asyncio.create_task(consume())
+    await asyncio.sleep(0.15)
+    gate.set()
+    first_body, second_body = await asyncio.gather(first_task, second_task)
+
+    assert first_body == second_body
+    assert "run.completed" in first_body
+    assert len(calls) == 1, "concurrent streams must not execute the run twice"
+
+
+@pytest.mark.asyncio
+async def test_cancel_during_run_persists_cancelled_event(
+    client, auth_headers, monkeypatch
+) -> None:
+    gate = asyncio.Event()
+    monkeypatch.setattr("app.api.agent.build_runner", lambda settings: GateRunner(gate))
+
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "cancel while running"},
+        headers=auth_headers,
+    )
+    run_id = created.json()["run_id"]
+    await _wait_status(run_id, "running")
+
+    cancelled = await client.post(f"/api/v1/agent/runs/{run_id}/cancel", headers=auth_headers)
+    assert cancelled.status_code == 202, cancelled.text
+
+    streamed = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert streamed.status_code == 200, streamed.text
+    assert '"code":"cancelled"' in streamed.text
+
+    record = await _wait_status(run_id, "cancelled")
+    assert record.cancelled is True
+
+
+@pytest.mark.asyncio
+async def test_orphaned_running_run_is_failed(client, auth_headers) -> None:
+    from sqlalchemy import text
+
+    from app.agents.runs import DatabaseRunStore
+    from cliver_playbook.app.basic.db.session import open_session
+
+    run_id = uuid.uuid4().hex
+    async with open_session() as db:
+        await DatabaseRunStore(db).create(run_id, message="orphaned run", user_id=None)
+        await DatabaseRunStore(db).set_status(run_id, "running")
+        await db.execute(
+            text(
+                "UPDATE agent_runs SET updated_at = now() - interval '600 seconds' "
+                "WHERE run_id = :run_id"
+            ),
+            {"run_id": run_id},
+        )
+        await db.commit()
+
+    streamed = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert streamed.status_code == 200, streamed.text
+    assert '"code":"orphaned"' in streamed.text
+    await _wait_status(run_id, "failed")
+
+
+@pytest.mark.skipif(not AUTH_ENABLED, reason="authentication is not enabled")
+@pytest.mark.asyncio
+async def test_run_is_scoped_to_its_owner(client, auth_headers) -> None:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "private run"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 202, created.text
+    run_id = created.json()["run_id"]
+
+    username = f"other_{uuid.uuid4().hex[:10]}"
+    registered = await client.post(
+        "/api/v1/auth/register",
+        json={"username": username, "password": "secret123"},
+    )
+    assert registered.status_code == 201, registered.text
+    other_headers = {"Authorization": f"Bearer {registered.json()['token']}"}
+
+    streamed = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=other_headers)
+    assert streamed.status_code == 403
+    cancelled = await client.post(f"/api/v1/agent/runs/{run_id}/cancel", headers=other_headers)
+    assert cancelled.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_http_run_streams_a_multi_step_plan(client, auth_headers, monkeypatch) -> None:
+    class TwoStepPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="general", confidence=1.0, payload={}),
+                    AgentIntent(name="general", confidence=1.0, payload={}),
+                ),
+                planner="test",
+            )
+
+    monkeypatch.setattr("app.api.agent.build_planner", lambda settings: TwoStepPlanner())
+    monkeypatch.setattr("app.api.agent.build_runner", lambda settings: ToolRunner())
+
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "run two steps"},
+        headers=auth_headers,
+    )
+    run_id = created.json()["run_id"]
+    streamed = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert streamed.status_code == 200, streamed.text
+    events = _events_from_sse(streamed.text)
+
+    selected = [event for event in events if event["type"] == "agent.selected"]
+    assert [event["step"] for event in selected] == [0, 1]
+    tool_calls = [event for event in events if event["type"] == "tool.call"]
+    assert tool_calls and all(event["agent"] == "general" for event in tool_calls)
+    assert events[-1]["type"] == "run.completed"
+
+    replay = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert replay.text == streamed.text
+
+
+@pytest.mark.asyncio
+async def test_agent_catalog_lists_examples(client, auth_headers) -> None:
+    response = await client.get("/api/v1/agent/agents", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    names = {agent["name"] for agent in response.json()["agents"]}
+    assert "general" in names
+{% if enabled('api.products') %}
+    assert "products" in names
+{% endif %}
+{% if enabled('api.auth') %}
+    assert "profile" in names
+{% endif %}
+    for agent in response.json()["agents"]:
+        assert agent["has_pipeline"] is True
+        assert agent["autonomy_mode"] == "proposal"
+
+
+@pytest.mark.asyncio
+async def test_run_stream_reaches_completion(client, auth_headers) -> None:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "hello"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 202, created.text
+    run_id = created.json()["run_id"]
+    response = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.text
+    for event_type in (
+        "run.started",
+        "coordinator.plan",
+        "agent.selected",
+        "agent.result",
+        "pipeline.evaluated",
+        "run.completed",
+    ):
+        assert f"event: {event_type}" in body, body
+    assert '"agent":"general"' in body
+{% if enabled('api.products') %}
+
+
+@pytest.mark.asyncio
+async def test_products_request_delegates_to_products_agent(client, auth_headers) -> None:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "list products"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 202, created.text
+    run_id = created.json()["run_id"]
+    response = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.text
+    assert '"agent":"products"' in body, body
+    assert "product(s)" in body
+
+
+@pytest.mark.asyncio
+async def test_products_agent_exposes_a_read_only_tool(client, auth_headers) -> None:
+    from cliver_playbook.app.basic.db.session import open_session
+
+    created = await client.post(
+        "/api/v1/products",
+        json={
+            "name": "Tool product",
+            "description": "Available to the agent",
+            "price_cents": 990,
+        },
+        headers=auth_headers,
+    )
+    assert created.status_code == 201, created.text
+
+    async with open_session() as db:
+        toolkit = ProductsAgent().toolkit(
+            AgentContext(
+                run_id="run-tool",
+                message="list products",
+                resources={"db": db},
+            )
+        )
+        names = {tool.name for tool in toolkit.tools}
+        assert "products_list" in names
+        tool = next(tool for tool in toolkit.tools if tool.name == "products_list")
+        assert tool.execute_async is not None
+        assert tool.safety == "safe"
+        result = await tool.execute_async(limit=5)
+    assert result
+    assert "Tool product" in result[0]["text"]
+{% endif %}

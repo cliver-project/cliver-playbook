@@ -1,0 +1,59 @@
+import uuid
+
+import pytest
+
+
+async def _headers(client):
+{% if enabled('api.auth') %}
+    username = f"user_{uuid.uuid4().hex[:10]}"
+    registered = await client.post(
+        "/api/v1/auth/register",
+        json={"username": username, "password": "secret123"},
+    )
+    assert registered.status_code == 201, registered.text
+    return {"Authorization": f"Bearer {registered.json()['token']}"}
+{% else %}
+    return {}
+{% endif %}
+
+
+@pytest.mark.asyncio
+async def test_product_crud(client):
+    headers = await _headers(client)
+
+    created = await client.post(
+        "/api/v1/products",
+        json={"name": "Demo product", "description": "A", "price_cents": 1234},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    product = created.json()
+
+    listed = await client.get("/api/v1/products", headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert any(item["id"] == product["id"] for item in listed.json())
+
+    detail = await client.get(f"/api/v1/products/{product['id']}", headers=headers)
+    assert detail.status_code == 200, detail.text
+
+    updated = await client.patch(
+        f"/api/v1/products/{product['id']}",
+        json={"name": "Updated product"},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "Updated product"
+
+    deleted = await client.delete(f"/api/v1/products/{product['id']}", headers=headers)
+    assert deleted.status_code == 204, deleted.text
+
+    missing = await client.get(f"/api/v1/products/{product['id']}", headers=headers)
+    assert missing.status_code == 404
+
+
+{% if enabled('api.auth') %}
+@pytest.mark.asyncio
+async def test_products_require_a_token(client):
+    response = await client.get("/api/v1/products")
+    assert response.status_code == 401
+{% endif %}

@@ -1,0 +1,31 @@
+{% if enabled('ui.agent.chat') %}
+import AgentChat from "../features/chat/AgentChat";
+
+export default function HomePage() {
+  return <AgentChat />;
+}
+{% else %}
+import { useTranslation } from "react-i18next";
+{% if enabled('ui.web.products') %}
+import { Link } from "react-router-dom";
+{% endif %}
+
+export default function HomePage() {
+  const { t } = useTranslation();
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-6 p-6 md:p-10">
+      <header>
+        <h1 className="text-2xl font-semibold md:text-3xl">
+          {t("app.title")}
+        </h1>
+        <p className="mt-2 text-muted-foreground">{t("home.body")}</p>
+      </header>
+{% if enabled('ui.web.products') %}
+      <Link className="text-primary underline" to="/products">
+        {t("home.products")}
+      </Link>
+{% endif %}
+    </section>
+  );
+}
+{% endif %}

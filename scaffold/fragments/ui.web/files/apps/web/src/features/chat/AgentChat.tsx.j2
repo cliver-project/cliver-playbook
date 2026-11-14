@@ -1,0 +1,285 @@
+{% if enabled('ui.agent.chat') %}
+{%- set has_agent_routes = enabled('ui.web.products') or enabled('api.auth') %}
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+{% if enabled('ui.web.products') or enabled('api.auth') %}
+import { Link } from "react-router-dom";
+{% endif %}
+
+{% if enabled('ui.web.products') or enabled('api.auth') %}
+import {
+  Button,
+  ChatMessage,
+  ChatShell,
+  Composer,
+  FeedbackButtons,
+  ToolCallCard,
+} from "../../ui";
+{% else %}
+import {
+  ChatMessage,
+  ChatShell,
+  Composer,
+  FeedbackButtons,
+  ToolCallCard,
+} from "../../ui";
+{% endif %}
+import {
+  cancelRun,
+  startRun,
+  streamRun,
+  submitFeedback,
+  type AgentEvent,
+} from "./api";
+
+type ChatEntry = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+};
+
+type ToolRun = {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  result?: unknown;
+  error?: boolean;
+};
+
+type FeedbackTarget = {
+  runId: string;
+  agent: string;
+};
+
+export default function AgentChat() {
+  const { t } = useTranslation();
+  const [messages, setMessages] = useState<ChatEntry[]>([]);
+  const [tools, setTools] = useState<ToolRun[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [feedbackTarget, setFeedbackTarget] = useState<FeedbackTarget | null>(
+    null,
+  );
+  const [feedbackRating, setFeedbackRating] = useState<number | null>(null);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+{% if has_agent_routes %}
+  const [agentName, setAgentName] = useState<string | null>(null);
+{% endif %}
+  const abortRef = useRef<AbortController | null>(null);
+  const runIdRef = useRef<string | null>(null);
+  const agentRef = useRef("general");
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      const runId = runIdRef.current;
+      if (runId) void cancelRun(runId);
+    },
+    [],
+  );
+
+  const handleEvent = (event: AgentEvent, assistantId: string) => {
+    switch (event.type) {
+      case "agent.selected":
+        agentRef.current = event.agent ?? "general";
+{% if has_agent_routes %}
+        setAgentName(event.agent ?? null);
+{% endif %}
+        break;
+      case "run.completed": {
+        const runId = runIdRef.current;
+        if (runId) {
+          setFeedbackTarget({ runId, agent: agentRef.current });
+        }
+        break;
+      }
+      case "message.delta":
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantId
+              ? { ...message, text: message.text + String(event.delta ?? "") }
+              : message,
+          ),
+        );
+        break;
+      case "tool.call": {
+        const id = String(event.tool_call_id ?? "");
+        setTools((current) => [
+          ...current,
+          {
+            id,
+            name: String(event.name ?? "tool"),
+            arguments: event.arguments ?? {},
+          },
+        ]);
+        break;
+      }
+      case "tool.result": {
+        const id = String(event.tool_call_id ?? "");
+        setTools((current) =>
+          current.map((tool) =>
+            tool.id === id
+              ? {
+                  ...tool,
+                  result: event.result,
+                  error: Boolean(event.is_error),
+                }
+              : tool,
+          ),
+        );
+        break;
+      }
+      case "run.failed":
+        setError(String(event.message ?? t("chat.failed")));
+        break;
+      default:
+        break;
+    }
+  };
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    const assistantId = newId();
+    setInput("");
+    setBusy(true);
+    setError(null);
+    setFeedbackTarget(null);
+    setFeedbackRating(null);
+    setFeedbackError(null);
+    agentRef.current = "general";
+{% if has_agent_routes %}
+    setAgentName(null);
+{% endif %}
+    setTools([]);
+    setMessages((current) => [
+      ...current,
+      { id: newId(), role: "user", text },
+      { id: assistantId, role: "assistant", text: "" },
+    ]);
+    try {
+      const runId = await startRun(text);
+      runIdRef.current = runId;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      await streamRun(
+        runId,
+        (event) => handleEvent(event, assistantId),
+        controller.signal,
+      );
+    } catch (reason) {
+      if (!(reason instanceof DOMException && reason.name === "AbortError")) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    } finally {
+      setBusy(false);
+      abortRef.current = null;
+      runIdRef.current = null;
+    }
+  };
+
+  const stop = () => {
+    abortRef.current?.abort();
+    const runId = runIdRef.current;
+    if (runId) void cancelRun(runId);
+    setBusy(false);
+  };
+
+  const rate = async (rating: number) => {
+    if (!feedbackTarget) return;
+    setFeedbackError(null);
+    try {
+      await submitFeedback(feedbackTarget.runId, feedbackTarget.agent, rating);
+      setFeedbackRating(rating);
+    } catch (reason) {
+      setFeedbackError(
+        reason instanceof Error ? reason.message : t("chat.feedbackFailed"),
+      );
+    }
+  };
+
+  return (
+    <ChatShell
+      title={t("chat.title")}
+      subtitle={t("chat.subtitle")}
+      footer={
+        <div className="space-y-2">
+{% if enabled('ui.web.products') %}
+          {agentName === "products" ? (
+            <Button asChild size="sm" variant="outline">
+              <Link to="/products">{t("chat.openProducts")}</Link>
+            </Button>
+          ) : null}
+{% endif %}
+{% if enabled('api.auth') %}
+          {agentName === "profile" ? (
+            <Button asChild size="sm" variant="outline">
+              <Link to="/profile">{t("chat.openProfile")}</Link>
+            </Button>
+          ) : null}
+{% endif %}
+          <Composer
+            value={input}
+            onChange={setInput}
+            onSubmit={() => void send()}
+            onStop={stop}
+            busy={busy}
+            placeholder={t("chat.placeholder")}
+            sendLabel={t("chat.send")}
+            stopLabel={t("chat.stop")}
+          />
+        </div>
+      }
+    >
+      {messages.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("chat.empty")}</p>
+      ) : null}
+      {messages.map((message, index) => {
+        const text =
+          message.text ||
+          (busy && message.role === "assistant" && index === messages.length - 1
+            ? t("chat.thinking")
+            : "");
+        return text ? (
+          <ChatMessage key={message.id} role={message.role}>
+            {text}
+          </ChatMessage>
+        ) : null;
+      })}
+      {tools.length > 0 ? (
+        <div className="space-y-2">
+          {tools.map((tool) => (
+            <ToolCallCard
+              key={tool.id}
+              name={tool.name}
+              arguments={tool.arguments}
+              result={tool.result}
+              error={tool.error}
+              resultLabel={t("chat.toolResult")}
+              errorLabel={t("chat.toolError")}
+            />
+          ))}
+        </div>
+      ) : null}
+      {feedbackTarget && !busy ? (
+        <FeedbackButtons
+          value={feedbackRating}
+          onRate={(rating) => void rate(rating)}
+          helpfulLabel={t("chat.helpful")}
+          notHelpfulLabel={t("chat.notHelpful")}
+          thanksLabel={t("chat.feedbackThanks")}
+        />
+      ) : null}
+      {feedbackError ? (
+        <p className="text-sm text-destructive">{feedbackError}</p>
+      ) : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+    </ChatShell>
+  );
+}
+
+function newId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+{% endif %}

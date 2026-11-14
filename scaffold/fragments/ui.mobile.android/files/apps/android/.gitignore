@@ -1,0 +1,12 @@
+# Android and Gradle local state. The Gradle wrapper is generated, not checked in.
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+*.jks
+*.keystore

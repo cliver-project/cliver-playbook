@@ -1,0 +1,97 @@
+"""Test harness: one scratch database per test session."""
+
+import atexit
+import os
+import uuid
+
+import psycopg
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+ADMIN_DSN = os.environ.get(
+    "CLIVER_TEST_DATABASE_URL",
+    "postgresql://cliver:cliver@127.0.0.1:5432/postgres",
+)
+TEST_DB = f"scaffold_test_{uuid.uuid4().hex[:10]}"
+TEST_DSN = ADMIN_DSN.rsplit("/", 1)[0] + f"/{TEST_DB}"
+
+
+def _create_temp_database() -> None:
+    with psycopg.connect(ADMIN_DSN, autocommit=True) as conn:
+        conn.execute(f'DROP DATABASE IF EXISTS "{TEST_DB}" WITH (FORCE)')
+        conn.execute(f'CREATE DATABASE "{TEST_DB}"')
+
+
+def _drop_temp_database() -> None:
+    with psycopg.connect(ADMIN_DSN, autocommit=True) as conn:
+        conn.execute(f'DROP DATABASE IF EXISTS "{TEST_DB}" WITH (FORCE)')
+
+
+try:
+    _create_temp_database()
+except Exception as exc:  # noqa: BLE001
+    pytest.skip(f"PostgreSQL unavailable: {exc}", allow_module_level=True)
+
+atexit.register(_drop_temp_database)
+os.environ["CLIVER_DATABASE_URL"] = TEST_DSN.replace("postgresql://", "postgresql+asyncpg://", 1)
+{% if enabled('api.agent') %}
+# Orphan detection is exercised by the agent tests; keep the threshold tiny.
+os.environ.setdefault("CLIVER_AGENT_RUN_ORPHAN_SECONDS", "2")
+{% endif %}
+
+from app.app import create_app
+from app.migrations import run_migrations_online as run_project
+from app.settings import Settings
+from cliver_playbook.app.basic.alembic import (
+    run_migrations_online as run_basic,
+)
+{% if enabled('api.rag') %}
+from cliver_playbook.app.rag.alembic import (
+    run_migrations_online as run_rag,
+)
+{% endif %}
+{% if enabled('api.auth') %}
+from cliver_playbook.app.user.alembic import (
+    run_migrations_online as run_user,
+)
+{% endif %}
+
+settings = Settings()
+run_basic(settings.sync_db_url)
+{% if enabled('api.auth') %}
+run_user(settings.sync_db_url)
+{% endif %}
+{% if enabled('api.rag') %}
+run_rag(settings.sync_db_url)
+{% endif %}
+run_project(settings.sync_db_url)
+app = create_app(settings)
+
+
+@pytest.fixture
+def app_instance():
+    return app
+
+
+@pytest.fixture
+async def client():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as value:
+        yield value
+
+
+{% if enabled('api.auth') %}
+@pytest.fixture
+async def auth_headers(client):
+    username = f"user_{uuid.uuid4().hex[:10]}"
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={"username": username, "password": "secret123"},
+    )
+    assert response.status_code == 201, response.text
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+{% else %}
+@pytest.fixture
+async def auth_headers():
+    return {}
+{% endif %}

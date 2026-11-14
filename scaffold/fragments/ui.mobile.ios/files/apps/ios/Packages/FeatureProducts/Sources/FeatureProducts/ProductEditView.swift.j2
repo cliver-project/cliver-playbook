@@ -1,0 +1,130 @@
+{% if enabled('ui.mobile.crud') %}
+import Core
+import SwiftUI
+
+/// Create and edit share one form. Pass `nil` to create.
+public struct ProductEditView: View {
+    @Environment(AuthStore.self) private var session
+    @Environment(\.dismiss) private var dismiss
+
+    private let product: Product?
+    private let onSaved: (Product) -> Void
+
+    @State private var name: String
+    @State private var description: String
+    @State private var priceText: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    public init(
+        product: Product? = nil,
+        onSaved: @escaping (Product) -> Void
+    ) {
+        self.product = product
+        self.onSaved = onSaved
+        _name = State(initialValue: product?.name ?? "")
+        _description = State(initialValue: product?.description ?? "")
+        _priceText = State(
+            initialValue: product.map {
+                DesignSystem.priceInput(cents: $0.priceCents)
+            } ?? ""
+        )
+    }
+
+    private var isEditing: Bool {
+        product != nil
+    }
+
+    public var body: some View {
+        Form {
+            Section("Product") {
+                TextField("Name", text: $name)
+
+                LabeledContent("Price") {
+                    TextField("0.00", text: $priceText)
+                        .multilineTextAlignment(.trailing)
+#if os(iOS)
+                        .keyboardType(.decimalPad)
+#endif
+                }
+            }
+
+            Section("Description") {
+                TextEditor(text: $description)
+                    .frame(minHeight: 120)
+            }
+
+            if let errorMessage {
+                Section {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle(isEditing ? "Edit product" : "New product")
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .disabled(isSaving)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await save() }
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text(isEditing ? "Save" : "Create")
+                    }
+                }
+                .disabled(isSaving)
+            }
+        }
+        .disabled(isSaving)
+    }
+
+    @MainActor
+    private func save() async {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Name cannot be empty."
+            return
+        }
+        guard let priceCents = DesignSystem.cents(fromPriceInput: priceText) else {
+            errorMessage = "Enter a valid price with two decimal places."
+            return
+        }
+
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            let saved: Product
+            if let product {
+                saved = try await session.api.updateProduct(
+                    id: product.id,
+                    name: trimmedName,
+                    description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    priceCents: priceCents
+                )
+            } else {
+                saved = try await session.api.createProduct(
+                    name: trimmedName,
+                    description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    priceCents: priceCents
+                )
+            }
+            onSaved(saved)
+            dismiss()
+        } catch is CancellationError {
+            // The view went away; nothing to report.
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+{% endif %}

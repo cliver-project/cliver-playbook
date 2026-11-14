@@ -1,0 +1,37 @@
+"""Register the default example sub-agents and the project-owned seam."""
+
+from __future__ import annotations
+
+from app.agents.registry import AgentRegistry, registry
+from app.agents.subagents.general import GeneralAgent
+{% if enabled('api.products') %}
+from app.agents.subagents.products import ProductsAgent
+{% endif %}
+{% if enabled('api.auth') %}
+from app.agents.subagents.profile import ProfileAgent
+{% endif %}
+
+
+def register_default_agents(target: AgentRegistry | None = None) -> AgentRegistry:
+    """Register the examples once; a project may register its own agents too."""
+    selected = target or registry
+    agents = [GeneralAgent()]
+{% if enabled('api.products') %}
+    agents.append(ProductsAgent())
+{% endif %}
+{% if enabled('api.auth') %}
+    agents.append(ProfileAgent())
+{% endif %}
+    for agent in agents:
+        if selected.get(agent.name) is None:
+            selected.register(agent)
+    return selected
+
+
+def register_project_agents(target: AgentRegistry | None = None) -> AgentRegistry:
+    """Project-owned sub-agents register here.
+
+    Replace this no-op with ``target.register(MyBusinessAgent())`` calls. The
+    scaffold deliberately keeps the examples and the project seam separate.
+    """
+    return target or registry

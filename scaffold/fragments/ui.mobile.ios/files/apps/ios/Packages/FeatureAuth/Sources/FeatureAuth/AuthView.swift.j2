@@ -1,0 +1,201 @@
+{% if enabled('ui.mobile.auth') %}
+import Core
+import SwiftUI
+
+/// Sign-in and registration in one adaptive screen: a max-width card on a
+/// pad, a full-width form on a phone.
+public struct AuthView: View {
+    private enum Mode: String, CaseIterable, Identifiable {
+        case signIn = "Sign in"
+        case register = "Register"
+
+        var id: Self { self }
+    }
+
+    private enum Field: Hashable {
+        case username
+        case password
+        case email
+        case displayName
+    }
+
+    @Environment(AuthStore.self) private var session
+
+    @State private var mode: Mode = .signIn
+    @State private var username = ""
+    @State private var password = ""
+    @State private var email = ""
+    @State private var displayName = ""
+    @State private var errorMessage: String?
+    @State private var isSubmitting = false
+    @FocusState private var focusedField: Field?
+
+    public init() {}
+
+    public var body: some View {
+        CenteredCard(maxWidth: DesignSystem.authMaxWidth) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.l) {
+                header
+                modePicker
+                fields
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                submitButton
+                Text("The session token is kept in the device Keychain.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onChange(of: mode) { _, _ in
+            errorMessage = nil
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.s) {
+            Image(systemName: "sparkles")
+                .font(.largeTitle)
+                .foregroundStyle(DesignSystem.accent)
+                .accessibilityHidden(true)
+            Text(mode == .signIn ? "Welcome back" : "Create an account")
+                .font(.title2.weight(.semibold))
+            Text(
+                mode == .signIn
+                    ? "Sign in to continue to the app."
+                    : "Register with a username and password."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $mode) {
+            ForEach(Mode.allCases) { mode in
+                Text(mode.rawValue).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Authentication mode")
+    }
+
+    private var fields: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.m) {
+            field("Username") {
+                TextField("Username", text: $username)
+                    .textContentType(.username)
+#if os(iOS)
+                    .textInputAutocapitalization(.never)
+#endif
+                    .autocorrectionDisabled()
+                    .focused($focusedField, equals: .username)
+            }
+
+            field("Password") {
+                SecureField("Password", text: $password)
+                    .textContentType(mode == .signIn ? .password : .newPassword)
+                    .focused($focusedField, equals: .password)
+            }
+
+            if mode == .register {
+                field("Email (optional)") {
+                    TextField("Email", text: $email)
+                        .textContentType(.emailAddress)
+#if os(iOS)
+                        .textInputAutocapitalization(.never)
+#endif
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .email)
+                }
+
+                field("Display name (optional)") {
+                    TextField("Display name", text: $displayName)
+                        .textContentType(.name)
+                        .focused($focusedField, equals: .displayName)
+                }
+            }
+        }
+    }
+
+    private func field<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            content()
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var submitButton: some View {
+        Button {
+            Task { await submit() }
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.s) {
+                if isSubmitting {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Text(mode == .signIn ? "Sign in" : "Create account")
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(!canSubmit)
+        .keyboardShortcut(.defaultAction)
+    }
+
+    private var canSubmit: Bool {
+        guard !isSubmitting else { return false }
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedUsername.isEmpty else { return false }
+        if mode == .signIn {
+            return !password.isEmpty
+        }
+        return password.count >= 8
+    }
+
+    @MainActor
+    private func submit() async {
+        guard canSubmit else {
+            errorMessage = mode == .signIn
+                ? "Enter a username and password."
+                : "Enter a username and a password of at least 8 characters."
+            return
+        }
+
+        isSubmitting = true
+        errorMessage = nil
+        defer { isSubmitting = false }
+
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            if mode == .signIn {
+                try await session.signIn(username: trimmedUsername, password: password)
+            } else {
+                try await session.register(
+                    username: trimmedUsername,
+                    password: password,
+                    email: trimmedEmail.isEmpty ? nil : trimmedEmail,
+                    displayName: trimmedDisplayName.isEmpty ? nil : trimmedDisplayName
+                )
+            }
+        } catch is CancellationError {
+            // The view went away; nothing to report.
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+{% endif %}

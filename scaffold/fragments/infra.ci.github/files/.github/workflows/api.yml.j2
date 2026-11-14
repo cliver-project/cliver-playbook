@@ -1,0 +1,53 @@
+{% if enabled('api.python') %}
+name: API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+      - ".github/workflows/api.yml"
+  pull_request:
+    paths:
+      - "services/api/**"
+      - ".github/workflows/api.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: cliver
+          POSTGRES_PASSWORD: cliver
+          POSTGRES_DB: {{ project_slug }}_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cliver"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      CLIVER_DATABASE_URL: postgresql+asyncpg://cliver:cliver@127.0.0.1:5432/{{ project_slug }}_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+      - name: Install
+        run: cd services/api && uv sync
+      - name: Lint
+        run: |
+          cd services/api
+          uv run ruff check
+          uv run ruff format --check
+      - name: Migrate
+        run: cd services/api && uv run python -m app.migrate
+      - name: Test
+        run: cd services/api && uv run pytest
+{% endif %}

@@ -1,0 +1,28 @@
+import type { RouteObject } from "react-router-dom";
+
+{% if enabled('api.auth') %}
+import type { AuthedNavItem } from "cliver-playbook-app-user";
+{% else %}
+import type { NavItem } from "cliver-playbook-app-basic";
+{% endif %}
+
+import ProductDetailPage from "./ProductDetailPage";
+import ProductEditPage from "./ProductEditPage";
+import ProductsPage from "./ProductsPage";
+
+export const productRoutes: RouteObject[] = [
+  { path: "products", element: <ProductsPage /> },
+  { path: "products/new", element: <ProductEditPage /> },
+  { path: "products/:productId", element: <ProductDetailPage /> },
+  { path: "products/:productId/edit", element: <ProductEditPage /> },
+];
+
+{% if enabled('api.auth') %}
+export const productNavItems: AuthedNavItem[] = [
+  { to: "/products", labelKey: "nav.products", perm: null },
+];
+{% else %}
+export const productNavItems: NavItem[] = [
+  { to: "/products", labelKey: "nav.products" },
+];
+{% endif %}

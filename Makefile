@@ -97,6 +97,16 @@ skill-check: ## Validate the published agent skill (frontmatter, references, man
 	uv run --with pyyaml python scripts/validate_skill.py --self-test
 	uv run --with pyyaml python scripts/validate_skill.py --all
 
+.PHONY: scaffold-check
+scaffold-check: ## Validate the AI-native scaffold catalog, schema and planner
+	uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --self-test
+	uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --validate-catalog
+
+.PHONY: scaffold-plan
+scaffold-plan: ## Print the AI-native scaffold plan (MANIFEST=scaffold/examples/ai-web.yaml)
+	@test -n "$(MANIFEST)" || { echo "usage: make scaffold-plan MANIFEST=scaffold/examples/ai-web.yaml" >&2; exit 2; }
+	uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --plan "$(MANIFEST)"
+
 .PHONY: version-set
 version-set: ## Bump every module (usage: make version-set VERSION=0.2.0)
 	@test -n "$(VERSION)" || { echo "usage: make version-set VERSION=x.y.z" >&2; exit 2; }
@@ -111,7 +121,7 @@ release-check: ## Build every backend distribution and verify license + version 
 	uv run python scripts/check_release_artifacts.py --dist dist
 
 .PHONY: check
-check: backend-lint backend-test web-ui-check version-check skill-check ## Everything CI would run
+check: backend-lint backend-test web-ui-check version-check skill-check scaffold-check ## Everything CI would run
 
 .PHONY: verify-reference
 verify-reference: ## Migrate a scratch DB, boot the composed app, build the reference frontend

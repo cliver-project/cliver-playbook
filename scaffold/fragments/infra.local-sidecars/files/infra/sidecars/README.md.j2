@@ -1,0 +1,14 @@
+# Local sidecars
+
+The desktop shell runs the API and model planes as loopback sidecars so the
+app works offline and local models stay out of the UI process.
+
+Phase 3 wires this directory:
+
+- build the API as a PyInstaller one-dir bundle or a Rust binary;
+- build the model service as a PyInstaller one-dir bundle;
+- start each on `127.0.0.1` with port 0 and a per-session token;
+- health-check, restart on crash, and kill on app exit;
+- keep models in a separate download/update channel.
+
+The UI still calls `http://127.0.0.1:<port>`; nothing runs in the renderer.

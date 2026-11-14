@@ -1,0 +1,15 @@
+packages:
+  - "apps/web"
+{% if enabled('ui.desktop.tauri') %}
+  - "apps/desktop"
+{% endif %}
+
+# Git dependencies are "exotic"; pnpm blocks them in subdependencies by default.
+# Keep all four playbook packages overridden so sibling pins resolve to the
+# same release even when the project selects only some of them.
+blockExoticSubdeps: false
+overrides:
+  cliver-playbook-app-basic: "github:cliver-project/cliver-playbook#{{ playbook.revision }}&path:/packages/frontend/cliver-playbook-app-basic"
+  cliver-playbook-app-user: "github:cliver-project/cliver-playbook#{{ playbook.revision }}&path:/packages/frontend/cliver-playbook-app-user"
+  cliver-playbook-app-rag: "github:cliver-project/cliver-playbook#{{ playbook.revision }}&path:/packages/frontend/cliver-playbook-app-rag"
+  cliver-playbook-app-mcp: "github:cliver-project/cliver-playbook#{{ playbook.revision }}&path:/packages/frontend/cliver-playbook-app-mcp"

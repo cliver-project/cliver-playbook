@@ -1,0 +1,117 @@
+{% if enabled('api.auth') %}
+"""Example business-point agent: read the signed-in user's profile."""
+
+from __future__ import annotations
+
+import json
+
+from cliver_core import tool
+
+from app.agents.contracts import (
+    AgentContext,
+    AgentIntent,
+    AgentResult,
+    AgentToolkit,
+    AutonomyPolicy,
+)
+from app.agents.learning import LearningPipeline
+from cliver_playbook.app.user.services import users as users_service
+
+
+def _declare_source(context: AgentContext, source: str) -> None:
+    raw = context.metadata.get("sources") or ()
+    if isinstance(raw, str):
+        raw = [raw]
+    sources = list(raw)
+    if source not in sources:
+        sources.append(source)
+    context.metadata["sources"] = sources
+
+
+class ProfileAgent:
+    name = "profile"
+    description = "Show the signed-in user's profile."
+    capabilities = ("profile.read",)
+    autonomy = AutonomyPolicy(
+        allowed_sources=("profile",),
+        evaluation_metric="profile.read.success",
+        evaluation_threshold=0.6,
+        improvement_mode="proposal",
+        retention_days=30,
+    )
+    pipeline = LearningPipeline(autonomy)
+
+    def can_handle(self, intent: AgentIntent) -> bool:
+        message = str(intent.payload.get("message", "")).lower()
+        return "profile" in message or "account" in message
+
+    def toolkit(self, context: AgentContext) -> AgentToolkit:
+        _declare_source(context, "profile")
+        db = context.resources.get("db")
+        system_prompt = (
+            "You are the profile business-point agent. Use the profile tool "
+            "to answer questions about the signed-in user. Never reveal "
+            "another user's data."
+        )
+        if db is None:
+            return AgentToolkit(system_prompt=system_prompt)
+
+        @tool(
+            name="profile_read",
+            description="Read the signed-in user's profile.",
+            safety="safe",
+        )
+        async def profile_read() -> list[dict]:
+            if context.user_id is None:
+                return [{"error": "Sign in to view your profile."}]
+            user = await users_service.get_user(db, context.user_id)
+            if user is None:
+                return [{"error": "The signed-in user no longer exists."}]
+            return [
+                {
+                    "text": json.dumps(
+                        {
+                            "id": user.id,
+                            "username": user.username,
+                            "display_name": user.display_name,
+                            "email": user.email,
+                            "phone": user.phone,
+                        },
+                        ensure_ascii=False,
+                    )
+                }
+            ]
+
+        return AgentToolkit(system_prompt=system_prompt, tools=[profile_read])
+
+    async def run(self, context: AgentContext) -> AgentResult:
+        _declare_source(context, "profile")
+        if context.user_id is None:
+            return AgentResult(
+                agent=self.name,
+                message="Sign in to view your profile.",
+            )
+        db = context.resources.get("db")
+        if db is None:
+            return AgentResult(
+                agent=self.name,
+                message="The profile agent needs a database session.",
+            )
+        user = await users_service.get_user(db, context.user_id)
+        if user is None:
+            return AgentResult(
+                agent=self.name,
+                message="The signed-in user no longer exists.",
+            )
+        return AgentResult(
+            agent=self.name,
+            message=f"Signed in as {user.display_name} ({user.username}).",
+            data={
+                "id": user.id,
+                "username": user.username,
+                "display_name": user.display_name,
+                "email": user.email,
+                "phone": user.phone,
+            },
+        )
+{% endif %}

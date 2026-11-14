@@ -1,0 +1,43 @@
+import Foundation
+
+/// One typed run event from `GET /api/v1/agent/runs/{id}/events`.
+///
+/// The API's event union is wide; the chat surface only needs the common
+/// fields. Tool arguments and results arrive as JSON and are kept as readable
+/// text so the reference tool-card component stays simple.
+public struct AgentEvent: Sendable, Equatable {
+    public let type: String
+    public let delta: String?
+    public let agent: String?
+    public let step: Int?
+    public let toolCallID: String?
+    public let name: String?
+    public let arguments: String?
+    public let result: String?
+    public let isError: Bool
+    public let message: String?
+
+    public init(
+        type: String,
+        delta: String? = nil,
+        agent: String? = nil,
+        step: Int? = nil,
+        toolCallID: String? = nil,
+        name: String? = nil,
+        arguments: String? = nil,
+        result: String? = nil,
+        isError: Bool = false,
+        message: String? = nil
+    ) {
+        self.type = type
+        self.delta = delta
+        self.agent = agent
+        self.step = step
+        self.toolCallID = toolCallID
+        self.name = name
+        self.arguments = arguments
+        self.result = result
+        self.isError = isError
+        self.message = message
+    }
+}

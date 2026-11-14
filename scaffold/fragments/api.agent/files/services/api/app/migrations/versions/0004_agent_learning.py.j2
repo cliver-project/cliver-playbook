@@ -1,0 +1,191 @@
+"""Self-enhancement store: experiences, feedback, evaluations, proposals.
+
+Revision ID: {{ "0004_agent_learning" if enabled('api.products') else "0003_agent_learning" }}
+Revises:{% if enabled('api.products') %} 0003_agent_run_events{% else %} 0002_agent_run_events{% endif %}
+Create Date: 2026-01-01 00:00:00
+"""
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
+
+revision = "{{ "0004_agent_learning" if enabled('api.products') else "0003_agent_learning" }}"
+down_revision = "{{ "0003_agent_run_events" if enabled('api.products') else "0002_agent_run_events" }}"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "agent_experiences",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("run_id", sa.String(length=32), nullable=False),
+        sa.Column("step", sa.Integer(), nullable=False),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("user_id", sa.BigInteger(), nullable=True),
+        sa.Column("session_id", sa.String(length=200), nullable=True),
+        sa.Column("message", sa.Text(), nullable=False),
+        sa.Column("result_message", sa.Text(), nullable=False),
+        sa.Column("result_data", JSONB(), nullable=False),
+        sa.Column("mode", sa.String(length=32), nullable=False),
+        sa.Column("sources", JSONB(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.UniqueConstraint("run_id", "step", "agent", name="uq_agent_experience_step"),
+    )
+    op.create_index("ix_agent_experiences_run_id", "agent_experiences", ["run_id"])
+    op.create_index("ix_agent_experiences_agent", "agent_experiences", ["agent"])
+    op.create_index("ix_agent_experiences_user_id", "agent_experiences", ["user_id"])
+    op.create_index("ix_agent_experiences_created_at", "agent_experiences", ["created_at"])
+
+    op.create_table(
+        "agent_feedback",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "experience_id",
+            sa.BigInteger(),
+            sa.ForeignKey(
+                "agent_experiences.id",
+                name="fk_agent_feedback_experience_id",
+                ondelete="CASCADE",
+            ),
+            nullable=False,
+        ),
+        sa.Column("run_id", sa.String(length=32), nullable=False),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("user_id", sa.BigInteger(), nullable=True),
+        sa.Column("rating", sa.Integer(), nullable=False),
+        sa.Column("comment", sa.Text(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.UniqueConstraint("experience_id", "user_id", name="uq_agent_feedback_user"),
+    )
+    op.create_index("ix_agent_feedback_experience_id", "agent_feedback", ["experience_id"])
+    op.create_index("ix_agent_feedback_run_id", "agent_feedback", ["run_id"])
+    op.create_index("ix_agent_feedback_agent", "agent_feedback", ["agent"])
+    op.create_index("ix_agent_feedback_user_id", "agent_feedback", ["user_id"])
+    op.create_index(
+        "uq_agent_feedback_anonymous",
+        "agent_feedback",
+        ["experience_id"],
+        unique=True,
+        postgresql_where=sa.text("user_id IS NULL"),
+    )
+
+    op.create_table(
+        "agent_evaluations",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "experience_id",
+            sa.BigInteger(),
+            sa.ForeignKey(
+                "agent_experiences.id",
+                name="fk_agent_evaluations_experience_id",
+                ondelete="CASCADE",
+            ),
+            nullable=False,
+        ),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("metric", sa.String(length=100), nullable=False),
+        sa.Column("score", sa.Float(), nullable=False),
+        sa.Column("passed", sa.Boolean(), nullable=False),
+        sa.Column("details", JSONB(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.UniqueConstraint("experience_id", "metric", name="uq_agent_evaluation_metric"),
+    )
+    op.create_index("ix_agent_evaluations_experience_id", "agent_evaluations", ["experience_id"])
+    op.create_index("ix_agent_evaluations_agent", "agent_evaluations", ["agent"])
+
+    op.create_table(
+        "agent_improvements",
+        sa.Column("id", sa.String(length=32), primary_key=True),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("kind", sa.String(length=16), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("rationale", sa.Text(), nullable=False),
+        sa.Column("patch", JSONB(), nullable=False),
+        sa.Column("evidence", JSONB(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column("reviewed_by", sa.BigInteger(), nullable=True),
+        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("applied_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_index("ix_agent_improvements_agent", "agent_improvements", ["agent"])
+    op.create_index("ix_agent_improvements_status", "agent_improvements", ["status"])
+    op.create_index(
+        "uq_agent_improvement_pending",
+        "agent_improvements",
+        ["agent", "kind"],
+        unique=True,
+        postgresql_where=sa.text("status = 'pending'"),
+    )
+
+    op.create_table(
+        "agent_improvement_events",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "proposal_id",
+            sa.String(length=32),
+            sa.ForeignKey(
+                "agent_improvements.id",
+                name="fk_agent_improvement_events_proposal_id",
+                ondelete="CASCADE",
+            ),
+            nullable=False,
+        ),
+        sa.Column("action", sa.String(length=16), nullable=False),
+        sa.Column("actor_id", sa.BigInteger(), nullable=True),
+        sa.Column("note", sa.Text(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    )
+    op.create_index(
+        "ix_agent_improvement_events_proposal_id",
+        "agent_improvement_events",
+        ["proposal_id"],
+    )
+
+    op.create_table(
+        "agent_configs",
+        sa.Column("agent", sa.String(length=64), primary_key=True),
+        sa.Column("prompt_overlay", sa.Text(), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    )
+
+
+def downgrade() -> None:
+    op.drop_table("agent_configs")
+    op.drop_table("agent_improvement_events")
+    op.drop_table("agent_improvements")
+    op.drop_table("agent_evaluations")
+    op.drop_table("agent_feedback")
+    op.drop_table("agent_experiences")

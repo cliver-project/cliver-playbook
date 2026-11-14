@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI-native project manifest",
+  "description": "Declares the UI, API, model and contract modules a new AI-native project composes. Cross-field profile rules are enforced by scripts/scaffold_project.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "project",
+    "playbook",
+    "scaffold",
+    "ui",
+    "api",
+    "model",
+    "agent",
+    "contracts",
+    "ci",
+    "release"
+  ],
+  "properties": {
+    "project": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 64
+    },
+    "playbook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "revision"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "revision": {
+          "type": "string",
+          "pattern": "^(?:v)?\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$|^[0-9a-f]{7,40}$"
+        }
+      }
+    },
+    "scaffold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template", "profile"],
+      "properties": {
+        "template": {"const": "ai-native"},
+        "profile": {
+          "enum": ["ai-web", "ai-desktop", "ai-mobile", "ai-full", "ai-rust-bff"]
+        },
+        "reference_slices": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["products"]}
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["web", "desktop", "mobile"],
+      "properties": {
+        "web": {"type": "boolean"},
+        "desktop": {"enum": ["none", "tauri2"]},
+        "mobile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ios", "android"],
+          "properties": {
+            "ios": {"enum": ["none", "swiftui"]},
+            "android": {"enum": ["none", "kotlin"]},
+            "features": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["auth", "profile", "crud"]}
+            },
+            "layouts": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["phone", "pad"]}
+            }
+          }
+        }
+      }
+    },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "deployment", "features"],
+      "properties": {
+        "runtime": {"enum": ["python", "rust"]},
+        "deployment": {"enum": ["remote", "local", "both"]},
+        "features": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["auth", "settings", "agent", "rag", "mcp", "files", "billing"]
+          }
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "deployment", "capabilities"],
+      "properties": {
+        "runtime": {"enum": ["python"]},
+        "deployment": {"enum": ["remote", "local", "both"]},
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "llm",
+              "embedding",
+              "rerank",
+              "asr",
+              "image",
+              "tts",
+              "video",
+              "system_one"
+            ]
+          }
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "skills", "mcp", "system_one"],
+      "properties": {
+        "runtime": {"enum": ["agentcore", "none"]},
+        "skills": {"type": "boolean"},
+        "mcp": {"type": "boolean"},
+        "system_one": {"type": "boolean"}
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openapi", "events"],
+      "properties": {
+        "openapi": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]+\\.(?:yaml|yml)$"
+        },
+        "events": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]+\\.json$"
+        }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider"],
+      "properties": {
+        "provider": {"enum": ["github", "gitea", "both"]}
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["desktop", "mobile"],
+      "properties": {
+        "desktop": {"type": "boolean"},
+        "mobile": {"type": "boolean"}
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

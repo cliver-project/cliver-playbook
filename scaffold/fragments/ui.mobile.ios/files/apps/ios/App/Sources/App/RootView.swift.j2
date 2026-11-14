@@ -1,0 +1,273 @@
+{%- set has_auth = enabled('ui.mobile.auth') %}
+{%- set has_profile = enabled('ui.mobile.profile') and has_auth %}
+{%- set has_products = enabled('ui.mobile.crud') %}
+{%- set has_chat = enabled('ui.agent.chat') %}
+{%- set has_responsive = enabled('ui.mobile.responsive') %}
+{%- set has_feature_destination = has_chat or has_products or has_profile %}
+import Core
+import SwiftUI
+{% if has_auth %}
+import FeatureAuth
+{% endif %}
+{% if has_profile %}
+import FeatureProfile
+{% endif %}
+{% if has_products %}
+import FeatureProducts
+{% endif %}
+
+struct RootView: View {
+    @Environment(AuthStore.self) private var session
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    @State private var selection: Destination? = .initial
+
+    var body: some View {
+{% if has_auth %}
+        Group {
+            if session.isRestoring {
+                ProgressView("Restoring session…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if session.isAuthenticated {
+                signedInContent
+            } else {
+                AuthView()
+            }
+        }
+        .task { await session.restoreSession() }
+{% else %}
+        signedInContent
+{% endif %}
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var signedInContent: some View {
+{% if has_responsive %}
+        if LayoutMode(sizeClass: horizontalSizeClass) == .regular {
+            regularLayout
+        } else {
+            compactLayout
+        }
+{% else %}
+        compactLayout
+{% endif %}
+    }
+
+    private var compactLayout: some View {
+        TabView(
+            selection: Binding(
+                get: { selection ?? .initial },
+                set: { selection = $0 }
+            )
+        ) {
+            ForEach(destinations) { destination in
+                NavigationStack {
+                    destinationView(destination)
+                        .navigationTitle(destination.title)
+{% if has_auth %}
+                        .toolbar { accountToolbar }
+{% endif %}
+                }
+                .tabItem {
+                    Label(destination.title, systemImage: destination.systemImage)
+                }
+                .tag(destination)
+            }
+        }
+    }
+
+    private var regularLayout: some View {
+        NavigationSplitView {
+            List(selection: $selection) {
+                ForEach(destinations) { destination in
+                    Label(destination.title, systemImage: destination.systemImage)
+                        .tag(destination)
+                }
+            }
+            .navigationTitle("{{ project_title }}")
+        } detail: {
+            NavigationStack {
+                destinationView(selection ?? .initial)
+                    .navigationTitle((selection ?? .initial).title)
+{% if has_auth %}
+                    .toolbar { accountToolbar }
+{% endif %}
+            }
+        }
+    }
+
+{% if has_auth %}
+    @ToolbarContentBuilder
+    private var accountToolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button {
+                    session.signOut()
+                } label: {
+                    Label(
+                        "Sign out",
+                        systemImage: "rectangle.portrait.and.arrow.right"
+                    )
+                }
+            } label: {
+                Image(systemName: "person.crop.circle")
+            }
+            .accessibilityLabel("Account")
+        }
+    }
+{% endif %}
+
+    private var destinations: [Destination] {
+        var values: [Destination] = []
+{% if has_chat %}
+        values.append(.chat)
+{% endif %}
+{% if has_products %}
+        values.append(.products)
+{% endif %}
+{% if has_profile %}
+        values.append(.profile)
+{% endif %}
+{% if not has_feature_destination %}
+        values.append(.overview)
+{% endif %}
+        return values
+    }
+
+    @ViewBuilder
+    private func destinationView(_ destination: Destination) -> some View {
+        switch destination {
+{% if has_chat %}
+        case .chat:
+            ChatView(
+{% if has_products %}
+                onOpenProducts: { selection = .products }
+{% else %}
+                onOpenProducts: nil
+{% endif %}
+            )
+{% endif %}
+{% if has_products %}
+        case .products:
+            ProductsView()
+{% endif %}
+{% if has_profile %}
+        case .profile:
+            ProfileView()
+{% endif %}
+{% if not has_feature_destination %}
+        case .overview:
+            OverviewView()
+{% endif %}
+        }
+    }
+}
+
+private enum Destination: CaseIterable, Identifiable {
+{% if has_chat %}
+    case chat
+{% endif %}
+{% if has_products %}
+    case products
+{% endif %}
+{% if has_profile %}
+    case profile
+{% endif %}
+{% if not has_feature_destination %}
+    case overview
+{% endif %}
+
+    var id: Self { self }
+
+    static var initial: Destination {
+{% if has_chat %}
+        .chat
+{% elif has_products %}
+        .products
+{% elif has_profile %}
+        .profile
+{% else %}
+        .overview
+{% endif %}
+    }
+
+    var title: String {
+        switch self {
+{% if has_chat %}
+        case .chat:
+            return "Assistant"
+{% endif %}
+{% if has_products %}
+        case .products:
+            return "Products"
+{% endif %}
+{% if has_profile %}
+        case .profile:
+            return "Profile"
+{% endif %}
+{% if not has_feature_destination %}
+        case .overview:
+            return "Overview"
+{% endif %}
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+{% if has_chat %}
+        case .chat:
+            return "bubble.left.and.bubble.right"
+{% endif %}
+{% if has_products %}
+        case .products:
+            return "shippingbox"
+{% endif %}
+{% if has_profile %}
+        case .profile:
+            return "person.crop.circle"
+{% endif %}
+{% if not has_feature_destination %}
+        case .overview:
+            return "square.grid.2x2"
+{% endif %}
+        }
+    }
+}
+
+{% if not has_feature_destination %}
+private struct OverviewView: View {
+    @Environment(AuthStore.self) private var session
+
+    var body: some View {
+        ContentColumn {
+            ContentUnavailableView {
+                Label("No feature screens", systemImage: "square.stack.3d.up.slash")
+            } description: {
+{% if has_auth %}
+                if let user = session.user {
+                    Text(
+                        "Signed in as \(user.displayName). Enable auth, profile or CRUD in the project manifest to add screens."
+                    )
+                } else {
+                    Text(
+                        "Enable auth, profile or CRUD in the project manifest to add screens."
+                    )
+                }
+{% else %}
+                Text(
+                    "Enable auth, profile or CRUD in the project manifest to add screens."
+                )
+{% endif %}
+            } actions: {
+{% if has_auth %}
+                Button("Sign out") {
+                    session.signOut()
+                }
+{% endif %}
+            }
+        }
+    }
+}
+{% endif %}

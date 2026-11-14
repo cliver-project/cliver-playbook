@@ -1,0 +1,38 @@
+# Example: a Tauri desktop app with local API and model sidecars.
+project: example-ai-desktop
+playbook:
+  source: https://github.com/cliver-project/cliver-playbook
+  revision: "0.2.1"
+scaffold:
+  template: ai-native
+  profile: ai-desktop
+  reference_slices: [products]
+ui:
+  web: true
+  desktop: tauri2
+  mobile:
+    ios: none
+    android: none
+api:
+  runtime: python
+  deployment: both
+  features: [auth, settings, agent, rag, mcp]
+model:
+  runtime: python
+  deployment: both
+  capabilities: [llm, embedding, rerank, asr, image, system_one]
+agent:
+  runtime: agentcore
+  skills: true
+  mcp: true
+  system_one: true
+contracts:
+  openapi: contracts/openapi.yaml
+  events: contracts/events.json
+ci:
+  provider: github
+release:
+  desktop: true
+  mobile: false
+decisions:
+  - "Profile ai-desktop: local sidecars are primary, with the remote API as fallback."

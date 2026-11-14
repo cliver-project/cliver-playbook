@@ -1,0 +1,196 @@
+{% if enabled('ui.mobile.profile') %}
+import Core
+import SwiftUI
+
+/// The signed-in user's profile: read-only by default, editable in place.
+/// Owned by the project; replace the fields with the project's domain.
+public struct ProfileView: View {
+    @Environment(AuthStore.self) private var session
+
+    @State private var isEditing = false
+    @State private var displayName = ""
+    @State private var email = ""
+    @State private var phone = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    public init() {}
+
+    public var body: some View {
+        Group {
+            if let user = session.user {
+                ContentColumn {
+                    Form {
+                        accountSection(user: user)
+                        rolesSection(user: user)
+                        metadataSection(user: user)
+                    }
+                }
+                .navigationTitle("Profile")
+                .toolbar { toolbarContent }
+                .disabled(isSaving)
+            } else {
+                ContentUnavailableView(
+                    "Not signed in",
+                    systemImage: "person.crop.circle.badge.exclamationmark",
+                    description: Text("Sign in to view your profile.")
+                )
+            }
+        }
+        .onAppear(perform: resetFields)
+        .onChange(of: session.user) { _, _ in
+            if !isEditing {
+                resetFields()
+            }
+        }
+        .alert(
+            "Could not save the profile",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                errorMessage = nil
+            }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    @ViewBuilder
+    private func accountSection(user: User) -> some View {
+        Section("Account") {
+            LabeledContent("Username", value: user.username)
+
+            if isEditing {
+                LabeledContent("Display name") {
+                    TextField("Display name", text: $displayName)
+                        .multilineTextAlignment(.trailing)
+                }
+                LabeledContent("Email") {
+                    TextField("Email", text: $email)
+                        .multilineTextAlignment(.trailing)
+#if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+#endif
+                        .autocorrectionDisabled()
+                }
+                LabeledContent("Phone") {
+                    TextField("Phone", text: $phone)
+                        .multilineTextAlignment(.trailing)
+                        .textContentType(.telephoneNumber)
+                }
+            } else {
+                LabeledContent("Display name", value: user.displayName)
+                LabeledContent("Email", value: user.email ?? "Not set")
+                LabeledContent("Phone", value: user.phone ?? "Not set")
+                LabeledContent("Status", value: user.isActive ? "Active" : "Inactive")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rolesSection(user: User) -> some View {
+        if !user.roleCodes.isEmpty {
+            Section("Roles") {
+                ForEach(user.roleCodes, id: \.self) { role in
+                    Text(role)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func metadataSection(user: User) -> some View {
+        Section("Member since") {
+            Text(formattedDate(user.createdAt))
+                .foregroundStyle(.secondary)
+        }
+        if user.mustChangePassword {
+            Section {
+                Label(
+                    "A password change is required before other clients will accept this session.",
+                    systemImage: "exclamationmark.shield"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        if isEditing {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    resetFields()
+                    isEditing = false
+                }
+                .disabled(isSaving)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await save() }
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("Save")
+                    }
+                }
+                .disabled(isSaving)
+            }
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit") {
+                    resetFields()
+                    isEditing = true
+                }
+            }
+        }
+    }
+
+    private func resetFields() {
+        guard let user = session.user else { return }
+        displayName = user.displayName
+        email = user.email ?? ""
+        phone = user.phone ?? ""
+    }
+
+    @MainActor
+    private func save() async {
+        let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDisplayName.isEmpty else {
+            errorMessage = "Display name cannot be empty."
+            return
+        }
+
+        isSaving = true
+        defer { isSaving = false }
+
+        do {
+            try await session.updateProfile(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
+                displayName: trimmedDisplayName
+            )
+            isEditing = false
+        } catch is CancellationError {
+            // The view went away; nothing to report.
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func formattedDate(_ raw: String) -> String {
+        let withFractionalSeconds = ISO8601DateFormatter()
+        withFractionalSeconds.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = withFractionalSeconds.date(from: raw)
+            ?? ISO8601DateFormatter().date(from: raw)
+        return date?.formatted(date: .abbreviated, time: .omitted) ?? raw
+    }
+}
+{% endif %}

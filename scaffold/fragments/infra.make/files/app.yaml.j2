@@ -1,0 +1,5 @@
+# Lowest-priority configuration layer. Environment and .env override it.
+# Never put secrets in this file.
+app_name: {{ project_slug }}
+log_level: INFO
+database_url: "postgresql+asyncpg://cliver:cliver@127.0.0.1:5432/{{ project_slug }}"

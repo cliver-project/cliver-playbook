@@ -20,3 +20,7 @@ docs/superpowers/
 
 # Node (frontend packages)
 node_modules/
+
+# SwiftPM build artifacts (can appear inside template package directories)
+**/.build/
+**/.swiftpm/

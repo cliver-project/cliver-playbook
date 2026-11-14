@@ -1,0 +1,12 @@
+@import "cliver-playbook-app-basic/styles/index.css";
+
+@source "../src";
+{% if enabled('api.auth') %}
+@source "../../../node_modules/cliver-playbook-app-user/src";
+{% endif %}
+{% if enabled('api.rag') %}
+@source "../../../node_modules/cliver-playbook-app-rag/src";
+{% endif %}
+{% if enabled('api.mcp') %}
+@source "../../../node_modules/cliver-playbook-app-mcp/src";
+{% endif %}

@@ -1,0 +1,5 @@
+# The model service is internal and is called by the API plane. Its public
+# contract is documented by the capabilities the API exposes, not by this
+# internal service. Add public capability paths here when the project exposes
+# them directly.
+paths: {}

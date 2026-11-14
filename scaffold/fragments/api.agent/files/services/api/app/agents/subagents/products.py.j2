@@ -1,0 +1,145 @@
+{% if enabled('api.products') %}
+"""Example business-point agent: read the product catalogue."""
+
+from __future__ import annotations
+
+import json
+
+from cliver_core import tool
+
+from app.agents.contracts import (
+    AgentContext,
+    AgentIntent,
+    AgentResult,
+    AgentToolkit,
+    AutonomyPolicy,
+)
+from app.agents.learning import LearningPipeline
+from app.services import products as products_service
+
+
+def _declare_source(context: AgentContext, source: str) -> None:
+    raw = context.metadata.get("sources") or ()
+    if isinstance(raw, str):
+        raw = [raw]
+    sources = list(raw)
+    if source not in sources:
+        sources.append(source)
+    context.metadata["sources"] = sources
+
+
+class ProductsAgent:
+    name = "products"
+    description = "List the project's products."
+    capabilities = ("products.list",)
+    autonomy = AutonomyPolicy(
+        allowed_sources=("products",),
+        evaluation_metric="products.list.success",
+        evaluation_threshold=0.6,
+        improvement_mode="proposal",
+        retention_days=30,
+    )
+    pipeline = LearningPipeline(autonomy)
+
+    def can_handle(self, intent: AgentIntent) -> bool:
+        message = str(intent.payload.get("message", "")).lower()
+        return "product" in message
+
+    def toolkit(self, context: AgentContext) -> AgentToolkit:
+        _declare_source(context, "products")
+        db = context.resources.get("db")
+        system_prompt = (
+            "You are the products business-point agent. Use the read-only "
+            "tools for product questions. Never invent products, prices or "
+            "availability."
+        )
+        if db is None:
+            return AgentToolkit(system_prompt=system_prompt)
+
+        @tool(
+            name="products_list",
+            description="List products with their ids, names and prices.",
+            safety="safe",
+        )
+        async def products_list(limit: int = 20) -> list[dict]:
+            products, total = await products_service.list_products(db, limit=max(1, min(limit, 50)))
+            return [
+                {
+                    "text": json.dumps(
+                        {
+                            "total": total,
+                            "products": [
+                                {
+                                    "id": product.id,
+                                    "name": product.name,
+                                    "description": product.description,
+                                    "price_cents": product.price_cents,
+                                }
+                                for product in products
+                            ],
+                        },
+                        ensure_ascii=False,
+                    )
+                }
+            ]
+
+        @tool(
+            name="products_get",
+            description="Read one product by its numeric id.",
+            safety="safe",
+        )
+        async def products_get(product_id: int) -> list[dict]:
+            product = await products_service.get_product(db, product_id)
+            if product is None:
+                return [{"error": f"Product {product_id} was not found."}]
+            return [
+                {
+                    "text": json.dumps(
+                        {
+                            "id": product.id,
+                            "name": product.name,
+                            "description": product.description,
+                            "price_cents": product.price_cents,
+                        },
+                        ensure_ascii=False,
+                    )
+                }
+            ]
+
+        return AgentToolkit(
+            system_prompt=system_prompt,
+            tools=[products_list, products_get],
+        )
+
+    async def run(self, context: AgentContext) -> AgentResult:
+        _declare_source(context, "products")
+        db = context.resources.get("db")
+        if db is None:
+            return AgentResult(
+                agent=self.name,
+                message="The products agent needs a database session.",
+            )
+        products, total = await products_service.list_products(db, limit=20)
+        preview = "; ".join(
+            f"{product.name} ({product.price_cents} cents)" for product in products[:5]
+        )
+        message = f"Found {total} product(s)."
+        if preview:
+            message = f"{message} {preview}"
+        return AgentResult(
+            agent=self.name,
+            message=message,
+            data={
+                "total": total,
+                "products": [
+                    {
+                        "id": product.id,
+                        "name": product.name,
+                        "description": product.description,
+                        "price_cents": product.price_cents,
+                    }
+                    for product in products
+                ],
+            },
+        )
+{% endif %}

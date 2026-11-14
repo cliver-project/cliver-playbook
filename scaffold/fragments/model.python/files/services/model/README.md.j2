@@ -1,0 +1,25 @@
+# Model service
+
+The model-invocation plane for {{ project_title }}. The API plane calls this
+service over loopback or a private network; clients never call it directly.
+
+Phase 1 exposes `/health`, `/v1/models` and the capability endpoint shapes.
+Phase 2 adds the actual runtimes:
+
+- embeddings and rerank — ONNX Runtime with quantized small models;
+- ASR — whisper.cpp / sherpa-onnx / faster-whisper;
+- image — ONNX Runtime for OCR/classification/CLIP; generation stays remote by
+  default;
+- System One / Laya — the decision/scoring binding.
+
+Model files are not committed. Download them on demand into a project-local
+cache, verify checksums, and keep model updates separate from application
+releases.
+
+Run it with `make dev-model` from the project root, or:
+
+```sh
+cd services/model
+uv sync
+uv run uvicorn --factory model_app.main:create_app --host 127.0.0.1 --port 8010
+```

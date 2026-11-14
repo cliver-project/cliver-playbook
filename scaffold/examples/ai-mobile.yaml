@@ -1,0 +1,40 @@
+# Example: an iOS SwiftUI client talking to the remote API.
+project: example-ai-mobile
+playbook:
+  source: https://github.com/cliver-project/cliver-playbook
+  revision: "0.2.1"
+scaffold:
+  template: ai-native
+  profile: ai-mobile
+  reference_slices: [products]
+ui:
+  web: false
+  desktop: none
+  mobile:
+    ios: swiftui
+    android: none
+    features: [auth, profile, crud]
+    layouts: [phone, pad]
+api:
+  runtime: python
+  deployment: remote
+  features: [auth, settings, agent, mcp]
+model:
+  runtime: python
+  deployment: remote
+  capabilities: [llm, embedding, rerank, asr, system_one]
+agent:
+  runtime: agentcore
+  skills: true
+  mcp: true
+  system_one: true
+contracts:
+  openapi: contracts/openapi.yaml
+  events: contracts/events.json
+ci:
+  provider: github
+release:
+  desktop: false
+  mobile: true
+decisions:
+  - "Profile ai-mobile: one native iOS client; Android is a later scaffold."

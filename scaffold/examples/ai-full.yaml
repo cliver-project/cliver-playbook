@@ -1,0 +1,41 @@
+# Example: web, desktop and both native mobile targets.
+project: example-ai-full
+playbook:
+  source: https://github.com/cliver-project/cliver-playbook
+  revision: "0.2.1"
+scaffold:
+  template: ai-native
+  profile: ai-full
+  reference_slices: [products]
+ui:
+  web: true
+  desktop: tauri2
+  mobile:
+    ios: swiftui
+    android: kotlin
+    features: [auth, profile, crud]
+    layouts: [phone, pad]
+api:
+  runtime: python
+  deployment: both
+  features: [auth, settings, agent, rag, mcp, files, billing]
+model:
+  runtime: python
+  deployment: both
+  capabilities: [llm, embedding, rerank, asr, image, tts, video, system_one]
+agent:
+  runtime: agentcore
+  skills: true
+  mcp: true
+  system_one: true
+contracts:
+  openapi: contracts/openapi.yaml
+  events: contracts/events.json
+ci:
+  provider: both
+release:
+  desktop: true
+  mobile: true
+decisions:
+  - "Profile ai-full: one product across web, desktop and both native mobile targets."
+  - "Desktop keeps local sidecars for offline use; mobile always uses the remote API."

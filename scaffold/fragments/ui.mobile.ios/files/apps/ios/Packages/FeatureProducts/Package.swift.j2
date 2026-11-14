@@ -1,0 +1,27 @@
+{% if enabled('ui.mobile.crud') %}
+// swift-tools-version: 5.9
+import PackageDescription
+
+// macOS lets `swift build` verify the package without a simulator; the app
+// target is iOS only.
+let package = Package(
+    name: "FeatureProducts",
+    platforms: [
+        .iOS(.v17),
+        .macOS(.v14),
+    ],
+    products: [
+        .library(name: "FeatureProducts", targets: ["FeatureProducts"]),
+    ],
+    dependencies: [
+        .package(path: "../Core"),
+    ],
+    targets: [
+        .target(
+            name: "FeatureProducts",
+            dependencies: [.product(name: "Core", package: "Core")],
+            path: "Sources/FeatureProducts"
+        ),
+    ]
+)
+{% endif %}

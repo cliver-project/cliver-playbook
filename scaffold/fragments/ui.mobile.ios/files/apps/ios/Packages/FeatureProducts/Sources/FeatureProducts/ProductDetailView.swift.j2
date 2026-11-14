@@ -1,0 +1,137 @@
+{% if enabled('ui.mobile.crud') %}
+import Core
+import SwiftUI
+
+public struct ProductDetailView: View {
+    @Environment(AuthStore.self) private var session
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var product: Product
+    @State private var isEditing = false
+    @State private var isDeleting = false
+    @State private var isConfirmingDelete = false
+    @State private var errorMessage: String?
+
+    private let onUpdated: (Product) -> Void
+    private let onDeleted: (Product) -> Void
+
+    public init(
+        product: Product,
+        onUpdated: @escaping (Product) -> Void = { _ in },
+        onDeleted: @escaping (Product) -> Void = { _ in }
+    ) {
+        _product = State(initialValue: product)
+        self.onUpdated = onUpdated
+        self.onDeleted = onDeleted
+    }
+
+    public var body: some View {
+        ContentColumn {
+            Form {
+                Section("Product") {
+                    LabeledContent("Name", value: product.name)
+                    LabeledContent(
+                        "Price",
+                        value: DesignSystem.price(cents: product.priceCents)
+                    )
+                }
+
+                Section("Description") {
+                    Text(
+                        product.description.isEmpty
+                            ? "No description."
+                            : product.description
+                    )
+                    .foregroundStyle(.secondary)
+                }
+
+                Section("Timestamps") {
+                    LabeledContent("Created", value: formattedDate(product.createdAt))
+                    LabeledContent("Updated", value: formattedDate(product.updatedAt))
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        isConfirmingDelete = true
+                    } label: {
+                        HStack(spacing: DesignSystem.Spacing.s) {
+                            if isDeleting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Delete product")
+                        }
+                    }
+                    .disabled(isDeleting)
+                }
+            }
+        }
+        .navigationTitle(product.name)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit") {
+                    isEditing = true
+                }
+                .disabled(isDeleting)
+            }
+        }
+        .sheet(isPresented: $isEditing) {
+            NavigationStack {
+                ProductEditView(product: product) { updated in
+                    product = updated
+                    onUpdated(updated)
+                }
+            }
+        }
+        .confirmationDialog(
+            "Delete this product?",
+            isPresented: $isConfirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                Task { await deleteProduct() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone.")
+        }
+        .alert(
+            "Could not delete the product",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                errorMessage = nil
+            }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func deleteProduct() async {
+        isDeleting = true
+        defer { isDeleting = false }
+
+        do {
+            try await session.api.deleteProduct(id: product.id)
+            onDeleted(product)
+            dismiss()
+        } catch is CancellationError {
+            // The view went away; nothing to report.
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func formattedDate(_ raw: String) -> String {
+        let withFractionalSeconds = ISO8601DateFormatter()
+        withFractionalSeconds.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = withFractionalSeconds.date(from: raw)
+            ?? ISO8601DateFormatter().date(from: raw)
+        return date?.formatted(date: .abbreviated, time: .omitted) ?? raw
+    }
+}
+{% endif %}

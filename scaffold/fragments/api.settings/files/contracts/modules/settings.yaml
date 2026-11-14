@@ -1,0 +1,3 @@
+# Settings routes are provided by the playbook packages. Project-specific
+# sections are added here when the project registers them.
+paths: {}

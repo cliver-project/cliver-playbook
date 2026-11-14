@@ -1,0 +1,46 @@
+{
+  "app": {
+    "title": "AI workspace"
+  },
+  "nav": {
+    "home": "Home",
+    "products": "Products"
+  },
+  "home": {
+    "title": "Welcome",
+    "body": "This is the project-owned home page. Replace it with your domain.",
+    "products": "Open the product reference slice"
+  },
+  "products": {
+    "title": "Products",
+    "empty": "No products yet",
+    "search": "Search products",
+    "create": "New product",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirmDelete": "Delete this product?",
+    "name": "Name",
+    "description": "Description",
+    "price": "Price (cents)"
+  },
+  "chat": {
+    "title": "Ask anything",
+    "subtitle": "Describe what you need; the API plane chooses the business agent.",
+    "empty": "Start a conversation. Ask about products or your account.",
+    "placeholder": "Ask a question…",
+    "send": "Send",
+    "stop": "Stop",
+    "thinking": "Thinking…",
+    "openProducts": "Open products",
+    "openProfile": "Open profile",
+    "failed": "The run failed. Try again.",
+    "toolResult": "Result",
+    "toolError": "Error",
+    "helpful": "Helpful",
+    "notHelpful": "Not helpful",
+    "feedbackThanks": "Thanks for the feedback.",
+    "feedbackFailed": "Could not send feedback. Try again."
+  }
+}

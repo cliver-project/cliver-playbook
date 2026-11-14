@@ -1,0 +1,46 @@
+{
+  "app": {
+    "title": "AI 工作台"
+  },
+  "nav": {
+    "home": "首页",
+    "products": "产品"
+  },
+  "home": {
+    "title": "欢迎",
+    "body": "这是项目自己的首页，替换成你的业务内容。",
+    "products": "打开产品参考切片"
+  },
+  "products": {
+    "title": "产品",
+    "empty": "还没有产品",
+    "search": "搜索产品",
+    "create": "新建产品",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存",
+    "cancel": "取消",
+    "confirmDelete": "确定删除这个产品？",
+    "name": "名称",
+    "description": "描述",
+    "price": "价格（分）"
+  },
+  "chat": {
+    "title": "随时提问",
+    "subtitle": "描述你的需求，API 侧会选择对应的业务 agent。",
+    "empty": "开始对话。可以询问产品信息或你的账户。",
+    "placeholder": "输入问题…",
+    "send": "发送",
+    "stop": "停止",
+    "thinking": "思考中…",
+    "openProducts": "打开产品",
+    "openProfile": "打开个人资料",
+    "failed": "运行失败，请重试。",
+    "toolResult": "结果",
+    "toolError": "错误",
+    "helpful": "有帮助",
+    "notHelpful": "没帮助",
+    "feedbackThanks": "感谢反馈。",
+    "feedbackFailed": "反馈发送失败，请重试。"
+  }
+}

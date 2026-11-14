@@ -1,0 +1,207 @@
+{% if enabled('ui.mobile.crud') %}
+import Core
+import SwiftUI
+
+/// Reference product slice: list, search, create, refresh, and navigation to
+/// detail. The project owns this screen and replaces it with its domain.
+public struct ProductsView: View {
+    private enum Phase: Equatable {
+        case idle
+        case loading
+        case loaded
+        case failed(String)
+    }
+
+    @Environment(AuthStore.self) private var session
+    @Environment(\.appComponents) private var components
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    @State private var products: [Product] = []
+    @State private var phase: Phase = .idle
+    @State private var searchText = ""
+    @State private var selectedProduct: Product?
+    @State private var isCreating = false
+    @State private var refreshError: String?
+
+    public init() {}
+
+    public var body: some View {
+        Group {
+            if isRegular {
+                splitLayout
+            } else {
+                compactLayout
+            }
+        }
+        .navigationTitle("Products")
+        .task { await loadIfNeeded() }
+        .sheet(isPresented: $isCreating) {
+            NavigationStack {
+                ProductEditView { created in
+                    products.insert(created, at: 0)
+                    selectedProduct = created
+                    phase = .loaded
+                }
+            }
+        }
+        .alert(
+            "Could not refresh products",
+            isPresented: Binding(
+                get: { refreshError != nil },
+                set: { if !$0 { refreshError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                refreshError = nil
+            }
+        } message: {
+            Text(refreshError ?? "")
+        }
+    }
+
+    private var isRegular: Bool {
+        LayoutMode(sizeClass: horizontalSizeClass) == .regular
+    }
+
+    private var compactLayout: some View {
+        productList
+            .navigationDestination(for: Product.self) { product in
+                ProductDetailView(
+                    product: product,
+                    onUpdated: update,
+                    onDeleted: remove
+                )
+            }
+    }
+
+    private var splitLayout: some View {
+        NavigationSplitView {
+            productList
+        } detail: {
+            NavigationStack {
+                if let selectedProduct {
+                    ProductDetailView(
+                        product: selectedProduct,
+                        onUpdated: update,
+                        onDeleted: remove
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "Select a product",
+                        systemImage: "sidebar.left",
+                        description: Text("Choose a product from the list to see its details.")
+                    )
+                }
+            }
+        }
+    }
+
+    private var productList: some View {
+        List(selection: isRegular ? $selectedProduct : nil) {
+            ForEach(filteredProducts) { product in
+                if isRegular {
+                    components.productRow(product)
+                        .tag(product)
+                } else {
+                    NavigationLink(value: product) {
+                        components.productRow(product)
+                    }
+                }
+            }
+        }
+        .searchable(text: $searchText, prompt: "Search products")
+        .refreshable { await load() }
+        .overlay { emptyOrErrorState }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                components.primaryButton("New product", "plus") {
+                    isCreating = true
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyOrErrorState: some View {
+        switch phase {
+        case .idle where products.isEmpty:
+            EmptyView()
+        case .loading where products.isEmpty:
+            ProgressView("Loading products…")
+        case let .failed(message) where products.isEmpty:
+            ContentUnavailableView {
+                Label("Could not load products", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("Retry") {
+                    Task { await load() }
+                }
+            }
+        case .loaded where products.isEmpty:
+            components.emptyState(
+                searchText.isEmpty ? "No products" : "No matches",
+                searchText.isEmpty
+                    ? "Create the first product to see it here."
+                    : "Try a different search term."
+            )
+        default:
+            EmptyView()
+        }
+    }
+
+    private var filteredProducts: [Product] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return products }
+        return products.filter { product in
+            product.name.localizedCaseInsensitiveContains(query)
+                || product.description.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private func loadIfNeeded() async {
+        guard phase == .idle else { return }
+        await load()
+    }
+
+    @MainActor
+    private func load() async {
+        phase = .loading
+        do {
+            let loaded = try await session.api.products()
+            products = loaded
+            phase = .loaded
+            if let selected = selectedProduct,
+               !loaded.contains(where: { $0.id == selected.id }) {
+                selectedProduct = nil
+            }
+        } catch is CancellationError {
+            phase = products.isEmpty ? .idle : .loaded
+        } catch {
+            if products.isEmpty {
+                phase = .failed(error.localizedDescription)
+            } else {
+                phase = .loaded
+                refreshError = error.localizedDescription
+            }
+        }
+    }
+
+    private func update(_ product: Product) {
+        if let index = products.firstIndex(where: { $0.id == product.id }) {
+            products[index] = product
+        }
+        if selectedProduct?.id == product.id {
+            selectedProduct = product
+        }
+    }
+
+    private func remove(_ product: Product) {
+        products.removeAll { $0.id == product.id }
+        if selectedProduct?.id == product.id {
+            selectedProduct = nil
+        }
+    }
+}
+
+{% endif %}

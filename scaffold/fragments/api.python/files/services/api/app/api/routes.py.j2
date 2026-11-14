@@ -1,0 +1,25 @@
+"""The project router list; every entry has a disjoint prefix."""
+
+from fastapi import APIRouter
+
+{% if enabled('api.agent') %}
+from app.api.agent import router as agent_router
+{% endif %}
+{% if enabled('api.auth') %}
+from app.api.auth import router as auth_router
+{% endif %}
+{% if enabled('api.products') %}
+from app.api.products import router as products_router
+{% endif %}
+
+ROUTERS: list[APIRouter] = [
+{% if enabled('api.auth') %}
+    auth_router,
+{% endif %}
+{% if enabled('api.products') %}
+    products_router,
+{% endif %}
+{% if enabled('api.agent') %}
+    agent_router,
+{% endif %}
+]

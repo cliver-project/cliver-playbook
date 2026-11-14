@@ -161,6 +161,55 @@ and the manifest example.
 the mcp frontend shell remains the worked composition. Releases are cut with
 `make release` (a bumped version plus a `X.Y.Z` tag); see `docs/releasing.md`.
 
+## AI-native project scaffold
+
+Every new project is an AI-native application: thin UI clients (web, Tauri
+desktop, native mobile), a Python API plane that owns AgentCore, and a separate
+model-invocation plane, connected by OpenAPI and a streaming-event contract. The
+scaffold in `scaffold/` selects modules from a manifest and materializes the
+project-owned infrastructure skeleton; it never generates domain logic.
+`make scaffold-check` validates the catalog, schema, planner and example
+manifests, and
+`make scaffold-plan MANIFEST=scaffold/examples/ai-web.yaml` prints a plan.
+`scripts/scaffold_project.py --apply MANIFEST --target DIR` writes the project.
+The web app installs and builds against the pinned tag, includes a chat-first
+home, enforces its `src/ui` seam in CI and has a Playwright chat E2E; the iOS
+app builds with XcodeGen/Xcode unsigned and exposes an `AppComponents`
+environment seam; the Android app builds with JDK 17, API 35 and Gradle 8.10.2.
+The native scaffold includes auth, profile, reference product CRUD and
+phone/pad layouts.
+The generated Python API is a multi-agent collaboration platform: a coordinator
+plans an ordered sequence of business-point sub-agents, runs the steps
+sequentially with each later step receiving the earlier results as handoff,
+and each sub-agent runs the reference self-enhancement loop: a redacted,
+source-checked experience store, a 0.6 launch-bar evaluation, evidence-backed
+proposals, optional model-based experience distillation, a golden-set offline
+regression gate, reviewer approval/audit and a prompt overlay applied to later
+runs.
+Sub-agents scope their own tools, skills (`skills/shared` + `skills/<agent>`)
+and MCP servers, and runner events carry the executing agent. An optional
+System One/Laya selector (local laya, Aliyun Bailian, TypeSafe or a generic
+HTTP decision model) narrows large tool/skill catalogues as AgentCore's
+`candidate_selector`; it is fail-open and only activates above configured
+thresholds. When `CLIVER_AGENT_LLM_*` is configured, the coordinator plans
+through AgentCore structured output and each sub-agent runs a
+tool loop with its own toolkit; with no model configured it falls back to
+deterministic routing and direct business methods. Runs are durable: every
+event is persisted to `agent_run_events`, a single worker executes each run
+while streams replay and tail the log, SSE frames carry `id:` sequence for
+`Last-Event-ID` resume, quiet periods get keepalive comments, and a vanished
+worker is marked orphaned rather than retried. Skills, MCP clients and
+permission callbacks are opt-in seams. The web reference implements the
+chat-first surface: `/` streams agent events, maps the selected business agent
+to a products/profile action, and keeps every feature route directly
+reachable. All web visuals sit behind `apps/web/src/ui`, and a seam check
+rejects deep visual imports from pages or features. iOS exposes the same
+`AppComponents` seam and a chat-first Assistant tab; Android has the component
+seam, the same chat-first shape and a passing Gradle build. The desktop shell
+is minimal until its sidecar phase. See
+`adr/0026-ai-native-project-scaffold.md`, `adr/0027-multi-agent-api-plane.md` and
+`scaffold/README.md`.
+
 ## Running this repository
 
 ```sh

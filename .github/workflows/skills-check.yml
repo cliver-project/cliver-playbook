@@ -1,4 +1,4 @@
-name: Check the assembly skill
+name: Check the assembly skill and scaffold
 
 # The skill is distributed from the default branch: `npx skills add` clones
 # main and installs the current SKILL.md. There is no tag and no release step.
@@ -9,14 +9,18 @@ on:
     branches: [main]
     paths:
       - "skills/**"
+      - "scaffold/**"
       - "scripts/validate_skill.py"
       - "scripts/validate_project_manifest.py"
+      - "scripts/scaffold_project.py"
       - ".github/workflows/skills-check.yml"
   pull_request:
     paths:
       - "skills/**"
+      - "scaffold/**"
       - "scripts/validate_skill.py"
       - "scripts/validate_project_manifest.py"
+      - "scripts/scaffold_project.py"
       - ".github/workflows/skills-check.yml"
 
 permissions:
@@ -44,3 +48,8 @@ jobs:
         run: |
           uv run --with pyyaml python scripts/validate_skill.py --self-test
           uv run --with pyyaml python scripts/validate_skill.py --all
+
+      - name: Validate the AI-native scaffold
+        run: |
+          uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --self-test
+          uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --validate-catalog

@@ -1,0 +1,582 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent run events",
+  "description": "Server-sent events emitted by GET /api/v1/agent/runs/{run_id}/events.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/RunStarted"
+    },
+    {
+      "$ref": "#/$defs/CoordinatorPlan"
+    },
+    {
+      "$ref": "#/$defs/AgentSelected"
+    },
+    {
+      "$ref": "#/$defs/AgentDelegated"
+    },
+    {
+      "$ref": "#/$defs/AgentResult"
+    },
+    {
+      "$ref": "#/$defs/PipelineEvaluated"
+    },
+    {
+      "$ref": "#/$defs/PipelineImprovement"
+    },
+    {
+      "$ref": "#/$defs/MessageDelta"
+    },
+    {
+      "$ref": "#/$defs/ToolCall"
+    },
+    {
+      "$ref": "#/$defs/ToolResult"
+    },
+    {
+      "$ref": "#/$defs/SkillSelected"
+    },
+    {
+      "$ref": "#/$defs/McpRequest"
+    },
+    {
+      "$ref": "#/$defs/McpResponse"
+    },
+    {
+      "$ref": "#/$defs/Artifact"
+    },
+    {
+      "$ref": "#/$defs/Usage"
+    },
+    {
+      "$ref": "#/$defs/RunCompleted"
+    },
+    {
+      "$ref": "#/$defs/RunFailed"
+    }
+  ],
+  "$defs": {
+    "Envelope": {
+      "type": "object",
+      "required": [
+        "type",
+        "run_id",
+        "sequence"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "request_id": {
+          "type": "string"
+        }
+      }
+    },
+    "RunStarted": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "run.started"
+            }
+          }
+        }
+      ]
+    },
+    "CoordinatorPlan": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "steps"
+          ],
+          "properties": {
+            "type": {
+              "const": "coordinator.plan"
+            },
+            "intent": {
+              "type": "object",
+              "description": "Deprecated single-step form; new servers emit steps.",
+              "required": [
+                "name",
+                "confidence"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "payload": {
+                  "type": "object"
+                }
+              }
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/PlanStep"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AgentSelected": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "agent"
+          ],
+          "properties": {
+            "type": {
+              "const": "agent.selected"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "AgentDelegated": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "agent"
+          ],
+          "properties": {
+            "type": {
+              "const": "agent.delegated"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "AgentResult": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "agent",
+            "message"
+          ],
+          "properties": {
+            "type": {
+              "const": "agent.result"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "data": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "PipelineEvaluated": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "agent",
+            "evaluation"
+          ],
+          "properties": {
+            "type": {
+              "const": "pipeline.evaluated"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "evaluation": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "PipelineImprovement": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "agent",
+            "proposal"
+          ],
+          "properties": {
+            "type": {
+              "const": "pipeline.improvement"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "proposal": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "MessageDelta": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "delta"
+          ],
+          "properties": {
+            "type": {
+              "const": "message.delta"
+            },
+            "delta": {
+              "type": "string"
+            },
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "ToolCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "tool_call_id",
+            "name",
+            "arguments"
+          ],
+          "properties": {
+            "type": {
+              "const": "tool.call"
+            },
+            "tool_call_id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "arguments": {
+              "type": "object"
+            },
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "ToolResult": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "tool_call_id",
+            "result"
+          ],
+          "properties": {
+            "type": {
+              "const": "tool.result"
+            },
+            "tool_call_id": {
+              "type": "string"
+            },
+            "result": {},
+            "is_error": {
+              "type": "boolean",
+              "default": false
+            },
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "SkillSelected": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "skill"
+          ],
+          "properties": {
+            "type": {
+              "const": "skill.selected"
+            },
+            "skill": {
+              "type": "string"
+            },
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "McpRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "server",
+            "method"
+          ],
+          "properties": {
+            "type": {
+              "const": "mcp.request"
+            },
+            "server": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object"
+            },
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "McpResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "server"
+          ],
+          "properties": {
+            "type": {
+              "const": "mcp.response"
+            },
+            "server": {
+              "type": "string"
+            },
+            "result": {},
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "Artifact": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "name",
+            "content_type"
+          ],
+          "properties": {
+            "type": {
+              "const": "artifact"
+            },
+            "name": {
+              "type": "string"
+            },
+            "content_type": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "Usage": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "usage"
+            },
+            "input_tokens": {
+              "type": "integer"
+            },
+            "output_tokens": {
+              "type": "integer"
+            },
+            "agent": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "RunCompleted": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "run.completed"
+            }
+          }
+        }
+      ]
+    },
+    "RunFailed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "code",
+            "message"
+          ],
+          "properties": {
+            "type": {
+              "const": "run.failed"
+            },
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "PlanStep": {
+      "type": "object",
+      "required": [
+        "name",
+        "confidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "payload": {
+          "type": "object"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

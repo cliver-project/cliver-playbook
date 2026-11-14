@@ -1,0 +1,576 @@
+paths:
+  /api/v1/agent/runs:
+    post:
+      tags: [agent]
+      summary: Start an agent run
+      operationId: createAgentRun
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRunRequest"
+      responses:
+        "202":
+          description: Run accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunCreated"
+  /api/v1/agent/runs/{run_id}/events:
+    parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema:
+          type: integer
+        description: >
+          Replay starts after this event sequence. The stream always ends with
+          the run's terminal event; reconnecting clients resume instead of
+          re-executing the run.
+    get:
+      tags: [agent]
+      summary: Stream run events as server-sent events
+      operationId: streamAgentRun
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: SSE stream; event types are defined in contracts/events.json
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /api/v1/agent/runs/{run_id}/cancel:
+    parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [agent]
+      summary: Cancel a run
+      operationId: cancelAgentRun
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: Cancellation accepted
+  /api/v1/agent/runs/{run_id}/feedback:
+    parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [agent]
+      summary: Rate an agent result and run the learning evaluation
+      operationId: submitAgentFeedback
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentFeedbackRequest"
+      responses:
+        "201":
+          description: Feedback recorded; evaluation and proposal outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentFeedbackCreated"
+        "403":
+          description: The run belongs to another user
+        "404":
+          description: Run, agent or observed experience not found
+        "422":
+          description: Invalid rating, agent or step
+  /api/v1/agent/proposals:
+    get:
+      tags: [agent]
+      summary: List improvement proposals (reviewer only)
+      operationId: listAgentProposals
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agent
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, applied, rejected]
+      responses:
+        "200":
+          description: Improvement proposals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentProposalList"
+        "403":
+          description: Reviewer permission required
+  /api/v1/agent/proposals/{proposal_id}/approve:
+    parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [agent]
+      summary: Approve a proposal and apply prompt guidance
+      operationId: approveAgentProposal
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Proposal approved; prompt proposals also applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentProposalDecision"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Proposal not found
+        "409":
+          description: Proposal was already reviewed
+        "422":
+          description: Prompt proposal is empty, too large or the overlay is full
+  /api/v1/agent/proposals/{proposal_id}/reject:
+    parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [agent]
+      summary: Reject a proposal without changing runtime behaviour
+      operationId: rejectAgentProposal
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentProposalRejectRequest"
+      responses:
+        "200":
+          description: Proposal rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentProposalDecision"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Proposal not found
+        "409":
+          description: Proposal was already reviewed
+        "422":
+          description: Reject note is too long
+  /api/v1/agent/golden-cases:
+    get:
+      tags: [agent]
+      summary: List offline regression cases (reviewer only)
+      operationId: listAgentGoldenCases
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agent
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Golden cases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentGoldenCaseList"
+        "403":
+          description: Reviewer permission required
+    post:
+      tags: [agent]
+      summary: Add an offline regression case
+      operationId: createAgentGoldenCase
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentGoldenCaseCreate"
+      responses:
+        "201":
+          description: Golden case created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentGoldenCase"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Agent not found
+        "409":
+          description: A case with this agent and name already exists
+        "422":
+          description: Missing fields or no assertions
+  /api/v1/agent/golden-cases/{case_id}:
+    parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    delete:
+      tags: [agent]
+      summary: Delete an offline regression case
+      operationId: deleteAgentGoldenCase
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Case deleted
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Case not found
+  /api/v1/agent/proposals/{proposal_id}/regression:
+    parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [agent]
+      summary: Read the latest offline gate report for a proposal
+      operationId: getAgentProposalRegression
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Regression report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRegression"
+        "403":
+          description: Reviewer permission required
+        "404":
+          description: Proposal or report not found
+  /api/v1/agent/agents:
+    get:
+      tags: [agent]
+      summary: List the coordinator's registered sub-agents
+      operationId: listAgentCatalog
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Registered sub-agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentList"
+  /api/v1/agent/agents/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [agent]
+      summary: Describe one registered sub-agent
+      operationId: getAgentCatalogEntry
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sub-agent descriptor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDescriptor"
+        "404":
+          description: Agent not found
+components:
+  schemas:
+    AgentRunRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        session_id:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+    AgentRunCreated:
+      type: object
+      required: [run_id, status]
+      properties:
+        run_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running]
+    AgentFeedbackRequest:
+      type: object
+      required: [agent, rating]
+      properties:
+        agent:
+          type: string
+          minLength: 1
+          maxLength: 64
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 2000
+        step:
+          type: [integer, "null"]
+          minimum: 0
+          description: Omit to rate the agent's latest step in the run.
+    AgentEvaluationSummary:
+      type: object
+      required: [status, agent, metric, score, passed, details]
+      properties:
+        status:
+          type: string
+          enum: [evaluated]
+        agent:
+          type: string
+        metric:
+          type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+        passed:
+          type: boolean
+        details:
+          type: object
+          additionalProperties: true
+    AgentProposal:
+      type: object
+      required:
+        [id, agent, kind, status, title, rationale, patch, evidence, created_at]
+      properties:
+        id:
+          type: string
+        agent:
+          type: string
+        kind:
+          type: string
+          enum: [prompt, tool, policy]
+        status:
+          type: string
+          enum: [pending, approved, applied, rejected]
+        title:
+          type: string
+        rationale:
+          type: string
+        patch:
+          type: object
+          additionalProperties: true
+        evidence:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        reviewed_by:
+          type: [integer, "null"]
+        reviewed_at:
+          type: [string, "null"]
+          format: date-time
+        applied_at:
+          type: [string, "null"]
+          format: date-time
+    AgentProposalList:
+      type: object
+      required: [proposals]
+      properties:
+        proposals:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentProposal"
+    AgentFeedbackCreated:
+      type: object
+      required: [feedback_id, experience_id, evaluation]
+      properties:
+        feedback_id:
+          type: integer
+        experience_id:
+          type: integer
+        evaluation:
+          $ref: "#/components/schemas/AgentEvaluationSummary"
+        proposal:
+          oneOf:
+            - $ref: "#/components/schemas/AgentProposal"
+            - type: "null"
+    AgentProposalDecision:
+      type: object
+      required: [proposal, applied, requires_manual_apply]
+      properties:
+        proposal:
+          $ref: "#/components/schemas/AgentProposal"
+        applied:
+          type: boolean
+        requires_manual_apply:
+          type: boolean
+        regression:
+          oneOf:
+            - $ref: "#/components/schemas/AgentRegression"
+            - type: "null"
+    AgentProposalRejectRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+    AgentGoldenCaseCreate:
+      type: object
+      required: [agent, name, message]
+      properties:
+        agent:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+        expected_contains:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        forbidden_contains:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+    AgentGoldenCase:
+      type: object
+      required:
+        [id, agent, name, message, expected_contains, forbidden_contains, enabled,
+         created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        agent:
+          type: string
+        name:
+          type: string
+        message:
+          type: string
+        expected_contains:
+          type: array
+          items:
+            type: string
+        forbidden_contains:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AgentGoldenCaseList:
+      type: object
+      required: [cases]
+      properties:
+        cases:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentGoldenCase"
+    AgentRegression:
+      type: object
+      required:
+        [id, proposal_id, agent, status, baseline_score, candidate_score,
+         min_score, case_results, error, created_at]
+      properties:
+        id:
+          type: integer
+        proposal_id:
+          type: string
+        agent:
+          type: string
+        status:
+          type: string
+          enum: [passed, failed, error, skipped]
+        baseline_score:
+          type: number
+        candidate_score:
+          type: number
+        min_score:
+          type: number
+        case_results:
+          type: array
+          items:
+            type: object
+        error:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AgentDescriptor:
+      type: object
+      required:
+        [name, description, capabilities, autonomy_mode, has_pipeline]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        autonomy_mode:
+          type: string
+          enum: [off, proposal, auto]
+        has_pipeline:
+          type: boolean
+    AgentList:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentDescriptor"

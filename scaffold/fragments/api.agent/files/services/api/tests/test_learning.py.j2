@@ -1,0 +1,944 @@
+import uuid
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+
+import pytest
+from sqlalchemy import delete, select
+
+from app.agents.contracts import (
+    AgentContext,
+    AgentResult,
+    AgentToolkit,
+    AutonomyPolicy,
+)
+from app.agents.learning import (
+    DEFAULT_PROMPT_APPEND,
+    LearningError,
+    LearningPipeline,
+    approve_proposal,
+    evaluate_experience,
+    find_experience,
+    load_prompt_overlay,
+    maybe_create_proposal,
+    observe_experience,
+    record_feedback,
+    reject_proposal,
+)
+from app.agents.models import (
+    AgentConfig,
+    AgentEvaluation,
+    AgentExperience,
+    AgentFeedback,
+    AgentGoldenCase,
+    AgentImprovement,
+    AgentImprovementEvent,
+    AgentRegressionRun,
+)
+from app.agents.proposals import ProposalDraft
+from app.agents.regression import (
+    create_golden_case,
+    get_regression_run,
+)
+from app.agents.runner import AgentCoreRunner
+from app.settings import Settings
+
+
+@pytest.fixture(autouse=True)
+async def clean_learning():
+    from cliver_playbook.app.basic.db.session import open_session
+
+    async with open_session() as db:
+        for model in (
+            AgentRegressionRun,
+            AgentImprovementEvent,
+            AgentImprovement,
+            AgentGoldenCase,
+            AgentEvaluation,
+            AgentFeedback,
+            AgentExperience,
+            AgentConfig,
+        ):
+            await db.execute(delete(model))
+        await db.commit()
+    yield
+
+
+@pytest.fixture
+async def db_session():
+    from cliver_playbook.app.basic.db.session import open_session
+
+    async with open_session() as db:
+        yield db
+
+
+def _policy(**overrides):
+    values = {
+        "allowed_sources": ("products",),
+        "evaluation_metric": "products.answer.quality",
+        "evaluation_threshold": 0.6,
+        "improvement_mode": "proposal",
+        "retention_days": 30,
+    }
+    values.update(overrides)
+    return AutonomyPolicy(**values)
+
+
+def _context(message="list products", *, sources=("products",), step=0):
+    return AgentContext(
+        run_id=uuid.uuid4().hex,
+        message=message,
+        user_id=1,
+        step=step,
+        metadata={"sources": list(sources)},
+    )
+
+
+def _result(message="Found 2 product(s).", **data):
+    return AgentResult(
+        agent="products",
+        message=message,
+        data={"mode": "agentcore", **data},
+    )
+
+
+@pytest.mark.asyncio
+async def test_observe_redacts_sensitive_data_and_enforces_sources(db_session):
+    policy = _policy()
+    context = _context(
+        "my email is a@b.com; call (555) 123-4567",
+        sources=("products",),
+    )
+    context.session_id = "session-abc"
+    result = _result(
+        "contact c@d.com; ssn 123-45-6789",
+        email="e@f.com",
+        mobile=5551234567,
+        price_cents=100,
+        nested={"phone": "+1 555 123 4567"},
+    )
+    experience = await observe_experience(db_session, policy, context, result)
+
+    assert experience is not None
+    assert "a@b.com" not in experience.message
+    assert "555" not in experience.message
+    assert "c@d.com" not in experience.result_message
+    assert "123-45-6789" not in experience.result_message
+    assert experience.result_data["email"] == "[redacted]"
+    assert experience.result_data["mobile"] == "[redacted]"
+    assert experience.result_data["nested"]["phone"] == "[redacted]"
+    assert experience.result_data["price_cents"] == 100
+    assert experience.session_id != "session-abc"
+    assert len(experience.session_id or "") == 32
+
+    denied = await observe_experience(
+        db_session,
+        policy,
+        _context(sources=("crm",)),
+        _result("should not be stored"),
+    )
+    assert denied is None
+
+    undeclared = await observe_experience(
+        db_session,
+        policy,
+        _context(sources=()),
+        _result("must not be stored without a declared source"),
+    )
+    assert undeclared is None
+
+
+@pytest.mark.asyncio
+async def test_feedback_lowers_the_evaluation_below_the_launch_bar(db_session):
+    policy = _policy()
+    context = _context()
+    experience = await observe_experience(db_session, policy, context, _result())
+    assert experience is not None
+
+    baseline = await evaluate_experience(db_session, policy, experience)
+    assert baseline.passed is True
+    assert baseline.score >= policy.evaluation_threshold
+
+    feedback = await record_feedback(
+        db_session,
+        experience=experience,
+        user_id=1,
+        rating=1,
+        comment="the answer missed the price",
+    )
+    assert feedback.rating == 1
+
+    after = await evaluate_experience(db_session, policy, experience)
+    assert after.score < policy.evaluation_threshold
+    assert after.passed is False
+
+
+@pytest.mark.asyncio
+async def test_find_experience_defaults_to_the_latest_step(db_session):
+    policy = _policy()
+    run_id = uuid.uuid4().hex
+    first_context = AgentContext(
+        run_id=run_id,
+        message="list products",
+        step=0,
+        metadata={"sources": ["products"]},
+    )
+    second_context = AgentContext(
+        run_id=run_id,
+        message="list products again",
+        step=1,
+        metadata={"sources": ["products"]},
+    )
+    await observe_experience(db_session, policy, first_context, _result("first"))
+    second = await observe_experience(db_session, policy, second_context, _result("second"))
+
+    found = await find_experience(db_session, run_id=run_id, agent="products")
+    assert found is not None
+    assert found.id == second.id
+    assert found.step == 1
+
+
+@pytest.mark.asyncio
+async def test_learning_uses_its_own_session_not_the_tool_session(db_session):
+    policy = _policy()
+    pipeline = LearningPipeline(policy)
+    context = _context()
+    context.resources = {"db": object(), "learning_db": db_session}
+
+    await pipeline.observe(context, _result("stored through learning_db"))
+    experience = await find_experience(db_session, run_id=context.run_id, agent="products")
+    assert experience is not None
+    assert experience.result_message == "stored through learning_db"
+
+    evaluation = await pipeline.evaluate(context, _result("stored through learning_db"))
+    assert evaluation["status"] == "evaluated"
+    assert evaluation["passed"] is True
+
+
+@pytest.mark.asyncio
+async def test_learning_failures_are_fail_open():
+    pipeline = LearningPipeline(_policy())
+    context = _context()
+    context.resources = {"db": object()}
+
+    await pipeline.observe(context, _result("still a valid business result"))
+    evaluation = await pipeline.evaluate(context, _result("still a valid business result"))
+    proposal = await pipeline.improve(context, {"agent": "products"})
+
+    assert evaluation["status"] == "error"
+    assert proposal is None
+
+
+@pytest.mark.asyncio
+async def test_anonymous_feedback_updates_the_existing_rating(db_session):
+    policy = _policy()
+    experience = await observe_experience(db_session, policy, _context(), _result())
+    assert experience is not None
+
+    first = await record_feedback(
+        db_session, experience=experience, user_id=None, rating=1, comment="first"
+    )
+    second = await record_feedback(
+        db_session, experience=experience, user_id=None, rating=5, comment="updated"
+    )
+
+    assert second.id == first.id
+    assert second.rating == 5
+
+
+@pytest.mark.asyncio
+async def test_low_evaluations_create_one_pending_proposal_and_approval_applies_it(
+    db_session,
+):
+    policy = _policy()
+    proposal = None
+    for _ in range(3):
+        experience = await observe_experience(
+            db_session, policy, _context(), _result("unhelpful answer")
+        )
+        assert experience is not None
+        await record_feedback(
+            db_session, experience=experience, user_id=1, rating=1, comment="wrong"
+        )
+        await evaluate_experience(db_session, policy, experience)
+        proposal = await maybe_create_proposal(db_session, policy, "products")
+
+    assert proposal is not None
+    assert proposal.status == "pending"
+    assert proposal.kind == "prompt"
+    assert proposal.evidence["samples"] == 3
+    assert proposal.patch["prompt_append"]
+    assert await maybe_create_proposal(db_session, policy, "products") is None
+
+    created_events = (
+        await db_session.scalars(
+            select(AgentImprovementEvent).where(AgentImprovementEvent.proposal_id == proposal.id)
+        )
+    ).all()
+    assert [event.action for event in created_events] == ["created"]
+
+    applied, was_applied = await approve_proposal(db_session, proposal.id, actor_id=7)
+    assert was_applied is True
+    assert applied.status == "applied"
+    overlay = await load_prompt_overlay(db_session, "products")
+    assert overlay.strip()
+    assert overlay == applied.patch["prompt_append"]
+    audit_events = (
+        await db_session.scalars(
+            select(AgentImprovementEvent)
+            .where(AgentImprovementEvent.proposal_id == proposal.id)
+            .order_by(AgentImprovementEvent.id)
+        )
+    ).all()
+    assert [event.action for event in audit_events] == [
+        "created",
+        "gate_skipped",
+        "applied",
+    ]
+    assert audit_events[-1].actor_id == 7
+
+
+@pytest.mark.asyncio
+async def test_rejecting_a_proposal_does_not_change_the_agent_overlay(db_session):
+    policy = _policy()
+    for _ in range(3):
+        experience = await observe_experience(
+            db_session, policy, _context(), _result("unhelpful answer")
+        )
+        assert experience is not None
+        await record_feedback(
+            db_session, experience=experience, user_id=1, rating=1, comment="wrong"
+        )
+        await evaluate_experience(db_session, policy, experience)
+    proposal = await maybe_create_proposal(db_session, policy, "products")
+    assert proposal is not None
+
+    rejected = await reject_proposal(db_session, proposal.id, actor_id=7, note="not safe")
+    assert rejected.status == "rejected"
+    assert await load_prompt_overlay(db_session, "products") == ""
+    events = (
+        await db_session.scalars(
+            select(AgentImprovementEvent)
+            .where(AgentImprovementEvent.proposal_id == proposal.id)
+            .order_by(AgentImprovementEvent.id)
+        )
+    ).all()
+    assert [event.action for event in events] == ["created", "rejected"]
+    assert events[-1].note == "not safe"
+
+
+async def _seed_low_evaluations(db_session, policy, count: int = 3) -> None:
+    for index in range(count):
+        experience = await observe_experience(
+            db_session,
+            policy,
+            _context(f"list products attempt {index}"),
+            _result(f"unhelpful answer {index}"),
+        )
+        assert experience is not None
+        await record_feedback(
+            db_session,
+            experience=experience,
+            user_id=1,
+            rating=1,
+            comment=f"the answer was wrong ({index})",
+        )
+        await evaluate_experience(db_session, policy, experience)
+
+
+class _FakeProposalGenerator:
+    def __init__(self, draft: ProposalDraft) -> None:
+        self.draft_value = draft
+        self.calls: list[dict] = []
+
+    async def draft(self, *, agent, metric, threshold, evidence):
+        self.calls.append(
+            {
+                "agent": agent,
+                "metric": metric,
+                "threshold": threshold,
+                "evidence": evidence,
+            }
+        )
+        return self.draft_value
+
+
+class _FailingProposalGenerator:
+    async def draft(self, *, agent, metric, threshold, evidence):
+        raise RuntimeError("distillation provider is down")
+
+
+@pytest.mark.asyncio
+async def test_model_generator_distills_a_proposal_from_recent_experience(db_session):
+    policy = _policy()
+    await _seed_low_evaluations(db_session, policy)
+    generator = _FakeProposalGenerator(
+        ProposalDraft(
+            title="Use prices explicitly",
+            rationale="Users repeatedly report missing prices.",
+            prompt_append="Always include the price when describing a product.",
+        )
+    )
+
+    proposal = await maybe_create_proposal(db_session, policy, "products", generator=generator)
+
+    assert proposal is not None
+    assert proposal.patch["prompt_append"].startswith("Always include the price")
+    assert proposal.title == "Use prices explicitly"
+    assert proposal.evidence["proposal_source"] == "agentcore"
+    assert generator.calls
+    assert generator.calls[0]["agent"] == "products"
+    assert generator.calls[0]["metric"] == policy.evaluation_metric
+    assert generator.calls[0]["evidence"]
+    assert generator.calls[0]["evidence"][0]["feedback"]
+
+
+@pytest.mark.asyncio
+async def test_model_generator_failure_falls_back_to_deterministic(db_session):
+    policy = _policy()
+    await _seed_low_evaluations(db_session, policy)
+
+    proposal = await maybe_create_proposal(
+        db_session, policy, "products", generator=_FailingProposalGenerator()
+    )
+
+    assert proposal is not None
+    assert proposal.patch["prompt_append"] == DEFAULT_PROMPT_APPEND
+    assert proposal.evidence["proposal_source"] == "deterministic_fallback"
+    assert "provider is down" in proposal.evidence["generator_fallback_reason"]
+
+
+@pytest.mark.asyncio
+async def test_learning_pipeline_uses_the_context_proposal_generator(db_session):
+    policy = _policy()
+    await _seed_low_evaluations(db_session, policy)
+    generator = _FakeProposalGenerator(
+        ProposalDraft(
+            title="Pipeline distilled",
+            rationale="The pipeline received the generator.",
+            prompt_append="Use the pipeline proposal.",
+        )
+    )
+    context = _context()
+    context.resources = {"db": db_session, "proposal_generator": generator}
+
+    proposal = await LearningPipeline(policy).improve(context, {"agent": "products"})
+
+    assert proposal is not None
+    assert proposal["patch"]["prompt_append"] == "Use the pipeline proposal."
+    assert generator.calls
+
+
+async def _pending_proposal(
+    db_session, *, agent: str = "products", prompt: str = "Always cite the price."
+) -> AgentImprovement:
+    proposal = AgentImprovement(
+        id=uuid.uuid4().hex,
+        agent=agent,
+        kind="prompt",
+        status="pending",
+        title=f"Improve {agent}",
+        rationale="test proposal",
+        patch={"prompt_append": prompt},
+        evidence={"samples": 3},
+    )
+    db_session.add(proposal)
+    await db_session.commit()
+    await db_session.refresh(proposal)
+    return proposal
+
+
+class _OverlayRunner:
+    def __init__(self, *, baseline: str, candidate: str, marker: str = "cite") -> None:
+        self.baseline = baseline
+        self.candidate = candidate
+        self.marker = marker
+
+    async def run(self, message: str, overlay: str) -> str:
+        return self.candidate if self.marker in overlay else self.baseline
+
+
+@pytest.mark.asyncio
+async def test_regression_gate_applies_a_proposal_that_improves_the_golden_set(
+    db_session,
+):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="price answer",
+        message="What is the price?",
+        expected_contains=["price"],
+        forbidden_contains=["no idea"],
+    )
+    proposal = await _pending_proposal(db_session)
+    runner = _OverlayRunner(baseline="no idea", candidate="The price is 100.")
+
+    applied, was_applied = await approve_proposal(
+        db_session,
+        proposal.id,
+        actor_id=7,
+        regression_runner=runner,
+        regression_min_score=0.8,
+    )
+
+    assert was_applied is True
+    assert applied.status == "applied"
+    report = await get_regression_run(db_session, proposal.id)
+    assert report is not None
+    assert report.status == "passed"
+    assert report.baseline_score == 0.0
+    assert report.candidate_score == 1.0
+
+
+@pytest.mark.asyncio
+async def test_regression_gate_tests_the_combined_overlay(db_session):
+    db_session.add(AgentConfig(agent="products", prompt_overlay="Base guidance.", version=1))
+    await db_session.commit()
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="combined overlay",
+        message="What is the price?",
+        expected_contains=["Base guidance.", "Candidate guidance."],
+    )
+    proposal = await _pending_proposal(db_session, prompt="Candidate guidance.")
+
+    class EchoOverlayRunner:
+        async def run(self, message: str, overlay: str) -> str:
+            return overlay
+
+    applied, was_applied = await approve_proposal(
+        db_session,
+        proposal.id,
+        actor_id=7,
+        regression_runner=EchoOverlayRunner(),
+        regression_min_score=0.8,
+    )
+
+    assert was_applied is True
+    assert applied.status == "applied"
+    assert await load_prompt_overlay(db_session, "products") == (
+        "Base guidance.\n\nCandidate guidance."
+    )
+
+
+@pytest.mark.asyncio
+async def test_regression_gate_blocks_a_proposal_that_regresses(db_session):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="price answer",
+        message="What is the price?",
+        expected_contains=["price"],
+        forbidden_contains=["no idea"],
+    )
+    proposal = await _pending_proposal(db_session)
+    runner = _OverlayRunner(baseline="The price is 100.", candidate="no idea")
+
+    with pytest.raises(LearningError) as raised:
+        await approve_proposal(
+            db_session,
+            proposal.id,
+            actor_id=7,
+            regression_runner=runner,
+            regression_min_score=0.8,
+        )
+
+    assert raised.value.status_code == 409
+    await db_session.refresh(proposal)
+    assert proposal.status == "pending"
+    report = await get_regression_run(db_session, proposal.id)
+    assert report is not None
+    assert report.status == "failed"
+    assert report.baseline_score == 1.0
+    assert report.candidate_score == 0.0
+
+
+@pytest.mark.asyncio
+async def test_regression_gate_is_skipped_when_no_cases_exist(db_session):
+    proposal = await _pending_proposal(db_session)
+
+    applied, was_applied = await approve_proposal(
+        db_session, proposal.id, actor_id=7, regression_runner=None
+    )
+
+    assert was_applied is True
+    assert applied.status == "applied"
+    report = await get_regression_run(db_session, proposal.id)
+    assert report is not None
+    assert report.status == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_regression_gate_fails_closed_without_a_runner(db_session):
+    await create_golden_case(
+        db_session,
+        agent="products",
+        name="price answer",
+        message="What is the price?",
+        expected_contains=["price"],
+    )
+    proposal = await _pending_proposal(db_session)
+
+    with pytest.raises(LearningError) as raised:
+        await approve_proposal(db_session, proposal.id, actor_id=7, regression_runner=None)
+
+    assert raised.value.status_code == 409
+    await db_session.refresh(proposal)
+    assert proposal.status == "pending"
+    report = await get_regression_run(db_session, proposal.id)
+    assert report is not None
+    assert report.status == "error"
+
+
+class _OverlayAgent:
+    name = "products"
+    description = "Test agent."
+    autonomy = AutonomyPolicy()
+
+    def toolkit(self, context: AgentContext) -> AgentToolkit:
+        return AgentToolkit(system_prompt="Base prompt.")
+
+
+@pytest.mark.asyncio
+async def test_agentcore_case_runner_rejects_a_deterministic_fallback(db_session, monkeypatch):
+    from app.agents import regression_runner as module
+    from app.agents.regression_runner import (
+        AgentCoreCaseRunner,
+        RegressionUnavailable,
+    )
+
+    class FakeCoreRunner:
+        def __init__(self, settings):
+            self.settings = settings
+
+        async def run(self, agent, context):
+            yield {
+                "type": "agent.result",
+                "agent": agent.name,
+                "message": "fallback answer",
+                "data": {"mode": "deterministic"},
+            }
+
+    monkeypatch.setattr(module, "AgentCoreRunner", FakeCoreRunner)
+    runner = AgentCoreCaseRunner(
+        Settings(
+            agent_llm_model="fake-model",
+            agent_llm_base_url="http://127.0.0.1:9",
+        ),
+        _OverlayAgent(),
+        db_session,
+    )
+
+    with pytest.raises(RegressionUnavailable):
+        await runner.run("hello", "candidate")
+
+
+@pytest.mark.asyncio
+async def test_agentcore_prefers_the_gate_overlay_override(db_session):
+    captured: list[str] = []
+
+    class FakeCore:
+        async def stream(self, user_input: str, **kwargs):
+            captured.append(kwargs["system_prompt"])
+            yield SimpleNamespace(content="ok", usage=None)
+
+    @asynccontextmanager
+    async def factory(context, toolkit, settings):
+        yield FakeCore()
+
+    runner = AgentCoreRunner(
+        Settings(
+            agent_llm_model="fake-model",
+            agent_llm_base_url="http://127.0.0.1:9",
+        ),
+        core_factory=factory,
+    )
+    context = AgentContext(
+        run_id=uuid.uuid4().hex,
+        message="hello",
+        resources={
+            "db": db_session,
+            "prompt_overlay_override": "Candidate guidance.",
+        },
+    )
+
+    events = [event async for event in runner.run(_OverlayAgent(), context)]
+    assert events[-1]["type"] == "agent.result"
+    assert "Candidate guidance." in captured[0]
+
+
+@pytest.mark.asyncio
+async def test_agentcore_receives_the_approved_prompt_overlay(db_session):
+    db_session.add(
+        AgentConfig(
+            agent="products",
+            prompt_overlay="Always cite the price.",
+            version=1,
+        )
+    )
+    await db_session.commit()
+
+    captured: list[str] = []
+
+    class FakeCore:
+        async def stream(self, user_input: str, **kwargs):
+            captured.append(kwargs["system_prompt"])
+            yield SimpleNamespace(content="ok", usage=None)
+
+    @asynccontextmanager
+    async def factory(context, toolkit, settings):
+        yield FakeCore()
+
+    runner = AgentCoreRunner(
+        Settings(
+            agent_llm_model="fake-model",
+            agent_llm_base_url="http://127.0.0.1:9",
+        ),
+        core_factory=factory,
+    )
+    context = AgentContext(
+        run_id=uuid.uuid4().hex,
+        message="hello",
+        resources={"db": db_session},
+    )
+    events = [event async for event in runner.run(_OverlayAgent(), context)]
+    assert events[-1]["type"] == "agent.result"
+    assert "Base prompt." in captured[0]
+    assert "Approved guidance from feedback:" in captured[0]
+    assert "Always cite the price." in captured[0]
+{% if enabled('api.auth') %}
+
+
+async def _products_run(client, auth_headers) -> str:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "list products"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 202, created.text
+    run_id = created.json()["run_id"]
+    streamed = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    assert streamed.status_code == 200, streamed.text
+    assert "event: run.completed" in streamed.text
+    return run_id
+
+
+async def _negative_proposal_id(client, auth_headers) -> str:
+    proposal_id = None
+    for _ in range(3):
+        run_id = await _products_run(client, auth_headers)
+        response = await client.post(
+            f"/api/v1/agent/runs/{run_id}/feedback",
+            json={"agent": "products", "rating": 1, "comment": "wrong"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        proposal = response.json()["proposal"]
+        if proposal is not None:
+            proposal_id = proposal["id"]
+    assert proposal_id is not None
+    return proposal_id
+
+
+@asynccontextmanager
+async def _admin_reviewer(app_instance):
+    from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
+
+    async def _admin_viewer():
+        return Viewer(
+            user_id=999999,
+            username="reviewer",
+            display_name="Reviewer",
+            must_change_password=False,
+            role_codes=frozenset({"admin"}),
+            permissions=frozenset({"*"}),
+        )
+
+    app_instance.dependency_overrides[get_current_user] = _admin_viewer
+    try:
+        yield
+    finally:
+        app_instance.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_feedback_endpoint_records_an_evaluation(client, auth_headers):
+    run_id = await _products_run(client, auth_headers)
+    response = await client.post(
+        f"/api/v1/agent/runs/{run_id}/feedback",
+        json={"agent": "products", "rating": 1, "comment": "the answer missed the price"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["feedback_id"] > 0
+    assert body["evaluation"]["passed"] is False
+    assert body["evaluation"]["score"] < 0.6
+    assert body["proposal"] is None
+
+
+@pytest.mark.asyncio
+async def test_three_negative_feedbacks_create_a_reviewer_gated_proposal(
+    client, auth_headers, app_instance
+):
+    proposal_id = None
+    for _ in range(3):
+        run_id = await _products_run(client, auth_headers)
+        response = await client.post(
+            f"/api/v1/agent/runs/{run_id}/feedback",
+            json={"agent": "products", "rating": 1, "comment": "wrong"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        proposal = response.json()["proposal"]
+        if proposal is not None:
+            proposal_id = proposal["id"]
+    assert proposal_id is not None
+
+    denied = await client.get("/api/v1/agent/proposals", headers=auth_headers)
+    assert denied.status_code == 403, denied.text
+
+    from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
+
+    async def _admin_viewer():
+        return Viewer(
+            user_id=999999,
+            username="reviewer",
+            display_name="Reviewer",
+            must_change_password=False,
+            role_codes=frozenset({"admin"}),
+            permissions=frozenset({"*"}),
+        )
+
+    app_instance.dependency_overrides[get_current_user] = _admin_viewer
+    try:
+        listed = await client.get("/api/v1/agent/proposals", headers=auth_headers)
+        assert listed.status_code == 200, listed.text
+        proposals = listed.json()["proposals"]
+        assert any(proposal["id"] == proposal_id for proposal in proposals)
+
+        approved = await client.post(
+            f"/api/v1/agent/proposals/{proposal_id}/approve",
+            headers=auth_headers,
+        )
+        assert approved.status_code == 200, approved.text
+        body = approved.json()
+        assert body["applied"] is True
+        assert body["proposal"]["status"] == "applied"
+    finally:
+        app_instance.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_golden_case_api_round_trip_and_reviewer_gate(client, auth_headers, app_instance):
+    payload = {
+        "agent": "products",
+        "name": "products list answer",
+        "message": "list products",
+        "expected_contains": ["Found"],
+    }
+    denied = await client.post("/api/v1/agent/golden-cases", json=payload, headers=auth_headers)
+    assert denied.status_code == 403, denied.text
+
+    async with _admin_reviewer(app_instance):
+        created = await client.post(
+            "/api/v1/agent/golden-cases", json=payload, headers=auth_headers
+        )
+        assert created.status_code == 201, created.text
+        case_id = created.json()["id"]
+        listed = await client.get("/api/v1/agent/golden-cases?agent=products", headers=auth_headers)
+        assert listed.status_code == 200, listed.text
+        assert [case["id"] for case in listed.json()["cases"]] == [case_id]
+        deleted = await client.delete(f"/api/v1/agent/golden-cases/{case_id}", headers=auth_headers)
+        assert deleted.status_code == 200, deleted.text
+        empty = await client.get("/api/v1/agent/golden-cases?agent=products", headers=auth_headers)
+        assert empty.json()["cases"] == []
+
+
+@pytest.mark.asyncio
+async def test_approval_fails_closed_with_golden_cases_and_no_model(
+    client, auth_headers, app_instance
+):
+    proposal_id = await _negative_proposal_id(client, auth_headers)
+
+    async with _admin_reviewer(app_instance):
+        created = await client.post(
+            "/api/v1/agent/golden-cases",
+            json={
+                "agent": "products",
+                "name": "products list answer",
+                "message": "list products",
+                "expected_contains": ["Found"],
+            },
+            headers=auth_headers,
+        )
+        assert created.status_code == 201, created.text
+        approved = await client.post(
+            f"/api/v1/agent/proposals/{proposal_id}/approve",
+            headers=auth_headers,
+        )
+        assert approved.status_code == 409, approved.text
+        report = await client.get(
+            f"/api/v1/agent/proposals/{proposal_id}/regression",
+            headers=auth_headers,
+        )
+        assert report.status_code == 200, report.text
+        assert report.json()["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_approval_applies_after_golden_gate_passes(
+    client, auth_headers, app_instance, monkeypatch
+):
+    proposal_id = await _negative_proposal_id(client, auth_headers)
+
+    from app.api import agent as agent_api
+
+    class FakeGateRunner:
+        async def run(self, message, overlay):
+            return "Found 3 product(s)" if overlay else "nothing"
+
+    monkeypatch.setattr(
+        agent_api,
+        "build_regression_runner",
+        lambda settings, agent, db: FakeGateRunner(),
+    )
+
+    async with _admin_reviewer(app_instance):
+        created = await client.post(
+            "/api/v1/agent/golden-cases",
+            json={
+                "agent": "products",
+                "name": "products list answer",
+                "message": "list products",
+                "expected_contains": ["Found"],
+            },
+            headers=auth_headers,
+        )
+        assert created.status_code == 201, created.text
+        approved = await client.post(
+            f"/api/v1/agent/proposals/{proposal_id}/approve",
+            headers=auth_headers,
+        )
+        assert approved.status_code == 200, approved.text
+        body = approved.json()
+        assert body["applied"] is True
+        assert body["regression"]["status"] == "passed"
+
+
+@pytest.mark.asyncio
+async def test_feedback_rejects_another_users_run(client, auth_headers):
+    run_id = await _products_run(client, auth_headers)
+    other = await client.post(
+        "/api/v1/auth/register",
+        json={"username": f"other_{uuid.uuid4().hex[:10]}", "password": "secret123"},
+    )
+    assert other.status_code == 201, other.text
+    other_headers = {"Authorization": f"Bearer {other.json()['token']}"}
+    response = await client.post(
+        f"/api/v1/agent/runs/{run_id}/feedback",
+        json={"agent": "products", "rating": 5},
+        headers=other_headers,
+    )
+    assert response.status_code == 403, response.text
+{% endif %}

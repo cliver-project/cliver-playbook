@@ -1,0 +1,87 @@
+"""Golden cases and offline regression reports for agent proposals.
+
+Revision ID: {{ "0005_agent_regression_gate" if enabled('api.products') else "0004_agent_regression_gate" }}
+Revises:{% if enabled('api.products') %} 0004_agent_learning{% else %} 0003_agent_learning{% endif %}
+Create Date: 2026-01-01 00:00:00
+"""
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
+
+revision = "{{ "0005_agent_regression_gate" if enabled('api.products') else "0004_agent_regression_gate" }}"
+down_revision = "{{ "0004_agent_learning" if enabled('api.products') else "0003_agent_learning" }}"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "agent_golden_cases",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("message", sa.Text(), nullable=False),
+        sa.Column("expected_contains", JSONB(), nullable=False),
+        sa.Column("forbidden_contains", JSONB(), nullable=False),
+        sa.Column(
+            "enabled",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.true(),
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.UniqueConstraint("agent", "name", name="uq_agent_golden_case_name"),
+    )
+    op.create_index("ix_agent_golden_cases_agent", "agent_golden_cases", ["agent"])
+
+    op.create_table(
+        "agent_regression_runs",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "proposal_id",
+            sa.String(length=32),
+            sa.ForeignKey(
+                "agent_improvements.id",
+                name="fk_agent_regression_runs_proposal_id",
+                ondelete="CASCADE",
+            ),
+            nullable=False,
+        ),
+        sa.Column("agent", sa.String(length=64), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("baseline_score", sa.Float(), nullable=False),
+        sa.Column("candidate_score", sa.Float(), nullable=False),
+        sa.Column("min_score", sa.Float(), nullable=False),
+        sa.Column("case_results", JSONB(), nullable=False),
+        sa.Column("error", sa.Text(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.UniqueConstraint("proposal_id", name="uq_agent_regression_proposal"),
+    )
+    op.create_index(
+        "ix_agent_regression_runs_proposal_id",
+        "agent_regression_runs",
+        ["proposal_id"],
+    )
+    op.create_index("ix_agent_regression_runs_agent", "agent_regression_runs", ["agent"])
+
+
+def downgrade() -> None:
+    op.drop_table("agent_regression_runs")
+    op.drop_table("agent_golden_cases")

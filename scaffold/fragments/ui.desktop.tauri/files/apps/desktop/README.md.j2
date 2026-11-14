@@ -1,0 +1,14 @@
+# Desktop shell
+
+A minimal Tauri 2 shell that loads the built web UI from `apps/web/dist`.
+
+```sh
+make build-web
+cd apps/desktop
+pnpm install
+pnpm tauri dev
+```
+
+Phase 3 adds local sidecar supervision, signed installers and the updater.
+The bundle is intentionally disabled until the project has icons and signing
+configuration.

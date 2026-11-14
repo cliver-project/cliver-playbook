@@ -1,0 +1,37 @@
+# Example: a Rust BFF as the public edge, with a Python AgentCore service behind it.
+project: example-ai-rust-bff
+playbook:
+  source: https://github.com/cliver-project/cliver-playbook
+  revision: "0.2.1"
+scaffold:
+  template: ai-native
+  profile: ai-rust-bff
+ui:
+  web: true
+  desktop: none
+  mobile:
+    ios: none
+    android: none
+api:
+  runtime: rust
+  deployment: remote
+  features: [auth, settings, agent, mcp]
+model:
+  runtime: python
+  deployment: remote
+  capabilities: [llm, embedding, rerank, system_one]
+agent:
+  runtime: agentcore
+  skills: true
+  mcp: true
+  system_one: true
+contracts:
+  openapi: contracts/openapi.yaml
+  events: contracts/events.json
+ci:
+  provider: gitea
+release:
+  desktop: false
+  mobile: false
+decisions:
+  - "Profile ai-rust-bff: the Rust edge owns auth and streaming; AgentCore stays Python."

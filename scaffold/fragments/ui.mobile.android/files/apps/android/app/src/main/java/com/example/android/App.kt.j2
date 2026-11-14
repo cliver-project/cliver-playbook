@@ -1,0 +1,389 @@
+package com.example.android
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+{% if enabled('ui.mobile.auth') %}
+import androidx.compose.foundation.layout.Box
+{% endif %}
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+{% if enabled('ui.agent.chat') %}
+import androidx.compose.material.icons.filled.Email
+{% endif %}
+import androidx.compose.material.icons.filled.Home
+{% if enabled('ui.mobile.crud') %}
+import androidx.compose.material.icons.filled.ShoppingCart
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+import androidx.compose.material.icons.filled.Person
+{% endif %}
+import androidx.compose.material3.Card
+{% if enabled('ui.mobile.auth') %}
+import androidx.compose.material3.CircularProgressIndicator
+{% endif %}
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
+import androidx.compose.runtime.Composable
+{% if enabled('ui.mobile.auth') %}
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+{% endif %}
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+{% if enabled('ui.mobile.auth') %}
+import androidx.compose.ui.platform.LocalContext
+{% endif %}
+import androidx.compose.ui.unit.dp
+{% if enabled('ui.mobile.auth') %}
+import com.example.android.core.auth.AuthStore
+import com.example.android.core.auth.SecureTokenStore
+{% endif %}
+import com.example.android.core.model.User
+import com.example.android.core.network.ApiClient
+import com.example.android.core.ui.LayoutMode
+import com.example.android.core.ui.PlaybookTheme
+import com.example.android.core.ui.currentLayoutMode
+{% if enabled('ui.mobile.responsive') %}
+import com.example.android.core.ui.rememberNavigationSuiteType
+{% endif %}
+{% if enabled('ui.mobile.auth') %}
+import com.example.android.feature.auth.AuthScreen
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+import com.example.android.feature.profile.ProfileScreen
+{% endif %}
+{% if enabled('ui.mobile.crud') %}
+import com.example.android.feature.products.ProductDetailScreen
+import com.example.android.feature.products.ProductEditorScreen
+import com.example.android.feature.products.ProductListScreen
+{% endif %}
+
+@Composable
+fun PlaybookApp() {
+    PlaybookTheme {
+        val api = remember { ApiClient(BuildConfig.API_BASE_URL) }
+{% if enabled('ui.mobile.auth') %}
+        val context = LocalContext.current.applicationContext
+        val tokenStore = remember { SecureTokenStore(context) }
+        val authStore = remember { AuthStore(api, tokenStore) }
+
+        DisposableEffect(api, authStore) {
+            api.tokenProvider = authStore::token
+            api.onUnauthorized = authStore::handleUnauthorized
+            onDispose {
+                api.tokenProvider = { null }
+                api.onUnauthorized = null
+            }
+        }
+
+        val authState by authStore.state.collectAsState()
+        LaunchedEffect(authStore) { authStore.restoreSession() }
+
+        when {
+            authState.restoring && authState.token != null -> LoadingScreen()
+            authState.token == null -> AuthScreen(
+                store = authStore,
+                title = "{{ project_title }}",
+            )
+            else -> AppShell(api = api, authStore = authStore)
+        }
+{% else %}
+        AppShell(api = api)
+{% endif %}
+    }
+}
+
+{% if enabled('ui.mobile.auth') %}
+@Composable
+private fun LoadingScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+{% endif %}
+
+private sealed interface Destination {
+{% if enabled('ui.agent.chat') %}
+    data object Chat : Destination
+{% endif %}
+    data object Home : Destination
+{% if enabled('ui.mobile.crud') %}
+    data object ProductList : Destination
+    data class ProductDetail(val id: Int) : Destination
+    data class ProductEditor(val id: Int?) : Destination
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+    data object Profile : Destination
+{% endif %}
+}
+
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+private fun AppShell(
+    api: ApiClient,
+{% if enabled('ui.mobile.auth') %}
+    authStore: AuthStore,
+{% endif %}
+) {
+{% if enabled('ui.mobile.auth') %}
+    val authState by authStore.state.collectAsState()
+{% endif %}
+    val backStack = remember {
+        mutableStateListOf<Destination>(
+{% if enabled('ui.agent.chat') %}
+            Destination.Chat,
+{% else %}
+            Destination.Home,
+{% endif %}
+        )
+    }
+    val current = backStack.last()
+    BackHandler(enabled = backStack.size > 1) {
+        backStack.removeAt(backStack.lastIndex)
+    }
+    val layoutType = {% if enabled('ui.mobile.responsive') %}rememberNavigationSuiteType(){% else %}NavigationSuiteType.NavigationBar{% endif %}
+
+    NavigationSuiteScaffold(
+        layoutType = layoutType,
+        navigationSuiteItems = {
+{% if enabled('ui.agent.chat') %}
+            item(
+                selected = current == Destination.Chat,
+                onClick = { backStack.activate(Destination.Chat) },
+                icon = { Icon(Icons.Filled.Email, contentDescription = null) },
+                label = { Text("Assistant") },
+            )
+{% endif %}
+            item(
+                selected = current == Destination.Home,
+                onClick = { backStack.activate(Destination.Home) },
+                icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                label = { Text("Home") },
+            )
+{% if enabled('ui.mobile.crud') %}
+            item(
+                selected = current == Destination.ProductList ||
+                    current is Destination.ProductDetail ||
+                    current is Destination.ProductEditor,
+                onClick = { backStack.activate(Destination.ProductList) },
+                icon = { Icon(Icons.Filled.ShoppingCart, contentDescription = null) },
+                label = { Text("Products") },
+            )
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+            item(
+                selected = current == Destination.Profile,
+                onClick = { backStack.activate(Destination.Profile) },
+                icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                label = { Text("Profile") },
+            )
+{% endif %}
+        },
+    ) {
+        when (current) {
+{% if enabled('ui.agent.chat') %}
+            Destination.Chat -> ChatScreen(
+                api = api,
+{% if enabled('ui.mobile.crud') %}
+                onOpenProducts = { backStack.activate(Destination.ProductList) },
+{% else %}
+                onOpenProducts = null,
+{% endif %}
+            )
+{% endif %}
+            Destination.Home -> HomeScreen(
+                title = "{{ project_title }}",
+{% if enabled('ui.mobile.auth') %}
+                user = authState.user,
+                onSignOut = { authStore.logout() },
+{% else %}
+                user = null,
+                onSignOut = null,
+{% endif %}
+{% if enabled('ui.mobile.crud') %}
+                onOpenProducts = { backStack.activate(Destination.ProductList) },
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+                onOpenProfile = { backStack.activate(Destination.Profile) },
+{% endif %}
+            )
+{% if enabled('ui.mobile.crud') %}
+            Destination.ProductList -> ProductListScreen(
+                api = api,
+                onOpenProduct = { id -> backStack.add(Destination.ProductDetail(id)) },
+                onCreateProduct = { backStack.add(Destination.ProductEditor(null)) },
+            )
+            is Destination.ProductDetail -> ProductDetailScreen(
+                api = api,
+                productId = current.id,
+                onBack = { backStack.removeAt(backStack.lastIndex) },
+                onEdit = { backStack.add(Destination.ProductEditor(current.id)) },
+                onDeleted = { backStack.activate(Destination.ProductList) },
+            )
+            is Destination.ProductEditor -> ProductEditorScreen(
+                api = api,
+                productId = current.id,
+                onBack = { backStack.removeAt(backStack.lastIndex) },
+                onSaved = { backStack.activate(Destination.ProductList) },
+            )
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+            Destination.Profile -> ProfileScreen(store = authStore)
+{% endif %}
+        }
+    }
+}
+
+private fun MutableList<Destination>.activate(destination: Destination) {
+    clear()
+    add(destination)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeScreen(
+    title: String,
+    user: User?,
+    onSignOut: (() -> Unit)?,
+{% if enabled('ui.mobile.crud') %}
+    onOpenProducts: () -> Unit,
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+    onOpenProfile: () -> Unit,
+{% endif %}
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Home") },
+                actions = {
+                    if (onSignOut != null) {
+                        IconButton(onClick = onSignOut) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "Sign out",
+                            )
+                        }
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        val horizontalPadding = if (currentLayoutMode() == LayoutMode.Compact) 16.dp else 32.dp
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(title, style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            text = if (user != null) {
+                                "Signed in as ${user.displayName.ifBlank { user.username }}."
+                            } else {
+                                "Native Android shell generated from the project manifest."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+{% if enabled('ui.mobile.crud') or enabled('ui.mobile.profile') %}
+            item {
+                Text(
+                    text = "Available in this project",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+{% endif %}
+{% if enabled('ui.mobile.crud') %}
+            item {
+                FeatureCard(
+                    title = "Products",
+                    description = "Browse and manage the reference product slice.",
+                    icon = Icons.Filled.ShoppingCart,
+                    onClick = onOpenProducts,
+                )
+            }
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+            item {
+                FeatureCard(
+                    title = "Profile",
+                    description = "Review and edit your account details.",
+                    icon = Icons.Filled.Person,
+                    onClick = onOpenProfile,
+                )
+            }
+{% endif %}
+{% if not enabled('ui.mobile.crud') and not enabled('ui.mobile.profile') %}
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "No feature screens are enabled in this project. " +
+                            "Add profile or CRUD to the manifest and re-run the " +
+                            "scaffolder.",
+                        modifier = Modifier.padding(20.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+{% endif %}
+        }
+    }
+}
+
+@Composable
+private fun FeatureCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(description, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}

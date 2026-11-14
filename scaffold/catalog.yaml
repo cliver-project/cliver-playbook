@@ -1,0 +1,319 @@
+# Module catalog for the AI-native project scaffold.
+#
+# Modules are infrastructure and capability selections; they never contain
+# project domain logic. A profile is a small, tested deployment shape. The
+# manifest fields select targets and features, and the planner resolves the
+# final module set through `selectors`. Omitted list fields default to empty.
+version: 1
+
+modules:
+  ui.web:
+    kind: ui
+    description: React web application shared by the browser and desktop targets.
+    outputs: [apps/web]
+    make_targets: [dev-web, build-web]
+    ci: [web.yml]
+
+  ui.desktop.tauri:
+    kind: ui
+    description: Tauri 2 desktop shell; loads the web build and supervises local sidecars.
+    requires: [ui.web]
+    outputs: [apps/desktop]
+    make_targets: [dev-desktop, build-desktop, package-desktop]
+    ci: [desktop.yml]
+
+  ui.mobile.ios:
+    kind: ui
+    description: Native SwiftUI iOS client with phone and pad layouts.
+    requires: [contracts.openapi, ui.mobile.responsive]
+    outputs: [apps/ios]
+    make_targets: [dev-ios, build-ios]
+    ci: [mobile.yml]
+
+  ui.mobile.android:
+    kind: ui
+    description: Native Kotlin/Compose Android client with phone and tablet layouts.
+    requires: [contracts.openapi, ui.mobile.responsive]
+    outputs: [apps/android]
+    make_targets: [dev-android, build-android]
+    ci: [mobile.yml]
+
+  ui.agent.chat:
+    kind: pattern
+    description: Agent chat layout, streaming message parts and tool-call cards.
+    requires: [contracts.events, api.agent]
+
+  ui.settings:
+    kind: pattern
+    description: Provider, model, MCP and local-engine settings screens.
+
+  ui.auth:
+    kind: pattern
+    description: Sign-in, account and session surfaces.
+
+  ui.web.products:
+    kind: pattern
+    description: Reference product list, detail and edit pages.
+    requires: [ui.web, api.products]
+
+  ui.mobile.responsive:
+    kind: pattern
+    description: Phone and pad adaptive layouts, design tokens and safe-area handling.
+
+  ui.mobile.auth:
+    kind: pattern
+    description: Native sign-in, registration and secure session storage.
+    requires: [api.auth, ui.mobile.responsive]
+
+  ui.mobile.profile:
+    kind: pattern
+    description: Native profile view and edit.
+    requires: [api.auth, ui.mobile.auth]
+
+  ui.mobile.crud:
+    kind: pattern
+    description: Reference product list, detail, create, edit and delete screens.
+    requires: [api.products, contracts.openapi]
+
+  api.python:
+    kind: api
+    description: FastAPI public API; hosts AgentCore when the agent feature is enabled.
+    conflicts: [api.rust]
+    outputs: [services/api]
+    make_targets: [dev-api, test-api, build-api]
+    ci: [api.yml]
+
+  api.rust:
+    kind: api
+    description: Axum BFF/gateway; delegates agent runs to the Python agent service.
+    requires: [api.agentcore]
+    conflicts: [api.python]
+    outputs: [services/api]
+    make_targets: [dev-api, test-api, build-api]
+    ci: [api.yml]
+
+  api.agentcore:
+    kind: api
+    description: Internal Python AgentCore service used by the Rust BFF.
+    requires: [api.agent]
+    outputs: [services/agent]
+    make_targets: [dev-agent, test-agent, build-agent]
+    ci: [agent.yml]
+
+  api.auth:
+    kind: api
+    description: Identity, sessions and RBAC.
+    contracts: [contracts/modules/auth.yaml]
+
+  api.settings:
+    kind: api
+    description: Layered settings and runtime settings sections.
+    contracts: [contracts/modules/settings.yaml]
+
+  api.agent:
+    kind: api
+    description: AgentCore planner, sub-agent tools, skills/MCP seams, streaming events and the self-enhancement loop.
+    contracts: [contracts/modules/agent.yaml]
+
+  api.rag:
+    kind: api
+    description: RAG pipeline and governance surfaces.
+    contracts: [contracts/modules/rag.yaml]
+
+  api.mcp:
+    kind: api
+    description: MCP endpoint, tool gate and server discovery.
+    contracts: [contracts/modules/mcp.yaml]
+
+  api.files:
+    kind: api
+    description: Uploads, media storage and resumable transfer.
+    contracts: [contracts/modules/files.yaml]
+
+  api.billing:
+    kind: api
+    description: Quota, usage accounting and billing hooks.
+    contracts: [contracts/modules/billing.yaml]
+
+  api.products:
+    kind: api
+    description: Reference product CRUD API slice (replace with the project's domain).
+    requires: [api.python]
+    contracts: [contracts/modules/products.yaml]
+
+  model.python:
+    kind: model
+    description: Python model service hosting the selected capabilities.
+    outputs: [services/model]
+    make_targets: [dev-model, test-model, build-model]
+    ci: [model.yml]
+    contracts: [contracts/modules/model.yaml]
+
+  model.cloud:
+    kind: model
+    description: Cloud provider adapters behind the model service.
+    requires: [model.python]
+
+  model.local:
+    kind: model
+    description: Local runtime adapters and model download support.
+    requires: [model.python]
+
+  model.llm:
+    kind: model
+    description: Chat and completion capability.
+
+  model.embedding:
+    kind: model
+    description: Embedding capability.
+
+  model.rerank:
+    kind: model
+    description: Rerank capability.
+
+  model.asr:
+    kind: model
+    description: Speech-to-text capability.
+
+  model.image:
+    kind: model
+    description: Image understanding and generation capability.
+
+  model.tts:
+    kind: model
+    description: Text-to-speech capability.
+
+  model.video:
+    kind: model
+    description: Video capability.
+
+  model.system_one:
+    kind: model
+    description: System One / Laya judgement and scoring capability.
+
+  contracts.openapi:
+    kind: contracts
+    description: Composed OpenAPI source of truth and generated clients.
+    outputs: [contracts/openapi.yaml]
+    make_targets: [contracts, contracts-check]
+    ci: [contracts.yml]
+
+  contracts.events:
+    kind: contracts
+    description: Versioned streaming event schema and generated types.
+    outputs: [contracts/events.json]
+
+  infra.make:
+    kind: infra
+    description: Root Makefile and module make fragments.
+    outputs: [Makefile, make]
+
+  infra.ci.github:
+    kind: infra
+    description: GitHub Actions workflows.
+    outputs: [.github/workflows]
+
+  infra.ci.gitea:
+    kind: infra
+    description: Gitea Actions workflows.
+    outputs: [.gitea/workflows]
+
+  infra.docker:
+    kind: infra
+    description: Container assets for remote API and model deployment.
+    outputs: [infra/docker]
+
+  infra.local-sidecars:
+    kind: infra
+    description: Build and supervision assets for desktop-local API and model sidecars.
+    outputs: [infra/sidecars]
+    make_targets: [sidecars, package-sidecars]
+
+  infra.release.desktop:
+    kind: infra
+    description: Desktop signing, notarization and update release assets.
+    requires: [ui.desktop.tauri]
+    make_targets: [package-desktop]
+
+  infra.release.mobile:
+    kind: infra
+    description: Mobile store build and release assets.
+    make_targets: [package-mobile]
+
+profiles:
+  ai-web:
+    description: Server-backed web app; no desktop or mobile target.
+    modules:
+      [api.python, model.python, model.cloud, contracts.openapi, contracts.events, infra.make, infra.docker]
+
+  ai-desktop:
+    description: Web UI plus a Tauri desktop shell with local API/model sidecars.
+    modules:
+      [api.python, model.python, model.local, model.cloud, infra.local-sidecars, contracts.openapi, contracts.events, infra.make, infra.docker]
+
+  ai-mobile:
+    description: One native mobile client talking to a remote API.
+    modules:
+      [api.python, model.python, model.cloud, contracts.openapi, contracts.events, infra.make, infra.docker]
+
+  ai-full:
+    description: Web, desktop and at least one native mobile target; remote and local deployment.
+    modules:
+      [api.python, model.python, model.local, model.cloud, infra.local-sidecars, contracts.openapi, contracts.events, infra.make, infra.docker]
+
+  ai-rust-bff:
+    description: Rust BFF as the public edge, delegating agent runs to a Python AgentCore service.
+    modules:
+      [api.rust, api.agentcore, model.python, model.cloud, contracts.openapi, contracts.events, infra.make, infra.docker]
+
+selectors:
+  ui.web: [ui.web]
+  ui.desktop.tauri: [ui.desktop.tauri]
+  ui.mobile.ios: [ui.mobile.ios]
+  ui.mobile.android: [ui.mobile.android]
+  mobile.feature.auth: [ui.mobile.auth]
+  mobile.feature.profile: [ui.mobile.profile]
+  mobile.feature.crud: [ui.mobile.crud]
+  mobile.layout.phone: [ui.mobile.responsive]
+  mobile.layout.pad: [ui.mobile.responsive]
+  reference.products.api: [api.products]
+  reference.products.web: [ui.web.products]
+
+  api.runtime.python: [api.python]
+  api.runtime.rust: [api.rust, api.agentcore]
+  api.deployment.remote: [infra.docker]
+  api.deployment.local: [infra.local-sidecars]
+  api.deployment.both: [infra.local-sidecars, infra.docker]
+
+  model.deployment.remote: [model.cloud, infra.docker]
+  model.deployment.local: [model.local, infra.local-sidecars]
+  model.deployment.both: [model.local, model.cloud, infra.local-sidecars, infra.docker]
+
+  feature.auth: [api.auth, ui.auth]
+  feature.settings: [api.settings, ui.settings]
+  feature.agent: [api.agent, ui.agent.chat]
+  feature.rag: [api.rag]
+  feature.mcp: [api.mcp]
+  feature.files: [api.files]
+  feature.billing: [api.billing]
+
+  capability.llm: [model.llm]
+  capability.embedding: [model.embedding]
+  capability.rerank: [model.rerank]
+  capability.asr: [model.asr]
+  capability.image: [model.image]
+  capability.tts: [model.tts]
+  capability.video: [model.video]
+  capability.system_one: [model.system_one]
+
+  agent.runtime.agentcore: [api.agent]
+  agent.runtime.none: []
+  agent.skills: [api.agent]
+  agent.mcp: [api.mcp]
+  agent.system_one: [model.system_one]
+
+  ci.github: [infra.ci.github]
+  ci.gitea: [infra.ci.gitea]
+
+  release.desktop: [infra.release.desktop]
+  release.mobile: [infra.release.mobile]

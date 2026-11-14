@@ -1,0 +1,133 @@
+# {{ project_title }}
+
+An AI-native application scaffolded from cliver-playbook with the
+`{{ manifest.scaffold.profile }}` profile.
+
+## Quick start
+
+```sh
+make init          # install Python, model-service and web dependencies
+make dev           # API + model service + web UI
+make check         # lint, tests, contract check and web build
+```
+
+The API is the public entry point. The web and mobile clients call it over
+HTTP; the API owns the agent runtime, authentication and provider routing. The
+model service is internal.
+
+## Layout
+
+- `services/api/` — API plane (FastAPI; AgentCore planner and sub-agent tools).
+- `services/model/` — model-invocation plane (local or remote).
+- `apps/web/` — React web UI.
+{% if enabled('ui.mobile.ios') %}
+- `apps/ios/` — native SwiftUI client; run `cd apps/ios && xcodegen generate` once.
+{% endif %}
+{% if enabled('ui.mobile.android') %}
+- `apps/android/` — native Kotlin/Compose client; open it in Android Studio or run `gradle wrapper` first.
+{% endif %}
+{% if enabled('ui.desktop.tauri') %}
+- `apps/desktop/` — Tauri 2 shell (desktop phase).
+{% endif %}
+- `contracts/` — OpenAPI base plus module fragments; `make contracts` composes them.
+- `infra/` — containers and local sidecar assets.
+- `.github/workflows/` and/or `.gitea/workflows/` — CI.
+
+## What is project-owned
+
+Everything in this repository is project-owned after generation. The scaffold
+does not upgrade it. Replace the reference slices with your domain.
+
+{% if reference_slices %}
+Reference slices enabled: {{ reference_slices | join(', ') }}. They are
+examples, not infrastructure; delete or replace them freely.
+{% endif %}
+
+{% if warnings %}
+## Generated warnings
+
+{% for warning in warnings %}
+- {{ warning }}
+{% endfor %}
+{% endif %}
+
+## Contracts
+
+`contracts/openapi.yaml` is the composed source of truth for HTTP clients.
+Edit `contracts/base/openapi.yaml` or `contracts/modules/*.yaml`, then run
+`make contracts`. `make contracts-check` fails when the composed file is stale.
+`contracts/events.json` defines the agent streaming events.
+
+{% if enabled('ui.web') %}
+## Web UI seam
+
+The web app's visual seam is `apps/web/src/ui/`. Pages and features import
+components only from there; `pnpm seam-check` (part of `make web-check`) rejects
+a deep playbook visual import. Replace a component in that directory to
+customize the UI without touching feature data flow. The chat surface on `/`
+is the reference AI-native form; direct feature routes remain available.
+Playbook package pages (for example the auth screens) are replaced at the route
+level or by the package, not by a generated page.
+
+The chat surface has a browser E2E with a mocked API:
+
+```sh
+pnpm --filter @{{ project_slug }}/web exec playwright install chromium
+pnpm --filter @{{ project_slug }}/web test:e2e
+# or: make web-e2e
+```
+
+Set `PLAYWRIGHT_CHANNEL=chrome` to use an installed Google Chrome instead of
+downloading Chromium. CI installs the bundled browser.
+{% endif %}
+
+{% if enabled('api.agent') %}
+## Agent runtime
+
+The API plane owns AgentCore. With no model configured, the coordinator uses
+deterministic single-step routing and each sub-agent runs its direct business
+method. Set `CLIVER_AGENT_LLM_MODEL` plus `CLIVER_AGENT_LLM_BASE_URL` or
+`CLIVER_AGENT_LLM_PROVIDER` (and the key) to enable LLM planning and the
+sub-agent tool loop. The planner returns an ordered multi-step plan (one agent
+per step, `CLIVER_AGENT_PLAN_MAX_STEPS`, default 8); later steps receive the
+earlier steps' results as handoff. Each step runs one agent with its own
+toolkit; skills are scoped to `skills/shared/` plus `skills/<agent-name>/` and
+an agent may name its own MCP servers. Runs are durable: every event lands in
+`agent_run_events`
+before it is observable, one worker executes each run (streams only replay and
+tail), the SSE frames carry `id: <sequence>` so `Last-Event-ID` resumes after a
+reconnect, and keepalive comments cover quiet periods. A worker that vanishes
+is marked `orphaned` rather than retried. Skills live in
+`services/api/skills/`; tool definitions live on each sub-agent in
+`services/api/app/agents/subagents/`. The UI never calls a model provider
+directly.
+
+An optional System One/Laya selector narrows large tool and skill catalogues
+before they reach the main model. It is fail-open and only activates above the
+configured catalogue thresholds:
+
+```sh
+# Local laya (first run downloads the checkpoint)
+CLIVER_AGENT_SYSTEM_ONE_PROVIDER=local make system-one-smoke
+
+# Remote Aliyun Bailian
+CLIVER_AGENT_SYSTEM_ONE_PROVIDER=bailian \
+CLIVER_AGENT_SYSTEM_ONE_WORKSPACE_ID=<workspace> \
+CLIVER_AGENT_SYSTEM_ONE_API_KEY=<dashscope-key> \
+make system-one-smoke
+```
+
+`CLIVER_AGENT_SYSTEM_ONE_PROVIDER` also accepts `typesafe` or `http`; leave it
+empty to disable selection. `make system-one-smoke` is a live check and needs
+the `local-system-one` extra for laya.
+{% endif %}
+
+## Mobile
+
+The native clients are thin: login/registration, profile and the reference
+product CRUD call the API. There is no local API or model process on the phone.
+Point the client at a reachable API base URL in the build configuration.
+
+## Never commit
+
+`.env`, `var/`, provider keys, model weights, or local build output.

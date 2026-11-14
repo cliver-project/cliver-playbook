@@ -1,0 +1,31 @@
+import org.gradle.api.initialization.resolve.RepositoriesMode
+
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "{{ project_slug }}-android"
+
+include(":app")
+include(":core")
+{% if enabled('ui.mobile.auth') %}
+include(":feature:auth")
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+include(":feature:profile")
+{% endif %}
+{% if enabled('ui.mobile.crud') %}
+include(":feature:products")
+{% endif %}

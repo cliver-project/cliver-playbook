@@ -1,0 +1,238 @@
+{% if enabled('ui.agent.chat') %}
+package com.example.android
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.example.android.core.model.AgentEvent
+import com.example.android.core.network.ApiClient
+import com.example.android.core.network.userMessage
+import com.example.android.core.ui.LocalAppComponents
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * Chat-first root. It renders typed API run events and never classifies intent
+ * or calls a model provider itself.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreen(
+    api: ApiClient,
+    onOpenProducts: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val components = LocalAppComponents.current
+    val scope = rememberCoroutineScope()
+    var messages by remember { mutableStateOf<List<ChatEntry>>(emptyList()) }
+    var tools by remember { mutableStateOf<List<ToolEntry>>(emptyList()) }
+    var input by rememberSaveable { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var selectedAgent by remember { mutableStateOf<String?>(null) }
+    var runID by remember { mutableStateOf<String?>(null) }
+    var runJob by remember { mutableStateOf<Job?>(null) }
+
+    fun apply(event: AgentEvent, assistantID: String) {
+        when (event.type) {
+            "agent.selected" -> selectedAgent = event.agent
+            "message.delta" -> {
+                val delta = event.delta.orEmpty()
+                messages = messages.map { message ->
+                    if (message.id == assistantID) {
+                        message.copy(text = message.text + delta)
+                    } else {
+                        message
+                    }
+                }
+            }
+            "tool.call" -> {
+                tools = tools + ToolEntry(
+                    id = event.toolCallId ?: UUID.randomUUID().toString(),
+                    name = event.name ?: "tool",
+                    detail = event.arguments.asDisplayText(),
+                )
+            }
+            "tool.result" -> {
+                val toolCallID = event.toolCallId
+                if (toolCallID != null) {
+                    tools = tools.map { tool ->
+                        if (tool.id == toolCallID) {
+                            tool.copy(
+                                detail = event.result.asDisplayText(),
+                                isError = event.isError,
+                            )
+                        } else {
+                            tool
+                        }
+                    }
+                }
+            }
+            "run.failed" -> error = event.message ?: "The run failed."
+        }
+    }
+
+    fun send() {
+        val text = input.trim()
+        if (text.isEmpty() || busy) return
+
+        input = ""
+        error = null
+        selectedAgent = null
+        tools = emptyList()
+        busy = true
+        val assistantID = UUID.randomUUID().toString()
+        messages = messages + listOf(
+            ChatEntry(UUID.randomUUID().toString(), isUser = true, text = text),
+            ChatEntry(assistantID, isUser = false, text = ""),
+        )
+
+        runJob = scope.launch {
+            try {
+                val id = api.startAgentRun(text)
+                runID = id
+                api.streamAgentRun(id).collect { event ->
+                    apply(event, assistantID)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.userMessage()
+            } finally {
+                busy = false
+                runID = null
+                runJob = null
+            }
+        }
+    }
+
+    fun stop() {
+        val id = runID
+        if (id != null) {
+            scope.launch {
+                runCatching { api.cancelAgentRun(id) }
+            }
+        }
+        runJob?.cancel()
+        busy = false
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            runJob?.cancel()
+        }
+    }
+
+    Scaffold(
+        modifier = modifier,
+        topBar = { TopAppBar(title = { Text("Assistant") }) },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (messages.isEmpty()) {
+                    item {
+                        Text(
+                            text = "Ask about products, your account, or this app.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+                items(messages, key = { it.id }) { message ->
+                    val text = if (message.text.isEmpty() && busy) {
+                        "Thinking…"
+                    } else {
+                        message.text
+                    }
+                    if (text.isNotEmpty()) {
+                        components.chatMessage(message.isUser, text)
+                    }
+                }
+                items(tools, key = { it.id }) { tool ->
+                    components.toolCall(
+                        if (tool.isError) "${tool.name} (error)" else tool.name,
+                        tool.detail,
+                    )
+                }
+                error?.let { message ->
+                    item {
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+
+            val openProducts = onOpenProducts
+            if (selectedAgent == "products" && openProducts != null) {
+                TextButton(onClick = openProducts) {
+                    Text("Open products")
+                }
+            }
+            components.composer(
+                input,
+                busy,
+                { input = it },
+                { send() },
+                { stop() },
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+private data class ChatEntry(
+    val id: String,
+    val isUser: Boolean,
+    val text: String,
+)
+
+private data class ToolEntry(
+    val id: String,
+    val name: String,
+    val detail: String,
+    val isError: Boolean = false,
+)
+
+private fun JsonElement?.asDisplayText(): String = when (this) {
+    null -> ""
+    is JsonPrimitive -> content
+    else -> toString()
+}
+{% endif %}

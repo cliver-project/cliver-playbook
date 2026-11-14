@@ -1,0 +1,17 @@
+openapi: 3.1.0
+info:
+  title: {{ project_title }} API
+  version: 0.1.0
+  description: |
+    Public contract for {{ project_title }}. Module fragments under
+    contracts/modules/ are composed into contracts/openapi.yaml by
+    `make contracts`.
+tags: []
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  schemas: {}

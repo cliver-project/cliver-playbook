@@ -1,0 +1,38 @@
+# Example: a server-backed AI web app.
+project: example-ai-web
+playbook:
+  source: https://github.com/cliver-project/cliver-playbook
+  revision: "0.2.1"
+scaffold:
+  template: ai-native
+  profile: ai-web
+  reference_slices: [products]
+ui:
+  web: true
+  desktop: none
+  mobile:
+    ios: none
+    android: none
+api:
+  runtime: python
+  deployment: remote
+  features: [auth, settings, agent, rag, mcp]
+model:
+  runtime: python
+  deployment: remote
+  capabilities: [llm, embedding, rerank, asr, image, tts, video, system_one]
+agent:
+  runtime: agentcore
+  skills: true
+  mcp: true
+  system_one: true
+contracts:
+  openapi: contracts/openapi.yaml
+  events: contracts/events.json
+ci:
+  provider: github
+release:
+  desktop: false
+  mobile: false
+decisions:
+  - "Profile ai-web: the first release is a browser app with a remote API and model service."

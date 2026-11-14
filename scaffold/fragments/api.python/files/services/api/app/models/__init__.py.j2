@@ -1,0 +1,10 @@
+"""Import every project model here so Alembic sees the metadata."""
+{% if enabled('api.agent') or enabled('api.products') %}
+
+{% if enabled('api.agent') %}
+from app.agents import models as agent_models  # noqa: F401
+{% endif %}
+{% if enabled('api.products') %}
+from app.models import products  # noqa: F401
+{% endif %}
+{% endif %}

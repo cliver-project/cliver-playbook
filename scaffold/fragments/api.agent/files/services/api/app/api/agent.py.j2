@@ -1,0 +1,590 @@
+"""Agent collaboration endpoints (ADR-0027).
+
+The coordinator is the public entry. ``POST /runs`` persists the run and
+starts its single worker; streams replay the durable event log from
+``Last-Event-ID`` and tail it until the terminal event, so reconnects and
+concurrent readers never re-execute a run.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.agents.bootstrap import register_default_agents, register_project_agents
+from app.agents.contracts import SubAgent
+from app.agents.coordinator import Coordinator
+from app.agents.events import EventStore, broadcaster
+from app.agents.learning import (
+    LearningError,
+    approve_proposal,
+    evaluate_experience,
+    find_experience,
+    get_pending_proposal,
+    get_proposal,
+    list_proposals,
+    maybe_create_proposal,
+    record_feedback,
+    reject_proposal,
+)
+from app.agents.models import (
+    AgentGoldenCase,
+    AgentImprovement,
+    AgentRegressionRun,
+)
+from app.agents.planner import build_planner
+from app.agents.proposals import build_proposal_generator
+from app.agents.registry import registry
+from app.agents.regression import (
+    RegressionError,
+    create_golden_case,
+    delete_golden_case,
+    get_regression_run,
+    list_golden_cases,
+)
+from app.agents.regression_runner import build_regression_runner
+from app.agents.runner import build_runner
+from app.agents.runs import TERMINAL_STATUSES, DatabaseRunStore, RunStore
+from app.agents.worker import TERMINAL_EVENT_TYPES, has_local_worker, start_run_worker
+from app.schemas.agent import (
+    AgentDescriptorRead,
+    AgentFeedbackCreated,
+    AgentFeedbackRequest,
+    AgentGoldenCaseCreate,
+    AgentGoldenCaseList,
+    AgentGoldenCaseRead,
+    AgentListRead,
+    AgentProposalDecision,
+    AgentProposalList,
+    AgentProposalRead,
+    AgentProposalRejectRequest,
+    AgentRegressionRead,
+    AgentRunCreated,
+    AgentRunRequest,
+)
+from cliver_playbook.app.basic.db.session import get_db, open_session
+from cliver_playbook.app.basic.settings import get_settings
+{% if enabled('api.auth') %}
+from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
+{% endif %}
+
+register_default_agents()
+register_project_agents()
+
+router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
+{% if enabled('api.auth') %}
+
+_VIEWER = Depends(get_current_user)
+{% endif %}
+
+
+def _coordinator() -> Coordinator:
+    """Build per request so settings and the event loop are current."""
+    settings = get_settings()
+    return Coordinator(
+        registry,
+        planner=build_planner(settings),
+        runner=build_runner(settings),
+        default_agent="general",
+    )
+
+
+def _run_store(db: AsyncSession) -> RunStore:
+    """The project's durable run store for one request session."""
+    return DatabaseRunStore(db)
+
+
+def _sse(event: dict) -> str:
+    """One SSE frame; ``id`` carries the sequence for Last-Event-ID resume."""
+    lines = []
+    sequence = event.get("sequence")
+    if isinstance(sequence, int):
+        lines.append(f"id: {sequence}")
+    lines.append(f"event: {event['type']}")
+    lines.append(f"data: {json.dumps(event, separators=(',', ':'))}")
+    return "\n".join(lines) + "\n\n"
+
+
+def _descriptor(agent: SubAgent) -> AgentDescriptorRead:
+    return AgentDescriptorRead(
+        name=agent.name,
+        description=agent.description,
+        capabilities=list(agent.capabilities),
+        autonomy_mode=agent.autonomy.improvement_mode,
+        has_pipeline=agent.pipeline is not None,
+    )
+
+
+def _case_read(case: AgentGoldenCase) -> AgentGoldenCaseRead:
+    return AgentGoldenCaseRead(
+        id=case.id,
+        agent=case.agent,
+        name=case.name,
+        message=case.message,
+        expected_contains=case.expected_contains,
+        forbidden_contains=case.forbidden_contains,
+        enabled=case.enabled,
+        created_at=case.created_at,
+        updated_at=case.updated_at,
+    )
+
+
+def _regression_read(run: AgentRegressionRun) -> AgentRegressionRead:
+    return AgentRegressionRead(
+        id=run.id,
+        proposal_id=run.proposal_id,
+        agent=run.agent,
+        status=run.status,
+        baseline_score=run.baseline_score,
+        candidate_score=run.candidate_score,
+        min_score=run.min_score,
+        case_results=run.case_results,
+        error=run.error,
+        created_at=run.created_at,
+    )
+
+
+def _proposal_read(proposal: AgentImprovement) -> AgentProposalRead:
+    return AgentProposalRead(
+        id=proposal.id,
+        agent=proposal.agent,
+        kind=proposal.kind,
+        status=proposal.status,
+        title=proposal.title,
+        rationale=proposal.rationale,
+        patch=proposal.patch,
+        evidence=proposal.evidence,
+        created_at=proposal.created_at,
+        reviewed_by=proposal.reviewed_by,
+        reviewed_at=proposal.reviewed_at,
+        applied_at=proposal.applied_at,
+    )
+{% if enabled('api.auth') %}
+
+
+def _require_reviewer(viewer: Viewer) -> None:
+    """Approval is a privileged action; register ``agent:improve`` in RBAC.
+
+    The bootstrap admin wildcard works without a project-specific permission.
+    Until a project registers the code, only the admin role can review.
+    """
+    if viewer.has("agent:improve") or "admin" in viewer.role_codes:
+        return
+    raise HTTPException(status_code=403, detail="Reviewer permission required")
+{% endif %}
+
+
+@router.post(
+    "/runs",
+    response_model=AgentRunCreated,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_run(
+    payload: AgentRunRequest,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentRunCreated:
+    settings = get_settings()
+    run_id = uuid.uuid4().hex
+{% if enabled('api.auth') %}
+    user_id = _viewer.user_id
+{% else %}
+    user_id = None
+{% endif %}
+    await _run_store(db).create(
+        run_id,
+        message=payload.message,
+        user_id=user_id,
+        session_id=payload.session_id,
+    )
+    start_run_worker(
+        run_id,
+        message=payload.message,
+        user_id=user_id,
+        session_id=payload.session_id,
+        settings=settings,
+        coordinator=_coordinator(),
+    )
+    return AgentRunCreated(run_id=run_id, status="queued")
+
+
+@router.get("/runs/{run_id}/events")
+async def stream_run(
+    run_id: str,
+    request: Request,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+) -> StreamingResponse:
+    settings = get_settings()
+    store_db = open_session()
+    store = DatabaseRunStore(store_db)
+    events = EventStore(store_db)
+    try:
+        record = await store.get(run_id)
+    except BaseException:
+        await store_db.close()
+        raise
+    if record is None:
+        await store_db.close()
+        raise HTTPException(status_code=404, detail="Run not found")
+{% if enabled('api.auth') %}
+    if record.user_id is not None and record.user_id != _viewer.user_id:
+        await store_db.close()
+        raise HTTPException(status_code=403, detail="Run belongs to another user")
+{% endif %}
+
+    raw_last_id = request.headers.get("last-event-id", "")
+    last_event_id = int(raw_last_id) if raw_last_id.strip().lstrip("-").isdigit() else -1
+    subscription = broadcaster.subscribe(run_id)
+
+    async def events_stream():
+        try:
+            last = last_event_id
+            last_output = time.monotonic()
+            while True:
+                payloads = await events.after(run_id, last)
+                if payloads:
+                    for payload in payloads:
+                        yield _sse(payload)
+                        last = payload["sequence"]
+                        last_output = time.monotonic()
+                        if payload.get("type") in TERMINAL_EVENT_TYPES:
+                            return
+                    continue
+                current = await store.get(run_id)
+                if current is not None and current.status in TERMINAL_STATUSES:
+                    return
+                if (
+                    current is not None
+                    and current.status in {"queued", "running"}
+                    and not has_local_worker(run_id)
+                    and await store.mark_orphaned_if_stale(
+                        run_id, settings.agent_run_orphan_seconds
+                    )
+                ):
+                    # The worker's process died mid-run: fail once, never retry
+                    # (tools may have had side effects).
+                    await events.persist(
+                        run_id,
+                        {
+                            "type": "run.failed",
+                            "code": "orphaned",
+                            "message": "The run stopped without completing; it was marked failed.",
+                        },
+                    )
+                    broadcaster.notify(run_id)
+                    continue
+                try:
+                    await asyncio.wait_for(
+                        subscription.wait(), timeout=settings.agent_event_poll_seconds
+                    )
+                except TimeoutError:
+                    pass
+                subscription.clear()
+                if time.monotonic() - last_output >= settings.agent_sse_keepalive_seconds:
+                    yield ": keepalive\n\n"
+                    last_output = time.monotonic()
+        finally:
+            broadcaster.unsubscribe(run_id, subscription)
+            await store_db.close()
+
+    return StreamingResponse(
+        events_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/runs/{run_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+async def cancel_run(
+    run_id: str,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    store = _run_store(db)
+    record = await store.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+{% if enabled('api.auth') %}
+    if record.user_id is not None and record.user_id != _viewer.user_id:
+        raise HTTPException(status_code=403, detail="Run belongs to another user")
+{% endif %}
+    cancelled = await store.cancel(run_id)
+    final = cancelled.status if cancelled is not None else record.status
+    return {"run_id": run_id, "status": final if final != "running" else "cancelling"}
+
+
+@router.post(
+    "/runs/{run_id}/feedback",
+    response_model=AgentFeedbackCreated,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_feedback(
+    run_id: str,
+    payload: AgentFeedbackRequest,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentFeedbackCreated:
+    """Attach an outcome rating; evaluation and proposal logic run now."""
+    record = await _run_store(db).get(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+{% if enabled('api.auth') %}
+    if record.user_id is not None and record.user_id != _viewer.user_id:
+        raise HTTPException(status_code=403, detail="Run belongs to another user")
+{% endif %}
+    agent = registry.get(payload.agent)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    experience = await find_experience(db, run_id=run_id, agent=payload.agent, step=payload.step)
+    if experience is None:
+        raise HTTPException(status_code=404, detail="No observed experience for this run")
+{% if enabled('api.auth') %}
+    user_id = _viewer.user_id
+{% else %}
+    user_id = None
+{% endif %}
+    try:
+        feedback = await record_feedback(
+            db,
+            experience=experience,
+            user_id=user_id,
+            rating=payload.rating,
+            comment=payload.comment,
+        )
+        evaluation = await evaluate_experience(db, agent.autonomy, experience)
+        proposal = await maybe_create_proposal(
+            db,
+            agent.autonomy,
+            agent.name,
+            generator=build_proposal_generator(get_settings()),
+        )
+        if proposal is None:
+            proposal = await get_pending_proposal(db, agent.name)
+    except LearningError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return AgentFeedbackCreated(
+        feedback_id=feedback.id,
+        experience_id=experience.id,
+        evaluation={
+            "status": "evaluated",
+            "agent": agent.name,
+            "metric": evaluation.metric,
+            "score": evaluation.score,
+            "passed": evaluation.passed,
+            "details": evaluation.details,
+        },
+        proposal=_proposal_read(proposal) if proposal is not None else None,
+    )
+
+
+@router.get("/proposals", response_model=AgentProposalList)
+async def get_proposals(
+    agent: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentProposalList:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    proposals = await list_proposals(db, agent=agent, status=status_filter)
+    return AgentProposalList(proposals=[_proposal_read(item) for item in proposals])
+
+
+@router.post(
+    "/golden-cases",
+    response_model=AgentGoldenCaseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_agent_golden_case(
+    payload: AgentGoldenCaseCreate,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentGoldenCaseRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    if registry.get(payload.agent) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    try:
+        case = await create_golden_case(
+            db,
+            agent=payload.agent,
+            name=payload.name,
+            message=payload.message,
+            expected_contains=payload.expected_contains,
+            forbidden_contains=payload.forbidden_contains,
+        )
+    except RegressionError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return _case_read(case)
+
+
+@router.get("/golden-cases", response_model=AgentGoldenCaseList)
+async def get_agent_golden_cases(
+    agent: str | None = None,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentGoldenCaseList:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    cases = await list_golden_cases(db, agent=agent)
+    return AgentGoldenCaseList(cases=[_case_read(case) for case in cases])
+
+
+@router.delete("/golden-cases/{case_id}")
+async def delete_agent_golden_case(
+    case_id: int,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, bool]:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    deleted = await delete_golden_case(db, case_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Golden case not found")
+    return {"deleted": True}
+
+
+@router.get(
+    "/proposals/{proposal_id}/regression",
+    response_model=AgentRegressionRead,
+)
+async def get_agent_proposal_regression(
+    proposal_id: str,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentRegressionRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    run = await get_regression_run(db, proposal_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Regression report not found")
+    return _regression_read(run)
+
+
+@router.post(
+    "/proposals/{proposal_id}/approve",
+    response_model=AgentProposalDecision,
+)
+async def approve_agent_proposal(
+    proposal_id: str,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentProposalDecision:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+    actor_id = _viewer.user_id
+{% else %}
+    actor_id = None
+{% endif %}
+    existing = await get_proposal(db, proposal_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    agent = registry.get(existing.agent)
+    runner = build_regression_runner(get_settings(), agent, db) if agent is not None else None
+    min_score = agent.autonomy.regression_min_score if agent is not None else 0.8
+    try:
+        proposal, applied = await approve_proposal(
+            db,
+            proposal_id,
+            actor_id,
+            regression_runner=runner,
+            regression_min_score=min_score,
+        )
+    except LearningError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    report = await get_regression_run(db, proposal.id)
+    return AgentProposalDecision(
+        proposal=_proposal_read(proposal),
+        applied=applied,
+        requires_manual_apply=not applied,
+        regression=_regression_read(report) if report is not None else None,
+    )
+
+
+@router.post(
+    "/proposals/{proposal_id}/reject",
+    response_model=AgentProposalDecision,
+)
+async def reject_agent_proposal(
+    proposal_id: str,
+    payload: AgentProposalRejectRequest | None = None,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+) -> AgentProposalDecision:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+    actor_id = _viewer.user_id
+{% else %}
+    actor_id = None
+{% endif %}
+    note = payload.note if payload is not None else ""
+    try:
+        proposal = await reject_proposal(db, proposal_id, actor_id=actor_id, note=note)
+    except LearningError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return AgentProposalDecision(
+        proposal=_proposal_read(proposal),
+        applied=False,
+        requires_manual_apply=False,
+    )
+
+
+@router.get("/agents", response_model=AgentListRead)
+{% if enabled('api.auth') %}
+async def list_agents(
+    _viewer: Viewer = _VIEWER,
+) -> AgentListRead:
+{% else %}
+async def list_agents() -> AgentListRead:
+{% endif %}
+    return AgentListRead(agents=[_descriptor(agent) for agent in registry.all()])
+
+
+@router.get("/agents/{name}", response_model=AgentDescriptorRead)
+async def get_agent(
+    name: str,
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+) -> AgentDescriptorRead:
+    agent = registry.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return _descriptor(agent)

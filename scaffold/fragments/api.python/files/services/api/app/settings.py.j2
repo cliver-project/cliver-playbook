@@ -1,0 +1,126 @@
+"""Project settings: one subclass of the most-derived playbook package."""
+
+{% if enabled('api.agent') %}
+from typing import Self
+
+from pydantic import model_validator
+
+{% endif %}
+{% if enabled('api.mcp') %}
+from cliver_playbook.app.mcp.settings import Settings as PlaybookSettings
+{% elif enabled('api.rag') %}
+from cliver_playbook.app.rag.settings import Settings as PlaybookSettings
+{% elif enabled('api.auth') %}
+from cliver_playbook.app.user.settings import Settings as PlaybookSettings
+{% else %}
+from cliver_playbook.app.basic.settings import Settings as PlaybookSettings
+{% endif %}
+
+
+class Settings(PlaybookSettings):
+    """Project fields; every playbook block is inherited unchanged."""
+
+    # Role assigned by POST /api/v1/auth/register.
+    registration_role: str = "user"
+{% if enabled('api.agent') %}
+
+    # ── Agent plane (API-side AgentCore) ──────────────────────────
+    # Empty model keeps deterministic planning and the direct business path.
+    # A configured model enables the AgentCore planner and the sub-agent tool
+    # loop. Credentials belong in the environment or .env, never in app.yaml.
+    agent_llm_model: str = ""
+    agent_llm_api_key: str = ""
+    agent_llm_base_url: str = ""
+    agent_llm_protocol: str = "openai"
+    agent_llm_provider: str | None = None
+    agent_llm_temperature: float = 0.0
+    agent_llm_max_tokens: int | None = None
+    agent_llm_timeout: float = 120.0
+    agent_tool_timeout: float = 30.0
+    agent_max_iterations: int = 20
+    agent_plan_max_steps: int = 8
+    # Run eventing: subscriber poll, worker tick, orphan threshold and SSE
+    # keepalive. A run whose worker vanished (crashed process) is marked
+    # failed after the orphan threshold instead of tailing forever.
+    agent_event_poll_seconds: float = 0.25
+    agent_run_tick_seconds: float = 0.5
+    agent_run_orphan_seconds: float = 120.0
+    agent_sse_keepalive_seconds: float = 15.0
+    # System One/Laya selector. Empty provider disables it; the selector is
+    # fail-open and only runs when a tool/skill catalogue exceeds its minimum.
+    agent_system_one_provider: str = ""  # local | bailian | typesafe | http
+    agent_system_one_model: str = ""
+    agent_system_one_api_key: str = ""
+    agent_system_one_base_url: str = ""
+    agent_system_one_workspace_id: str = ""
+    agent_system_one_region: str = "cn-beijing"
+    agent_system_one_fit_threshold: float = 0.3
+    agent_system_one_min_tools: int = 20
+    agent_system_one_min_skills: int = 20
+    agent_system_one_top_k_tools: int = 10
+    agent_system_one_top_k_skills: int = 5
+    agent_system_one_timeout: float = 5.0
+    # Directory of Agent Skills (SKILL.md) relative to services/api.
+    agent_skills_dir: str = "skills"
+
+    @model_validator(mode="after")
+    def _validate_agent_settings(self) -> Self:
+        if self.agent_llm_model.strip() and not (
+            self.agent_llm_base_url.strip() or self.agent_llm_provider
+        ):
+            raise ValueError(
+                "CLIVER_AGENT_LLM_BASE_URL or CLIVER_AGENT_LLM_PROVIDER is "
+                "required when CLIVER_AGENT_LLM_MODEL is set"
+            )
+        if self.agent_llm_protocol not in {"openai", "anthropic"}:
+            raise ValueError("CLIVER_AGENT_LLM_PROTOCOL must be openai or anthropic")
+        if self.agent_max_iterations < 1:
+            raise ValueError("CLIVER_AGENT_MAX_ITERATIONS must be at least 1")
+        if self.agent_plan_max_steps < 1:
+            raise ValueError("CLIVER_AGENT_PLAN_MAX_STEPS must be at least 1")
+        if self.agent_llm_timeout <= 0 or self.agent_tool_timeout <= 0:
+            raise ValueError("agent timeouts must be positive")
+        for field in (
+            "agent_event_poll_seconds",
+            "agent_run_tick_seconds",
+            "agent_run_orphan_seconds",
+            "agent_sse_keepalive_seconds",
+        ):
+            if getattr(self, field) <= 0:
+                raise ValueError(f"{field} must be positive")
+
+        system_one = self.agent_system_one_provider.strip().lower()
+        if system_one not in {"", "local", "bailian", "typesafe", "http"}:
+            raise ValueError(
+                "CLIVER_AGENT_SYSTEM_ONE_PROVIDER must be local, bailian, typesafe or http"
+            )
+        if system_one == "bailian" and not (
+            self.agent_system_one_workspace_id.strip() or self.agent_system_one_base_url.strip()
+        ):
+            raise ValueError(
+                "CLIVER_AGENT_SYSTEM_ONE_WORKSPACE_ID or "
+                "CLIVER_AGENT_SYSTEM_ONE_BASE_URL is required for the "
+                "bailian System One provider"
+            )
+        if system_one == "http" and not (
+            self.agent_system_one_base_url.strip() and self.agent_system_one_model.strip()
+        ):
+            raise ValueError(
+                "CLIVER_AGENT_SYSTEM_ONE_BASE_URL and "
+                "CLIVER_AGENT_SYSTEM_ONE_MODEL are required for the http "
+                "System One provider"
+            )
+        if not 0.0 <= self.agent_system_one_fit_threshold <= 1.0:
+            raise ValueError("CLIVER_AGENT_SYSTEM_ONE_FIT_THRESHOLD must be between 0 and 1")
+        if self.agent_system_one_min_tools < 0 or self.agent_system_one_min_skills < 0:
+            raise ValueError("System One minimum catalogue sizes must be >= 0")
+        for field in (
+            "agent_system_one_top_k_tools",
+            "agent_system_one_top_k_skills",
+        ):
+            if not 1 <= getattr(self, field) <= 12:
+                raise ValueError(f"{field} must be between 1 and 12")
+        if self.agent_system_one_timeout <= 0:
+            raise ValueError("CLIVER_AGENT_SYSTEM_ONE_TIMEOUT must be positive")
+        return self
+{% endif %}

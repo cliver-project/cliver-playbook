@@ -1,0 +1,41 @@
+{% if enabled('ui.web') %}
+name: Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/web.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @{{ project_slug }}/web typecheck
+      - run: pnpm --filter @{{ project_slug }}/web lint
+      - run: pnpm --filter @{{ project_slug }}/web seam-check
+      - run: pnpm --filter @{{ project_slug }}/web build
+{% if enabled('ui.agent.chat') %}
+      - run: pnpm --filter @{{ project_slug }}/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @{{ project_slug }}/web test:e2e
+{% endif %}
+{% endif %}

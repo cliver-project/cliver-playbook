@@ -1,0 +1,65 @@
+[project]
+name = "{{ project_slug }}-api"
+version = "0.1.0"
+description = "{{ project_title }} API plane"
+requires-python = ">=3.12"
+dependencies = [
+    "cliver-playbook-app-basic=={{ playbook.revision }}",
+{% if enabled('api.auth') %}
+    "cliver-playbook-app-user=={{ playbook.revision }}",
+{% endif %}
+{% if enabled('api.rag') %}
+    "cliver-playbook-app-rag=={{ playbook.revision }}",
+{% endif %}
+{% if enabled('api.mcp') %}
+    "cliver-playbook-app-mcp=={{ playbook.revision }}",
+{% endif %}
+{% if enabled('api.agent') %}
+    "cliver-core>=0.3.1,<0.4",
+{% endif %}
+    "fastapi>=0.143.0",
+    "uvicorn[standard]>=0.35.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.16.0",
+    "pydantic-settings>=2.16,<3",
+    "email-validator>=2.2",
+    "psycopg[binary]>=3.2.0",
+]
+{% if enabled('api.agent') %}
+
+[project.optional-dependencies]
+# In-process laya System One selector: `uv sync --extra local-system-one`.
+local-system-one = ["cliver-core[local-laya]>=0.3.1,<0.4"]
+{% endif %}
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "anyio>=4.4.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# The test harness sets CLIVER_DATABASE_URL before importing the app.
+ignore = ["B008", "E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "cliver_playbook"]

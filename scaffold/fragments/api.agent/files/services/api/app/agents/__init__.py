@@ -1,0 +1,24 @@
+"""API-plane agent collaboration package (ADR-0027)."""
+
+from app.agents.bootstrap import register_default_agents, register_project_agents
+from app.agents.coordinator import Coordinator
+from app.agents.events import EventStore, broadcaster
+from app.agents.registry import AgentRegistry, registry
+from app.agents.runs import DatabaseRunStore, InMemoryRunStore, RunRecord, RunStore
+from app.agents.worker import has_local_worker, start_run_worker
+
+__all__ = [
+    "AgentRegistry",
+    "Coordinator",
+    "DatabaseRunStore",
+    "EventStore",
+    "InMemoryRunStore",
+    "RunRecord",
+    "RunStore",
+    "broadcaster",
+    "has_local_worker",
+    "register_default_agents",
+    "register_project_agents",
+    "registry",
+    "start_run_worker",
+]

@@ -1,0 +1,19 @@
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+// The FastAPI backend in development. A split deployment uses
+// VITE_API_BASE_URL at build time instead of this proxy.
+const DEV_BACKEND = "http://127.0.0.1:8000";
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      "/api": { target: DEV_BACKEND, changeOrigin: true },
+{% if enabled('api.mcp') %}
+      "/mcp": { target: DEV_BACKEND, changeOrigin: true },
+{% endif %}
+    },
+  },
+});

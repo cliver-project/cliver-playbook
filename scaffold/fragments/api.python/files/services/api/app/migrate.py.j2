@@ -1,0 +1,27 @@
+"""Apply every migration chain in dependency order, then the project's."""
+
+from app.migrations import run_migrations_online as run_project
+from app.settings import Settings
+from cliver_playbook.app.basic.alembic import run_migrations_online as run_basic
+{% if enabled('api.rag') %}
+from cliver_playbook.app.rag.alembic import run_migrations_online as run_rag
+{% endif %}
+{% if enabled('api.auth') %}
+from cliver_playbook.app.user.alembic import run_migrations_online as run_user
+{% endif %}
+
+
+def main() -> None:
+    url = Settings().sync_db_url
+    run_basic(url)
+{% if enabled('api.auth') %}
+    run_user(url)
+{% endif %}
+{% if enabled('api.rag') %}
+    run_rag(url)
+{% endif %}
+    run_project(url)
+
+
+if __name__ == "__main__":
+    main()

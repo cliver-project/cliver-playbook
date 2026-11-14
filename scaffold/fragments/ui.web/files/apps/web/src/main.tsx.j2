@@ -1,0 +1,39 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+
+import { createI18n } from "cliver-playbook-app-basic";
+import "./index.css";
+{% if enabled('api.rag') %}
+import { ragTranslations } from "cliver-playbook-app-rag";
+{% endif %}
+{% if enabled('api.mcp') %}
+import { mcpTranslations } from "cliver-playbook-app-mcp";
+{% endif %}
+{% if enabled('api.auth') %}
+import { installAuthClient, userTranslations } from "cliver-playbook-app-user";
+{% endif %}
+
+import App from "./App";
+import { projectTranslations } from "./i18n";
+
+{% if enabled('api.auth') %}
+installAuthClient();
+{% endif %}
+createI18n(
+{% if enabled('api.auth') %}
+  userTranslations,
+{% endif %}
+{% if enabled('api.rag') %}
+  ragTranslations,
+{% endif %}
+{% if enabled('api.mcp') %}
+  mcpTranslations,
+{% endif %}
+  projectTranslations,
+);
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);

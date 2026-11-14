@@ -1,0 +1,17 @@
+# API contract
+
+`contracts/openapi.yaml` is the composed public contract. Do not edit it by
+hand for module endpoints: edit the matching fragment under
+`contracts/modules/` and run `make contracts`.
+
+- `contracts/base/openapi.yaml` — base document, security scheme and shared
+  metadata.
+- `contracts/modules/*.yaml` — one fragment per selected module.
+- `contracts/compose.py` — deterministic merge; `--check` fails when the
+  composed output is stale.
+- `contracts/events.json` — streaming event union used by the agent run
+  endpoint and the UI.
+
+Generated clients (TypeScript, Swift, Kotlin, Python and Rust) are added in a
+later phase. Until then the clients in the scaffold are hand-written to the
+same shapes.

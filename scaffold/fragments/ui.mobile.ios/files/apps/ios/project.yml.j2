@@ -1,0 +1,82 @@
+# XcodeGen spec. Generate the project with `xcodegen generate`; the
+# .xcodeproj is not checked in.
+name: {{ project_slug }}
+
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  Core:
+    path: Packages/Core
+{% if enabled('ui.mobile.auth') %}
+  FeatureAuth:
+    path: Packages/FeatureAuth
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+  FeatureProfile:
+    path: Packages/FeatureProfile
+{% endif %}
+{% if enabled('ui.mobile.crud') %}
+  FeatureProducts:
+    path: Packages/FeatureProducts
+{% endif %}
+
+targets:
+  App:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: App/Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.{{ project_slug }}
+        PRODUCT_NAME: {{ project_slug }}
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_PREVIEWS: YES
+    dependencies:
+      - package: Core
+{% if enabled('ui.mobile.auth') %}
+      - package: FeatureAuth
+{% endif %}
+{% if enabled('ui.mobile.profile') %}
+      - package: FeatureProfile
+{% endif %}
+{% if enabled('ui.mobile.crud') %}
+      - package: FeatureProducts
+{% endif %}
+
+  AppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: App/Tests
+    dependencies:
+      - target: App
+      - package: Core
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.{{ project_slug }}.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/{{ project_slug }}.app/{{ project_slug }}"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  {{ project_slug }}:
+    build:
+      targets:
+        App: all
+    test:
+      targets:
+        - AppTests

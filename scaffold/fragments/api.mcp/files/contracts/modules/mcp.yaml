@@ -1,0 +1,4 @@
+# The MCP endpoint is mounted by cliver-playbook-app-mcp and is not part of
+# the /api/v1 OpenAPI surface. Keep this fragment for project-specific MCP
+# discovery endpoints.
+paths: {}
