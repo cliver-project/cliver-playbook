@@ -275,6 +275,12 @@ endpoint no longer consults a process-local task registry: a running run is
 orphaned only when its heartbeat is stale. Queued runs wait for a consumer;
 they are not failed as orphans.
 
+Context compaction is opt-in. `CLIVER_AGENT_COMPACTION_ENABLED` builds a
+cliver-core `LlmCompactor` with a separate tool-free AgentCore summarizer; it
+triggers from the previous call's input token usage and keeps the most recent
+turns verbatim. It is off by default, requires the API-plane model, and shares
+the run timeout. A real-model compaction smoke is still a verification item.
+
 MCP discovery and auth are opt-in. `CLIVER_AGENT_MCP_ENABLED` plus a
 gitignored `CLIVER_AGENT_MCP_CONFIG` file feed cliver-core discovery; `${VAR}`
 expansion keeps tokens in the environment, and discovery problems are logged

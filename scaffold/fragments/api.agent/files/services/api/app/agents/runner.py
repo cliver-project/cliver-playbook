@@ -17,6 +17,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import Any, Protocol
 
 from cliver_core import AgentCore, CLIverMessageChunk, ModelBindings
+from cliver_core.compactors import LlmCompactor
 from cliver_core.events import (
     InferenceEvent,
     InferenceEventType,
@@ -35,6 +36,37 @@ from app.agents.mcp import select_mcp_servers
 from app.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+class _AgentCoreSummarizer:
+    """Summarize compacted history with a separate, tool-free AgentCore."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    async def chat(self, prompt: str, **kwargs: Any):
+        binding = build_llm_binding(self.settings)
+        if binding is None:
+            raise RuntimeError("No API-plane model is configured for compaction")
+        async with AgentCore.open(ModelBindings(llm=binding)) as core:
+            return await core.chat(
+                prompt,
+                max_iterations=1,
+                run_timeout=self.settings.agent_llm_timeout,
+            )
+
+
+def build_context_compactor(settings: Settings) -> LlmCompactor | None:
+    """Return an opt-in context compactor when a model is configured."""
+    if not settings.agent_compaction_enabled:
+        return None
+    if not settings.agent_llm_model.strip():
+        return None
+    return LlmCompactor(
+        _AgentCoreSummarizer(settings),
+        threshold_tokens=settings.agent_compaction_threshold_tokens,
+        keep_turns=settings.agent_compaction_keep_turns,
+    )
 
 
 class CoreHandle(Protocol):
@@ -163,6 +195,7 @@ class AgentCoreRunner:
                     run_timeout=self.settings.agent_llm_timeout,
                     tool_timeout=self.settings.agent_tool_timeout,
                     mcp_servers=select_mcp_servers(context, toolkit),
+                    context_compactor=build_context_compactor(self.settings),
                     on_event=on_event,
                 ):
                     if chunk.content:

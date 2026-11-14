@@ -275,6 +275,9 @@ def _runner_settings() -> SimpleNamespace:
         agent_max_iterations=8,
         agent_llm_timeout=30.0,
         agent_tool_timeout=10.0,
+        agent_compaction_enabled=False,
+        agent_compaction_threshold_tokens=60_000,
+        agent_compaction_keep_turns=2,
     )
 
 
@@ -1284,3 +1287,26 @@ async def test_event_contract_envelope_sequence_and_terminal(client, auth_header
         "run.failed",
     }
     assert {event["type"] for event in events} <= allowed
+
+
+def test_context_compaction_is_opt_in_and_model_backed():
+    from cliver_core.compactors import LlmCompactor
+
+    from app.agents.runner import build_context_compactor
+    from app.settings import Settings
+
+    disabled = Settings(agent_compaction_enabled=False)
+    assert build_context_compactor(disabled) is None
+
+    enabled = Settings(
+        agent_compaction_enabled=True,
+        agent_compaction_threshold_tokens=1000,
+        agent_compaction_keep_turns=2,
+        agent_llm_model="test-model",
+        agent_llm_base_url="http://127.0.0.1:9/v1",
+    )
+    compactor = build_context_compactor(enabled)
+    assert isinstance(compactor, LlmCompactor)
+
+    no_model = Settings(agent_compaction_enabled=True)
+    assert build_context_compactor(no_model) is None

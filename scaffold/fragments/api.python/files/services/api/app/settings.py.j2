@@ -47,6 +47,11 @@ class Settings(PlaybookSettings):
     agent_mcp_enabled: bool = False
     agent_mcp_config: str = ""
     agent_mcp_extra_paths: str = ""
+    # Opt-in context compaction. It summarizes older turns with a separate
+    # model call when the previous call's input usage crosses the threshold.
+    agent_compaction_enabled: bool = False
+    agent_compaction_threshold_tokens: int = 60000
+    agent_compaction_keep_turns: int = 2
     # Run eventing: subscriber poll, worker tick, orphan threshold and SSE
     # keepalive. A run whose worker vanished (crashed process) is marked
     # failed after the orphan threshold instead of tailing forever.
@@ -104,6 +109,10 @@ class Settings(PlaybookSettings):
                 raise ValueError(f"{field} must be positive")
         if self.agent_run_concurrency < 1:
             raise ValueError("CLIVER_AGENT_RUN_CONCURRENCY must be at least 1")
+        if self.agent_compaction_threshold_tokens < 1:
+            raise ValueError("agent_compaction_threshold_tokens must be positive")
+        if self.agent_compaction_keep_turns < 1:
+            raise ValueError("agent_compaction_keep_turns must be positive")
 
         system_one = self.agent_system_one_provider.strip().lower()
         if system_one not in {"", "local", "bailian", "typesafe", "http"}:
