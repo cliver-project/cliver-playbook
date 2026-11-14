@@ -21,6 +21,7 @@ from cliver_core.provider import CLIverResponse, Provider
 from app.agents.contracts import (
     AgentContext,
     AgentDescriptor,
+    AgentHandoff,
     AgentIntent,
     AgentResult,
     AgentToolkit,
@@ -259,6 +260,35 @@ class FakeCore:
         yield CLIverMessageChunk(content="world")
 
 
+class HandoffCore(FakeCore):
+    """Fake AgentCore that requests a handoff through the optional tool."""
+
+    def __init__(self, target: str = "second", reason: str = "needs it") -> None:
+        self.target = target
+        self.reason = reason
+        self.toolkit: AgentToolkit | None = None
+
+    async def stream(self, user_input: str, **kwargs: object) -> AsyncIterator[CLIverMessageChunk]:
+        on_event = kwargs["on_event"]
+        await on_event(
+            ToolEvent(
+                event=ToolEventType.START,
+                tool_name="handoff_to_agent",
+                tool_call_id="handoff-1",
+                args={"target": self.target, "reason": self.reason},
+            )
+        )
+        await on_event(
+            ToolEvent(
+                event=ToolEventType.END,
+                tool_name="handoff_to_agent",
+                tool_call_id="handoff-1",
+                result="ok",
+            )
+        )
+        yield CLIverMessageChunk(content="Handing this off.")
+
+
 class BrokenCore:
     async def stream(self, user_input: str, **kwargs: object) -> AsyncIterator[CLIverMessageChunk]:
         raise RuntimeError("model down")
@@ -309,6 +339,11 @@ def test_registry_rejects_duplicate_names() -> None:
     registry.register(EchoAgent())
     with pytest.raises(ValueError, match="already registered"):
         registry.register(EchoAgent())
+
+
+def test_agent_handoff_depth_must_not_be_negative() -> None:
+    with pytest.raises(ValueError, match="AGENT_HANDOFF_MAX_DEPTH"):
+        Settings(_env_file=None, agent_handoff_max_depth=-1)
 
 
 def test_agent_model_requires_an_endpoint() -> None:
@@ -586,6 +621,318 @@ async def test_multi_step_sources_are_isolated_per_agent() -> None:
 
 
 @pytest.mark.asyncio
+async def test_agentcore_planner_preserves_parallel_groups() -> None:
+    class OtherEcho(EchoAgent):
+        name = "other"
+
+    planner = AgentCorePlanner(
+        FakePlanModel(
+            PlanChoice(
+                steps=[
+                    PlanStepChoice(agent="echo", parallel_group=0),
+                    PlanStepChoice(agent="other", parallel_group=0),
+                ]
+            )
+        ),
+        fallback=DeterministicPlanner(),
+    )
+    decision = await planner.plan(_context(), (EchoAgent(), OtherEcho()))
+    assert [intent.parallel_group for intent in decision.steps] == [0, 0]
+
+
+@pytest.mark.asyncio
+async def test_coordinator_runs_a_parallel_group_behind_a_barrier() -> None:
+    class GroupPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="first", payload={}, parallel_group=0),
+                    AgentIntent(name="second", payload={}, parallel_group=0),
+                    AgentIntent(name="third", payload={}),
+                ),
+                planner="test",
+            )
+
+    started = {name: asyncio.Event() for name in ("first", "second")}
+    order: list[str] = []
+
+    class BarrierAgent(EchoAgent):
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            order.append(f"{self.name}:start")
+            started[self.name].set()
+            await asyncio.wait_for(
+                asyncio.gather(
+                    *(event.wait() for other, event in started.items() if other != self.name)
+                ),
+                timeout=1.0,
+            )
+            order.append(f"{self.name}:end")
+            return AgentResult(
+                agent=self.name,
+                message=f"{self.name} done",
+                data={
+                    "prior": [result.agent for result in context.prior_results],
+                    "db": context.resources.get("db"),
+                },
+            )
+
+    opened: list[object] = []
+    closed: list[object] = []
+
+    @asynccontextmanager
+    async def scope():
+        token = object()
+        opened.append(token)
+        try:
+            yield {"db": token}
+        finally:
+            closed.append(token)
+
+    registry = AgentRegistry()
+    registry.register(BarrierAgent("first"))
+    registry.register(BarrierAgent("second"))
+    registry.register(RecordingAgent("third"))
+    coordinator = Coordinator(registry, planner=GroupPlanner())
+    context = AgentContext(run_id="run-parallel", message="do three", resource_scope=scope)
+
+    events = [event async for event in coordinator.stream(context)]
+    selected = [event for event in events if event["type"] == "agent.selected"]
+    assert {event["agent"] for event in selected[:2]} == {"first", "second"}
+    assert selected[2]["agent"] == "third"
+    assert [event.get("parallel_group") for event in selected[:2]] == [0, 0]
+    assert selected[2].get("parallel_group") is None
+    assert set(order[:2]) == {"first:start", "second:start"}
+    assert order[2:] == ["first:end", "second:end"] or order[2:] == [
+        "second:end",
+        "first:end",
+    ]
+
+    results = {event["agent"]: event for event in events if event["type"] == "agent.result"}
+    assert results["first"]["data"]["prior"] == []
+    assert results["second"]["data"]["prior"] == []
+    assert results["first"]["data"]["db"] is not results["second"]["data"]["db"]
+    assert results["third"]["data"]["prior"] == ["first", "second"]
+    assert len(opened) == 3
+    assert len(closed) == 3
+    assert {id(token) for token in closed} == {id(token) for token in opened}
+    assert [event["sequence"] for event in events] == list(range(len(events)))
+    assert events[-1]["type"] == "run.completed"
+
+
+@pytest.mark.asyncio
+async def test_parallel_steps_require_a_resource_scope() -> None:
+    class OtherEcho(EchoAgent):
+        name = "second"
+
+    class GroupPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="echo", payload={}, parallel_group=0),
+                    AgentIntent(name="second", payload={}, parallel_group=0),
+                ),
+                planner="test",
+            )
+
+    registry = AgentRegistry()
+    registry.register(EchoAgent())
+    registry.register(OtherEcho())
+    coordinator = Coordinator(registry, planner=GroupPlanner())
+
+    events = [event async for event in coordinator.stream(_context("do both"))]
+    assert events[-1]["type"] == "run.failed"
+    assert events[-1]["code"] == "parallel_resources"
+    assert not any(event["type"] == "agent.selected" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_coordinator_runs_a_direct_handoff_before_the_next_plan_step() -> None:
+    class HandoffAgent(EchoAgent):
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            return AgentResult(
+                agent=self.name,
+                message="first hands off",
+                data={"prior": [result.agent for result in context.prior_results]},
+                handoff=AgentHandoff(
+                    target="second",
+                    reason="needs the second business point",
+                    payload={"case": "handoff-1"},
+                ),
+            )
+
+    class CaptureAgent(RecordingAgent):
+        def __init__(self, name: str, captured: list[AgentContext]) -> None:
+            super().__init__(name)
+            self.captured = captured
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            self.captured.append(context)
+            return await super().run(context)
+
+    class HandoffPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="first", payload={}),
+                    AgentIntent(name="third", payload={}),
+                ),
+                planner="test",
+            )
+
+    captured: list[AgentContext] = []
+    registry = AgentRegistry()
+    registry.register(HandoffAgent("first"))
+    registry.register(CaptureAgent("second", captured))
+    registry.register(RecordingAgent("third"))
+    coordinator = Coordinator(registry, planner=HandoffPlanner())
+
+    events = [event async for event in coordinator.stream(_context("do the chain"))]
+    handoff = next(event for event in events if event["type"] == "agent.handoff")
+    assert handoff["agent"] == "first"
+    assert handoff["target"] == "second"
+    assert handoff["reason"] == "needs the second business point"
+    assert handoff["depth"] == 1
+    assert handoff["step"] == 0
+
+    selected = [event for event in events if event["type"] == "agent.selected"]
+    assert [event["agent"] for event in selected] == ["first", "second", "third"]
+    assert selected[1]["reason"] == "handoff:first"
+
+    results = {event["agent"]: event for event in events if event["type"] == "agent.result"}
+    assert results["second"]["data"]["prior"] == ["first"]
+    assert results["third"]["data"]["prior"] == ["first", "second"]
+    assert captured[0].metadata["handoff"]["from"] == "first"
+    assert captured[0].metadata["handoff"]["payload"] == {"case": "handoff-1"}
+    assert events[-1]["type"] == "run.completed"
+
+
+@pytest.mark.asyncio
+async def test_direct_handoff_rejects_an_unknown_target() -> None:
+    class HandoffAgent(EchoAgent):
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            return AgentResult(
+                agent=self.name,
+                message="hand off",
+                handoff=AgentHandoff(target="ghost"),
+            )
+
+    registry = AgentRegistry()
+    registry.register(HandoffAgent("first"))
+    coordinator = Coordinator(
+        registry,
+        planner=DeterministicPlanner(default_agent="first"),
+        default_agent="first",
+    )
+
+    events = [event async for event in coordinator.stream(_context("hand off"))]
+    assert events[-1]["type"] == "run.failed"
+    assert events[-1]["code"] == "no_agent"
+    assert "ghost" in events[-1]["message"]
+
+
+@pytest.mark.asyncio
+async def test_direct_handoff_stops_at_the_depth_limit() -> None:
+    class ChainAgent(EchoAgent):
+        def __init__(self, name: str, target: str) -> None:
+            self.name = name
+            self.target = target
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            return AgentResult(
+                agent=self.name,
+                message=f"{self.name} hands off",
+                handoff=AgentHandoff(target=self.target),
+            )
+
+    class OneStepPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(AgentIntent(name="first", payload={}),),
+                planner="test",
+            )
+
+    registry = AgentRegistry()
+    registry.register(ChainAgent("first", "second"))
+    registry.register(ChainAgent("second", "third"))
+    registry.register(RecordingAgent("third"))
+    coordinator = Coordinator(
+        registry,
+        planner=OneStepPlanner(),
+        max_handoff_depth=1,
+    )
+
+    events = [event async for event in coordinator.stream(_context("chain"))]
+    assert events[-1]["type"] == "run.failed"
+    assert events[-1]["code"] == "handoff_depth"
+    assert "second" in events[-1]["message"]
+
+
+@pytest.mark.asyncio
+async def test_direct_handoff_rejects_a_cycle() -> None:
+    class ChainAgent(EchoAgent):
+        def __init__(self, name: str, target: str) -> None:
+            self.name = name
+            self.target = target
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            return AgentResult(
+                agent=self.name,
+                message=f"{self.name} hands off",
+                handoff=AgentHandoff(target=self.target),
+            )
+
+    class OneStepPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(AgentIntent(name="first", payload={}),),
+                planner="test",
+            )
+
+    registry = AgentRegistry()
+    registry.register(ChainAgent("first", "second"))
+    registry.register(ChainAgent("second", "first"))
+    coordinator = Coordinator(
+        registry,
+        planner=OneStepPlanner(),
+        max_handoff_depth=3,
+    )
+
+    events = [event async for event in coordinator.stream(_context("cycle"))]
+    assert events[-1]["type"] == "run.failed"
+    assert events[-1]["code"] == "handoff_cycle"
+    assert "first" in events[-1]["message"]
+
+
+@pytest.mark.asyncio
+async def test_deterministic_runner_propagates_a_handoff() -> None:
+    class HandoffAgent(EchoAgent):
+        async def run(self, context: AgentContext) -> AgentResult:
+            return AgentResult(
+                agent=self.name,
+                message="hand off",
+                handoff=AgentHandoff(target="second", reason="next step"),
+            )
+
+    events = [
+        event async for event in DeterministicRunner().run(HandoffAgent(), _context("hand off"))
+    ]
+    assert events[-1]["handoff"] == {
+        "target": "second",
+        "reason": "next step",
+        "payload": {},
+    }
+
+
+@pytest.mark.asyncio
 async def test_coordinator_completes_when_the_pipeline_fails() -> None:
     class FailingPipeline:
         async def observe(self, context, result):
@@ -661,6 +1008,48 @@ async def test_coordinator_marks_the_agentcore_planner() -> None:
     assert selected["reason"] == "planner:agentcore"
     result = next(event for event in events if event["type"] == "agent.result")
     assert result["message"] == "echo: echo hi"
+
+
+class HandoffToolkitAgent(EchoAgent):
+    def __init__(self, targets: tuple[str, ...] = ("second",)) -> None:
+        self.targets = targets
+
+    def toolkit(self, context: AgentContext) -> AgentToolkit:
+        return AgentToolkit(
+            system_prompt="Use a handoff when needed.", handoff_targets=self.targets
+        )
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_adds_a_handoff_tool_only_when_declared() -> None:
+    core = FakeCore()
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+    [event async for event in runner.run(EchoAgent(), _context())]
+    assert core.toolkit is not None
+    assert "handoff_to_agent" not in {tool.name for tool in core.toolkit.tools}
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_propagates_a_declared_handoff() -> None:
+    core = HandoffCore(target="second", reason="needs the second point")
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+    events = [event async for event in runner.run(HandoffToolkitAgent(("second",)), _context())]
+    assert core.toolkit is not None
+    assert "handoff_to_agent" in {tool.name for tool in core.toolkit.tools}
+    result = events[-1]
+    assert result["handoff"] == {
+        "target": "second",
+        "reason": "needs the second point",
+        "payload": {"source": "agentcore"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_agentcore_runner_ignores_a_handoff_to_an_undeclared_target() -> None:
+    core = HandoffCore(target="ghost")
+    runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(core))
+    events = [event async for event in runner.run(HandoffToolkitAgent(("second",)), _context())]
+    assert "handoff" not in events[-1]
 
 
 @pytest.mark.asyncio
@@ -1063,6 +1452,73 @@ async def test_http_run_streams_a_multi_step_plan(client, auth_headers, monkeypa
 
     replay = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
     assert replay.text == streamed.text
+
+
+@pytest.mark.asyncio
+async def test_worker_runs_parallel_steps_with_isolated_sessions() -> None:
+    from app.agents.events import EventStore
+    from app.agents.runs import DatabaseRunStore
+    from app.agents.worker import execute_run
+    from app.settings import Settings
+    from cliver_playbook.app.basic.db.session import open_session
+
+    class SessionAgent(EchoAgent):
+        def __init__(self, name: str, seen: list[int]) -> None:
+            self.name = name
+            self.seen = seen
+
+        async def run(self, context: AgentContext) -> AgentResult:
+            db = context.resources.get("db")
+            self.seen.append(id(db))
+            return AgentResult(
+                agent=self.name,
+                message=f"{self.name} done",
+                data={"has_db": db is not None},
+            )
+
+    class GroupPlanner:
+        async def plan(self, context, agents):
+            return PlanDecision(
+                steps=(
+                    AgentIntent(name="first", payload={}, parallel_group=0),
+                    AgentIntent(name="second", payload={}, parallel_group=0),
+                ),
+                planner="test",
+            )
+
+    seen: list[int] = []
+    registry = AgentRegistry()
+    registry.register(SessionAgent("first", seen))
+    registry.register(SessionAgent("second", seen))
+    coordinator = Coordinator(registry, planner=GroupPlanner())
+    run_id = uuid.uuid4().hex
+
+    async with open_session() as db:
+        store = DatabaseRunStore(db)
+        await store.create(run_id, message="run in parallel")
+        await store.set_status(run_id, "running")
+
+    await execute_run(
+        run_id,
+        message="run in parallel",
+        user_id=None,
+        session_id=None,
+        settings=Settings(),
+        coordinator=coordinator,
+        already_claimed=True,
+    )
+
+    async with open_session() as db:
+        record = await DatabaseRunStore(db).get(run_id)
+        events = await EventStore(db).after(run_id, -1)
+
+    assert record is not None and record.status == "completed"
+    assert len(seen) == 2 and len(set(seen)) == 2
+    selected = [event for event in events if event["type"] == "agent.selected"]
+    assert {event["agent"] for event in selected} == {"first", "second"}
+    assert {event.get("parallel_group") for event in selected} == {0}
+    assert [event["sequence"] for event in events] == list(range(len(events)))
+    assert events[-1]["type"] == "run.completed"
 
 
 @pytest.mark.asyncio

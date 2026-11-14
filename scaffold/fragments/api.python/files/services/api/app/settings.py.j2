@@ -39,6 +39,8 @@ class Settings(PlaybookSettings):
     agent_tool_timeout: float = 30.0
     agent_max_iterations: int = 20
     agent_plan_max_steps: int = 8
+    # Maximum direct agent-to-agent handoff chain. 0 disables handoffs.
+    agent_handoff_max_depth: int = 2
     # Optional semantic judge for golden-set approval. Enabling it without a
     # configured model fails closed; deterministic assertions always run too.
     agent_judge_enabled: bool = False
@@ -99,6 +101,8 @@ class Settings(PlaybookSettings):
             raise ValueError("CLIVER_AGENT_MAX_ITERATIONS must be at least 1")
         if self.agent_plan_max_steps < 1:
             raise ValueError("CLIVER_AGENT_PLAN_MAX_STEPS must be at least 1")
+        if self.agent_handoff_max_depth < 0:
+            raise ValueError("CLIVER_AGENT_HANDOFF_MAX_DEPTH must not be negative")
         if self.agent_llm_timeout <= 0 or self.agent_tool_timeout <= 0:
             raise ValueError("agent timeouts must be positive")
         for field in (

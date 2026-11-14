@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from app.agents.contracts import AgentContext
@@ -58,8 +59,6 @@ async def execute_run(
     already_claimed: bool = False,
 ) -> None:
     store_db = open_session()
-    tool_db = open_session()
-    learning_db = open_session()
     store = DatabaseRunStore(store_db)
     events = EventStore(store_db)
     mcp_runtime = None
@@ -69,12 +68,33 @@ async def execute_run(
         user_id=user_id,
         session_id=session_id,
         resources={
-            "db": tool_db,
-            "learning_db": learning_db,
             "proposal_generator": build_proposal_generator(settings),
             "tool_permission_mode": settings.agent_tool_permission_mode,
         },
     )
+
+    # Each plan step gets its own tool and learning sessions. Parallel steps
+    # must never share an AsyncSession; the factory copies shared resources
+    # (model clients, MCP handles) and opens fresh database sessions.
+    @asynccontextmanager
+    async def step_resources():
+        db = open_session()
+        learning_db = open_session()
+        try:
+            resources = {
+                key: value
+                for key, value in context.resources.items()
+                if key not in {"db", "learning_db"}
+            }
+            resources.update({"db": db, "learning_db": learning_db})
+            yield resources
+        finally:
+            with contextlib.suppress(Exception):
+                await db.close()
+            with contextlib.suppress(Exception):
+                await learning_db.close()
+
+    context.resource_scope = step_resources
     try:
         if not already_claimed and not await store.claim(run_id):
             return  # cancelled while queued, or another worker claimed it
@@ -167,10 +187,6 @@ async def execute_run(
         await close_mcp_runtime(mcp_runtime)
         with contextlib.suppress(Exception):
             await store_db.close()
-        with contextlib.suppress(Exception):
-            await tool_db.close()
-        with contextlib.suppress(Exception):
-            await learning_db.close()
 
 
 async def _finish_cancelled(store: DatabaseRunStore, events: EventStore, run_id: str) -> None:

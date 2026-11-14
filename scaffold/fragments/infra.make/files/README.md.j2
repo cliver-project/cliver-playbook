@@ -129,8 +129,19 @@ deterministic single-step routing and each sub-agent runs its direct business
 method. Set `CLIVER_AGENT_LLM_MODEL` plus `CLIVER_AGENT_LLM_BASE_URL` or
 `CLIVER_AGENT_LLM_PROVIDER` (and the key) to enable LLM planning and the
 sub-agent tool loop. The planner returns an ordered multi-step plan (one agent
-per step, `CLIVER_AGENT_PLAN_MAX_STEPS`, default 8); later steps receive the
-earlier steps' results as handoff. Each step runs one agent with its own
+per step, `CLIVER_AGENT_PLAN_MAX_STEPS`, default 8); consecutive steps with the
+same `parallel_group` run concurrently behind a barrier, and later groups
+receive every earlier result through `context.prior_results`. Members of one
+group do not see each other's results. Parallel steps require
+`AgentContext.resource_scope`; the worker supplies it and opens a fresh tool and
+learning session per step, because a shared database session is not
+concurrency-safe.
+
+A sub-agent can return an `AgentHandoff` (or declare `handoff_targets` in its
+toolkit so the model gets a `handoff_to_agent` tool) to run another business
+point immediately. The coordinator validates the target, emits
+`agent.handoff`, bounds the chain with `CLIVER_AGENT_HANDOFF_MAX_DEPTH` (default
+2; 0 disables) and rejects cycles. Each step runs one agent with its own
 toolkit; skills are scoped to `skills/shared/` plus `skills/<agent-name>/` and
 an agent may name its own MCP servers. Runs are durable: every event lands in
 `agent_run_events`

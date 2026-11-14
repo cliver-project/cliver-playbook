@@ -7,10 +7,16 @@ other's internals.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from cliver_core import CLIverTool
+
+# Opens the resources for one plan step. Parallel steps must not share a
+# database session, so the coordinator asks the owner for a fresh mapping.
+StepResourceScope = Callable[[], AbstractAsyncContextManager[dict[str, Any]]]
 
 
 @dataclass(frozen=True)
@@ -20,12 +26,18 @@ class AgentIntent:
     name: str
     confidence: float = 1.0
     payload: dict[str, Any] = field(default_factory=dict)
+    # Consecutive steps sharing a group run concurrently behind a barrier.
+    # Later groups see every earlier group's results, but members of one
+    # group do not see each other's results.
+    parallel_group: int | None = None
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("AgentIntent.name must not be blank")
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("AgentIntent.confidence must be between 0 and 1")
+        if self.parallel_group is not None and self.parallel_group < 0:
+            raise ValueError("AgentIntent.parallel_group must not be negative")
 
 
 @dataclass
@@ -46,8 +58,33 @@ class AgentContext:
     session_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     resources: dict[str, Any] = field(default_factory=dict)
+    # Owner-supplied factory for per-step resources. Parallel steps require
+    # it because a shared database session is not concurrency-safe. The
+    # factory must return a fresh mapping and close what it opens on exit.
+    # Values it copies as-is (MCP clients, model handles) must themselves be
+    # safe to use from concurrent steps.
+    resource_scope: StepResourceScope | None = None
     prior_results: list[AgentResult] = field(default_factory=list)
     step: int = 0
+
+
+@dataclass(frozen=True)
+class AgentHandoff:
+    """A sub-agent's explicit request to run another business point next.
+
+    The coordinator validates the target against the registry, bounds the
+    chain and emits ``agent.handoff`` before delegating. The target sees the
+    normal user message plus the complete ``prior_results``, and can read the
+    request in ``context.metadata["handoff"]``.
+    """
+
+    target: str
+    reason: str = ""
+    payload: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.target.strip():
+            raise ValueError("AgentHandoff.target must not be blank")
 
 
 @dataclass
@@ -58,6 +95,7 @@ class AgentResult:
     message: str
     data: dict[str, Any] = field(default_factory=dict)
     events: list[dict[str, Any]] = field(default_factory=list)
+    handoff: AgentHandoff | None = None
 
 
 @dataclass
@@ -69,6 +107,8 @@ class AgentToolkit:
     ``safety="safe"``; mutating tools stay behind the permission callback.
     ``mcp_servers`` names the MCP servers this agent may call; an empty list
     falls back to the run-level servers from ``context.resources``.
+    ``handoff_targets`` opts the agent into the model-facing
+    ``handoff_to_agent`` tool; the coordinator still validates the target.
     """
 
     system_prompt: str
@@ -76,6 +116,9 @@ class AgentToolkit:
     mcp_servers: list[str] = field(default_factory=list)
     # Set by the runner when a sub-agent omits it, so Core can scope skills.
     agent_name: str = ""
+    # Optional allow-list for a model-driven direct handoff. An empty tuple
+    # keeps the handoff tool out of the AgentCore loop.
+    handoff_targets: tuple[str, ...] = ()
     # Tool permission scope; see app.agents.permissions. A non-empty
     # allowed_tools list is an additional allow-list over declared tools.
     permission_mode: str = "scoped"

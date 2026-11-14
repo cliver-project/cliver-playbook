@@ -35,6 +35,14 @@ class PlanStepChoice(BaseModel):
     agent: str = Field(description="Exact registered agent name.")
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     reason: str = Field(default="", description="One sentence explaining the step.")
+    parallel_group: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Consecutive steps with the same value run concurrently. Leave "
+            "unset unless the steps are independent."
+        ),
+    )
 
 
 class PlanChoice(BaseModel):
@@ -168,6 +176,7 @@ class AgentCorePlanner:
                             "reason": step.reason,
                             "planner": "agentcore",
                         },
+                        parallel_group=step.parallel_group,
                     )
                     for step in choice.steps
                 ),
@@ -209,6 +218,9 @@ def _planner_prompt(agents: list[AgentDescriptor]) -> str:
             "- Usually one step is enough; add a second step only when the request",
             "  genuinely needs another business point, because later steps see the",
             "  earlier steps' results.",
+            "- Give consecutive independent steps the same parallel_group so they",
+            "  run concurrently. Steps in one group do not see each other's results;",
+            "  use separate groups when one step depends on another.",
             "- Choose general only when no specialist applies, at most once.",
             "- Confidence is between 0 and 1; each reason is one sentence.",
         ]

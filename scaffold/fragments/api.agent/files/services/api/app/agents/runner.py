@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager
 from typing import Any, Protocol
 
-from cliver_core import AgentCore, CLIverMessageChunk, ModelBindings
+from cliver_core import AgentCore, CLIverMessageChunk, CLIverTool, ModelBindings, tool
 from cliver_core.compactors import LlmCompactor
 from cliver_core.events import (
     InferenceEvent,
@@ -25,7 +25,7 @@ from cliver_core.events import (
     ToolEventType,
 )
 
-from app.agents.contracts import AgentContext, AgentToolkit, SubAgent
+from app.agents.contracts import AgentContext, AgentHandoff, AgentToolkit, SubAgent
 from app.agents.core import (
     build_llm_binding,
     build_skill_manager,
@@ -37,6 +37,28 @@ from app.agents.permissions import build_permission_callback
 from app.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+HANDOFF_TOOL_NAME = "handoff_to_agent"
+
+
+def _handoff_tool(targets: tuple[str, ...]) -> CLIverTool:
+    """Build the optional model-facing handoff tool for one agent."""
+    allowed = ", ".join(targets)
+
+    @tool(
+        name=HANDOFF_TOOL_NAME,
+        description=(
+            "Hand the request to another business-point agent. Use it only "
+            f"when another agent owns the next step. Allowed targets: {allowed}."
+        ),
+        safety="safe",
+    )
+    async def handoff_to_agent(target: str, reason: str = "") -> list[dict]:
+        if target not in targets:
+            return [{"error": f"Unknown handoff target {target!r}; allowed: {allowed}."}]
+        return [{"text": f"Handoff to {target} requested."}]
+
+    return handoff_to_agent
 
 
 class _AgentCoreSummarizer:
@@ -102,12 +124,19 @@ class DeterministicRunner:
 
     async def run(self, agent: SubAgent, context: AgentContext) -> AsyncIterator[dict[str, Any]]:
         result = await agent.run(context)
-        yield {
+        event: dict[str, Any] = {
             "type": "agent.result",
             "agent": result.agent,
             "message": result.message,
             "data": {**result.data, "mode": "deterministic"},
         }
+        if result.handoff is not None:
+            event["handoff"] = {
+                "target": result.handoff.target,
+                "reason": result.handoff.reason,
+                "payload": dict(result.handoff.payload),
+            }
+        yield event
         for extra in result.events:
             yield dict(extra)
 
@@ -159,8 +188,18 @@ class AgentCoreRunner:
     ) -> AsyncIterator[dict[str, Any]]:
         toolkit = agent.toolkit(context)
         toolkit.agent_name = toolkit.agent_name or agent.name
+        if toolkit.handoff_targets and not any(
+            item.name == HANDOFF_TOOL_NAME for item in toolkit.tools
+        ):
+            toolkit.tools = [*toolkit.tools, _handoff_tool(toolkit.handoff_targets)]
         user_input = _input_with_prior(context)
         system_prompt = toolkit.system_prompt or agent.description
+        if toolkit.handoff_targets:
+            system_prompt = (
+                f"{system_prompt}\n\nYou may hand off to another business-point "
+                f"agent with {HANDOFF_TOOL_NAME} when that agent owns the next "
+                "step. Allowed targets: " + ", ".join(toolkit.handoff_targets) + "."
+            )
         override = context.resources.get("prompt_overlay_override")
         if override is not None:
             overlay = str(override)
@@ -181,8 +220,29 @@ class AgentCoreRunner:
         parts: list[str] = []
         failure: list[BaseException] = []
         failed_tool_calls: set[str] = set()
+        handoff_request: AgentHandoff | None = None
+        pending_handoffs: dict[str, dict[str, Any]] = {}
 
         async def on_event(event: Any) -> None:
+            nonlocal handoff_request
+            if isinstance(event, ToolEvent) and event.tool_name == HANDOFF_TOOL_NAME:
+                if event.event is ToolEventType.START:
+                    pending_handoffs[event.tool_call_id] = dict(event.args or {})
+                elif event.event is ToolEventType.END:
+                    args = pending_handoffs.pop(event.tool_call_id, None)
+                    if args is not None and handoff_request is None:
+                        target = str(args.get("target", ""))
+                        if target in toolkit.handoff_targets:
+                            handoff_request = AgentHandoff(
+                                target=target,
+                                reason=str(args.get("reason", "")),
+                                payload={"source": "agentcore"},
+                            )
+                elif event.event in {
+                    ToolEventType.ERROR,
+                    ToolEventType.PERMISSION_DENIED,
+                }:
+                    pending_handoffs.pop(event.tool_call_id, None)
             mapped = _map_core_event(event, failed_tool_calls)
             if mapped is not None:
                 await queue.put(mapped)
@@ -225,12 +285,19 @@ class AgentCoreRunner:
 
         if failure:
             raise failure[0]
-        yield {
+        result_event: dict[str, Any] = {
             "type": "agent.result",
             "agent": agent.name,
             "message": "".join(parts).strip(),
             "data": {"mode": "agentcore"},
         }
+        if handoff_request is not None:
+            result_event["handoff"] = {
+                "target": handoff_request.target,
+                "reason": handoff_request.reason,
+                "payload": dict(handoff_request.payload),
+            }
+        yield result_event
 
 
 def build_runner(settings: Settings) -> AgentRunner:

@@ -16,6 +16,10 @@ export type AgentEvent = {
   delta?: string;
   agent?: string;
   step?: number;
+  parallel_group?: number | null;
+  target?: string;
+  reason?: string;
+  depth?: number;
   tool_call_id?: string;
   name?: string;
   arguments?: Record<string, unknown>;

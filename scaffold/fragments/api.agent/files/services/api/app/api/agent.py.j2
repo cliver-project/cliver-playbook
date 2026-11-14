@@ -776,11 +776,13 @@ async def reject_agent_proposal(
 
 
 @router.get("/runtime", response_model=AgentRuntimeStatusRead)
-async def get_agent_runtime_status(
 {% if enabled('api.auth') %}
+async def get_agent_runtime_status(
     _viewer: Viewer = _VIEWER,
-{% endif %}
 ) -> AgentRuntimeStatusRead:
+{% else %}
+async def get_agent_runtime_status() -> AgentRuntimeStatusRead:
+{% endif %}
 {% if enabled('api.auth') %}
     _require_reviewer(_viewer)
 {% endif %}

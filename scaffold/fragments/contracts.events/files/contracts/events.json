@@ -16,6 +16,9 @@
       "$ref": "#/$defs/AgentDelegated"
     },
     {
+      "$ref": "#/$defs/AgentHandoffEvent"
+    },
+    {
       "$ref": "#/$defs/AgentResult"
     },
     {
@@ -168,6 +171,10 @@
             "step": {
               "type": "integer",
               "minimum": 0
+            },
+            "parallel_group": {
+              "type": ["integer", "null"],
+              "minimum": 0
             }
           }
         }
@@ -194,6 +201,50 @@
             "step": {
               "type": "integer",
               "minimum": 0
+            },
+            "parallel_group": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "AgentHandoffEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Envelope"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "agent",
+            "target",
+            "depth"
+          ],
+          "properties": {
+            "type": {
+              "const": "agent.handoff"
+            },
+            "agent": {
+              "type": "string",
+              "description": "The agent that requested the handoff."
+            },
+            "target": {
+              "type": "string",
+              "description": "The registered agent that runs next."
+            },
+            "reason": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "depth": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         }
@@ -223,6 +274,17 @@
             },
             "data": {
               "type": "object"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "parallel_group": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "handoff": {
+              "$ref": "#/$defs/HandoffRequest"
             }
           }
         }
@@ -575,6 +637,27 @@
         },
         "reason": {
           "type": "string"
+        },
+        "parallel_group": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "HandoffRequest": {
+      "type": "object",
+      "required": [
+        "target"
+      ],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "payload": {
+          "type": "object"
         }
       }
     }

@@ -18,4 +18,5 @@ def build_coordinator(settings: Settings) -> Coordinator:
         planner=build_planner(settings),
         runner=build_runner(settings),
         default_agent="general",
+        max_handoff_depth=settings.agent_handoff_max_depth,
     )

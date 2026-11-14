@@ -87,6 +87,14 @@ export default function AgentChat() {
         setAgentName(event.agent ?? null);
 {% endif %}
         break;
+      case "agent.result":
+        // The final result, not the last selection, owns the feedback target
+        // (a parallel group can select several agents).
+        agentRef.current = event.agent ?? agentRef.current;
+{% if has_agent_routes %}
+        setAgentName(event.agent ?? null);
+{% endif %}
+        break;
       case "run.completed": {
         const runId = runIdRef.current;
         if (runId) {
