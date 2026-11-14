@@ -13,6 +13,7 @@ from app.agents.core import close_system_one_providers
 from app.agents.job_queue import start_job_queue, stop_job_queue
 {% endif %}
 from app.api.routes import ROUTERS as PROJECT_ROUTERS
+from app.middleware import JsonNulGuardMiddleware
 from app.settings import Settings
 from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.basic.api.routes import ROUTERS as BASIC_ROUTERS
@@ -72,6 +73,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     logging.basicConfig(level=resolved.log_level.upper())
 
     app = FastAPI(title=resolved.app_name, version="0.1.0", lifespan=_lifespan)
+    app.add_middleware(JsonNulGuardMiddleware)
     for router in (
         *BASIC_ROUTERS,
 {% if enabled('api.auth') %}

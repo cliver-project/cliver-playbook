@@ -1152,3 +1152,93 @@ async def test_products_agent_exposes_a_read_only_tool(client, auth_headers) -> 
     assert result
     assert "Tool product" in result[0]["text"]
 {% endif %}
+
+
+@pytest.mark.asyncio
+async def test_run_rejects_nul_text(client, auth_headers) -> None:
+    response = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "bad\u0000message"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_agent_path_ids_reject_overflow(client, auth_headers, app_instance) -> None:
+    from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
+
+    async def _admin_viewer():
+        return Viewer(
+            user_id=999999,
+            username="reviewer",
+            display_name="Reviewer",
+            must_change_password=False,
+            role_codes=frozenset({"admin"}),
+            permissions=frozenset({"*"}),
+        )
+
+    app_instance.dependency_overrides[get_current_user] = _admin_viewer
+    huge = str(2**63)
+    try:
+        case = await client.delete(f"/api/v1/agent/golden-cases/{huge}", headers=auth_headers)
+        assert case.status_code == 422, case.text
+
+        version = await client.post(
+            f"/api/v1/agent/golden-set/versions/{huge}/activate",
+            headers=auth_headers,
+        )
+        assert version.status_code == 422, version.text
+
+        rollback = await client.post(
+            f"/api/v1/agent/agents/general/config/rollback/{huge}",
+            headers=auth_headers,
+        )
+        assert rollback.status_code == 422, rollback.text
+    finally:
+        app_instance.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_agent_query_rejects_nul(client, auth_headers, app_instance) -> None:
+    from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
+
+    async def _admin_viewer():
+        return Viewer(
+            user_id=999999,
+            username="reviewer",
+            display_name="Reviewer",
+            must_change_password=False,
+            role_codes=frozenset({"admin"}),
+            permissions=frozenset({"*"}),
+        )
+
+    app_instance.dependency_overrides[get_current_user] = _admin_viewer
+    try:
+        response = await client.get(
+            "/api/v1/agent/golden-set/versions",
+            params={"agent": "bad\x00agent"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422, response.text
+    finally:
+        app_instance.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_stream_rejects_last_event_id_overflow(client, auth_headers) -> None:
+    response = await client.get(
+        "/api/v1/agent/runs/missing/events",
+        headers={**auth_headers, "Last-Event-ID": str(2**31)},
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_run_rejects_overlong_session_id(client, auth_headers) -> None:
+    response = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "hello", "session_id": "x" * 201},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422, response.text

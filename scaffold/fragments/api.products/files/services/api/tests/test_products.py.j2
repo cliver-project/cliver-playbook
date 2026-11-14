@@ -57,3 +57,58 @@ async def test_products_require_a_token(client):
     response = await client.get("/api/v1/products")
     assert response.status_code == 401
 {% endif %}
+
+
+@pytest.mark.asyncio
+async def test_product_ids_and_pagination_reject_out_of_range(client):
+    headers = await _headers(client)
+    huge = 2**63
+
+    too_large_id = await client.get(f"/api/v1/products/{huge}", headers=headers)
+    assert too_large_id.status_code == 422, too_large_id.text
+
+    too_large_offset = await client.get(
+        "/api/v1/products", params={"offset": huge}, headers=headers
+    )
+    assert too_large_offset.status_code == 422, too_large_offset.text
+
+
+@pytest.mark.asyncio
+async def test_product_text_rejects_nul_bytes(client):
+    headers = await _headers(client)
+    response = await client.post(
+        "/api/v1/products",
+        json={"name": "bad\u0000name"},
+        headers=headers,
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_product_price_rejects_int64_overflow(client):
+    headers = await _headers(client)
+    response = await client.post(
+        "/api/v1/products",
+        json={"name": "too expensive", "price_cents": 2**63},
+        headers=headers,
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_product_update_rejects_explicit_null(client):
+    headers = await _headers(client)
+    created = await client.post(
+        "/api/v1/products",
+        json={"name": "Cannot null", "price_cents": 1},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    product_id = created.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"price_cents": None},
+        headers=headers,
+    )
+    assert response.status_code == 422, response.text

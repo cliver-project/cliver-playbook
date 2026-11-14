@@ -1463,6 +1463,12 @@ def _self_test() -> int:
         assert "test-ios" in makefile
         assert "test-android" in makefile
         assert "test-model" in makefile
+        assert "contract-test" in makefile
+        assert (full_target / "services/api/scripts/contract_test.py").is_file()
+        assert (full_target / "apps/web/src/contracts/schema.d.ts").is_file()
+        assert (full_target / "apps/web/e2e/real-api.spec.ts").is_file()
+        assert "contracts:generate" in makefile
+        assert "web-e2e-real" in makefile
         for line in makefile.splitlines():
             if line.startswith(("DEV_TARGETS :=", "CHECK_TARGETS :=", "BUILD_TARGETS :=")):
                 assert line.count(":=") == 1, f"joined make assignment: {line}"
@@ -1472,6 +1478,10 @@ def _self_test() -> int:
             assert "\nCreate Date:" in migration_text, (
                 f"{migration.name}: joined Revises/Create Date metadata"
             )
+        api_ci = (
+            full_target / ".github/workflows/api.yml"
+        ).read_text(encoding="utf-8")
+        assert "scripts/contract_test.py" in api_ci
         desktop_ci = (
             full_target / ".github/workflows/desktop.yml"
         ).read_text(encoding="utf-8")

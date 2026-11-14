@@ -81,8 +81,15 @@ examples, not infrastructure; delete or replace them freely.
 
 `contracts/openapi.yaml` is the composed source of truth for HTTP clients.
 Edit `contracts/base/openapi.yaml` or `contracts/modules/*.yaml`, then run
-`make contracts`. `make contracts-check` fails when the composed file is stale.
-`contracts/events.json` defines the agent streaming events.
+`make contracts`; it recomposes the contract and regenerates the web
+TypeScript types in `apps/web/src/contracts/schema.d.ts`.
+`make contracts-check` fails when either the composed file or the generated
+client is stale. `contracts/events.json` defines the agent streaming events.
+
+`make contract-test` creates a scratch PostgreSQL database, starts the API,
+grants the seeded admin role and runs Schemathesis against the live contract.
+It fails on 5xx responses; missing fixtures and constrained-schema rejections
+are warnings.
 
 {% if enabled('ui.web') %}
 ## Web UI seam
@@ -105,6 +112,13 @@ pnpm --filter @{{ project_slug }}/web test:e2e
 
 Set `PLAYWRIGHT_CHANNEL=chrome` to use an installed Google Chrome instead of
 downloading Chromium. CI installs the bundled browser.
+
+The opt-in real-API E2E signs in, sends a run, submits feedback and loads the
+learning dashboard without mocks. Start the API first, then:
+
+```sh
+make web-e2e-real E2E_USERNAME=<admin> E2E_PASSWORD=<password>
+```
 {% endif %}
 
 {% if enabled('api.agent') %}

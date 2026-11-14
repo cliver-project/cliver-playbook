@@ -1,21 +1,10 @@
 import { api } from "cliver-playbook-app-basic";
 
-export interface Product {
-  id: number;
-  name: string;
-  description: string;
-  price_cents: number;
-  created_at: string;
-  updated_at: string;
-}
+import type { components } from "../../contracts/schema";
 
-export interface ProductCreate {
-  name: string;
-  description: string;
-  price_cents: number;
-}
-
-export type ProductUpdate = Partial<ProductCreate>;
+export type Product = components["schemas"]["Product"];
+export type ProductCreate = components["schemas"]["ProductCreate"];
+export type ProductUpdate = components["schemas"]["ProductUpdate"];
 
 export async function listProducts(): Promise<Product[]> {
   const response = await api.get<Product[]>("/products");

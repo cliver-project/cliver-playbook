@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 class AgentRunRequest(BaseModel):
     message: str = Field(min_length=1)
-    session_id: str | None = None
+    session_id: str | None = Field(default=None, max_length=200)
     attachments: list[str] = Field(default_factory=list)
 
 
@@ -33,7 +33,7 @@ class AgentFeedbackRequest(BaseModel):
     agent: str = Field(min_length=1, max_length=64)
     rating: int = Field(ge=1, le=5)
     comment: str = Field(default="", max_length=2000)
-    step: int | None = Field(default=None, ge=0)
+    step: int | None = Field(default=None, ge=0, le=2**31 - 1)
 
 
 class AgentProposalRead(BaseModel):

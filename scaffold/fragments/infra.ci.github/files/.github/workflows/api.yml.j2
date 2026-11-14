@@ -50,4 +50,6 @@ jobs:
         run: cd services/api && uv run python -m app.migrate
       - name: Test
         run: cd services/api && uv run pytest
+      - name: Contract
+        run: cd services/api && uv run python scripts/contract_test.py
 {% endif %}

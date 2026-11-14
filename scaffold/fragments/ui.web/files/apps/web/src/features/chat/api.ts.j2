@@ -3,6 +3,12 @@
 import { TOKEN_STORAGE_KEY } from "cliver-playbook-app-user";
 {% endif %}
 
+import type { components } from "../../contracts/schema";
+
+export type AgentRunRequest = components["schemas"]["AgentRunRequest"];
+export type AgentRunCreated = components["schemas"]["AgentRunCreated"];
+export type AgentFeedbackRequest = components["schemas"]["AgentFeedbackRequest"];
+
 export type AgentEvent = {
   type: string;
   run_id?: string;
@@ -26,12 +32,12 @@ export async function startRun(message: string): Promise<string> {
       "Content-Type": "application/json",
       ...authHeaders(),
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message } satisfies AgentRunRequest),
   });
   if (!response.ok) {
     throw new Error((await response.text()) || `HTTP ${response.status}`);
   }
-  const data = (await response.json()) as { run_id?: string };
+  const data = (await response.json()) as AgentRunCreated;
   if (!data.run_id) {
     throw new Error("The API did not return a run id.");
   }
@@ -111,7 +117,7 @@ export async function submitFeedback(
       "Content-Type": "application/json",
       ...authHeaders(),
     },
-    body: JSON.stringify({ agent, rating, comment }),
+    body: JSON.stringify({ agent, rating, comment } satisfies AgentFeedbackRequest),
   });
   if (!response.ok) {
     throw new Error((await response.text()) || `HTTP ${response.status}`);

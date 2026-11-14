@@ -8,8 +8,11 @@
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "seam-check": "node scripts/check-ui-seam.mjs",
+    "contracts:generate": "node scripts/generate-contracts.mjs",
+    "contracts:check": "node scripts/generate-contracts.mjs --check",
 {% if enabled('ui.agent.chat') %}
     "test:e2e": "playwright test",
+    "test:e2e:real": "playwright test e2e/real-api.spec.ts",
 {% endif %}
     "preview": "vite preview"
   },
@@ -40,6 +43,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.1.0",
+    "openapi-typescript": "^7.13.0",
     "oxlint": "^1.79.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",

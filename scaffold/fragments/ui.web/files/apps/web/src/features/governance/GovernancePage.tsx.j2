@@ -113,7 +113,7 @@ export default function GovernancePage() {
           <Card>
             <CardHeader><CardTitle className="text-sm">{t("governance.passRate")}</CardTitle></CardHeader>
             <CardContent className="text-2xl font-semibold">
-              {summary.data.recent_pass_rate === null
+              {summary.data.recent_pass_rate == null
                 ? "—"
                 : `${Math.round(summary.data.recent_pass_rate * 100)}%`}
             </CardContent>

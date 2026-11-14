@@ -31,6 +31,9 @@ paths:
         required: false
         schema:
           type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
         description: >
           Replay starts after this event sequence. The stream always ends with
           the run's terminal event; reconnecting clients resume instead of
@@ -48,6 +51,8 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        "422":
+          description: Invalid run id or Last-Event-ID header
   /api/v1/agent/runs/{run_id}/cancel:
     parameters:
       - name: run_id
@@ -242,6 +247,7 @@ paths:
         required: true
         schema:
           type: integer
+          format: int64
     delete:
       tags: [agent]
       summary: Delete an offline regression case
@@ -334,6 +340,7 @@ paths:
         required: true
         schema:
           type: integer
+          format: int64
     post:
       tags: [agent]
       summary: Activate, or roll back to, a golden-set version
@@ -411,6 +418,7 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
     post:
       tags: [agent]
       summary: Roll the active prompt configuration back to a version
@@ -480,6 +488,7 @@ components:
           type: string
         session_id:
           type: string
+          maxLength: 200
         attachments:
           type: array
           items:
@@ -503,6 +512,7 @@ components:
           maxLength: 64
         rating:
           type: integer
+          format: int64
           minimum: 1
           maximum: 5
         comment:
@@ -510,7 +520,9 @@ components:
           maxLength: 2000
         step:
           type: [integer, "null"]
+          format: int32
           minimum: 0
+          maximum: 2147483647
           description: Omit to rate the agent's latest step in the run.
     AgentEvaluationSummary:
       type: object
@@ -582,8 +594,10 @@ components:
       properties:
         feedback_id:
           type: integer
+          format: int64
         experience_id:
           type: integer
+          format: int64
         evaluation:
           $ref: "#/components/schemas/AgentEvaluationSummary"
         proposal:
@@ -643,6 +657,7 @@ components:
       properties:
         id:
           type: integer
+          format: int64
         agent:
           type: string
         name:
@@ -681,6 +696,7 @@ components:
       properties:
         id:
           type: integer
+          format: int64
         proposal_id:
           type: string
         agent:
@@ -721,10 +737,12 @@ components:
       properties:
         id:
           type: integer
+          format: int64
         agent:
           type: string
         version:
           type: integer
+          format: int32
         cases:
           type: array
           items:
@@ -753,10 +771,12 @@ components:
       properties:
         id:
           type: integer
+          format: int64
         agent:
           type: string
         version:
           type: integer
+          format: int32
         prompt_overlay:
           type: string
         source_proposal_id:
@@ -795,24 +815,30 @@ components:
           type: [integer, "null"]
         config_versions:
           type: integer
+          format: int64
         prompt_overlay:
           type: string
         active_golden_version:
           type: [integer, "null"]
         golden_versions:
           type: integer
+          format: int64
         proposal_counts:
           type: object
           additionalProperties:
             type: integer
+            format: int64
         feedback_count:
           type: integer
+          format: int64
         positive_feedback:
           type: integer
+          format: int64
         recent_pass_rate:
           type: [number, "null"]
         recent_evaluations:
           type: integer
+          format: int64
         generated_at:
           type: string
           format: date-time

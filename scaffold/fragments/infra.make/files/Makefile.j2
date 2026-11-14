@@ -72,12 +72,18 @@ db-init:{% if enabled('infra.docker') %} db-up{% endif %} ## Apply every migrati
 
 {% if enabled('contracts.openapi') %}
 .PHONY: contracts
-contracts: ## Compose the OpenAPI fragments
+contracts: ## Compose the OpenAPI fragments and regenerate clients
 	uv run --with pyyaml python contracts/compose.py
+{% if enabled('ui.web') %}
+	pnpm --filter $(WEB_FILTER) contracts:generate
+{% endif %}
 
 .PHONY: contracts-check
-contracts-check: ## Fail when the composed contract is stale
+contracts-check: ## Fail when the composed contract or a generated client is stale
 	uv run --with pyyaml python contracts/compose.py --check
+{% if enabled('ui.web') %}
+	pnpm --filter $(WEB_FILTER) contracts:check
+{% endif %}
 {% endif %}
 
 ##@ Development
@@ -151,6 +157,12 @@ test-model: ## Run the model-service tests
 	cd services/model && uv run pytest
 {% endif %}
 
+{% if enabled('api.python') %}
+.PHONY: contract-test
+contract-test: ## Run Schemathesis against the live API on a scratch database
+	cd services/api && uv run python scripts/contract_test.py
+{% endif %}
+
 {% if enabled('api.agent') %}
 .PHONY: system-one-smoke
 system-one-smoke: ## Live System One selector check (local laya or a remote provider)
@@ -170,6 +182,11 @@ web-check: ## Type-check, lint, seam-check and build the web UI
 .PHONY: web-e2e
 web-e2e: ## Run the chat E2E with a mocked API (needs `playwright install chromium`)
 	pnpm --filter $(WEB_FILTER) test:e2e
+
+.PHONY: web-e2e-real
+web-e2e-real: ## Run the opt-in real-API E2E (API running; E2E_USERNAME/E2E_PASSWORD)
+	@test -n "$(E2E_USERNAME)" -a -n "$(E2E_PASSWORD)" || { echo "usage: make web-e2e-real E2E_USERNAME=... E2E_PASSWORD=..." >&2; exit 2; }
+	E2E_REAL_API=1 E2E_USERNAME="$(E2E_USERNAME)" E2E_PASSWORD="$(E2E_PASSWORD)" pnpm --filter $(WEB_FILTER) test:e2e:real
 {% endif %}
 
 {% if enabled('ui.mobile.ios') %}

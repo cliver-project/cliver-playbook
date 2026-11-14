@@ -1,60 +1,13 @@
 {% if enabled('api.agent') %}
 import { api } from "cliver-playbook-app-basic";
 
-export interface AgentDescriptor {
-  name: string;
-  description: string;
-  capabilities: string[];
-  autonomy_mode: string;
-  has_pipeline: boolean;
-}
+import type { components } from "../../contracts/schema";
 
-export interface AgentLearningSummary {
-  agent: string;
-  config_version: number | null;
-  config_versions: number;
-  prompt_overlay: string;
-  active_golden_version: number | null;
-  golden_versions: number;
-  proposal_counts: Record<string, number>;
-  feedback_count: number;
-  positive_feedback: number;
-  recent_pass_rate: number | null;
-  recent_evaluations: number;
-  generated_at: string;
-}
-
-export interface AgentProposal {
-  id: string;
-  agent: string;
-  kind: string;
-  status: string;
-  title: string;
-  rationale: string;
-  patch: Record<string, unknown>;
-  evidence: Record<string, unknown>;
-  created_at: string;
-}
-
-export interface GoldenVersion {
-  id: number;
-  agent: string;
-  version: number;
-  cases: Array<Record<string, unknown>>;
-  note: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-export interface ConfigVersion {
-  id: number;
-  agent: string;
-  version: number;
-  prompt_overlay: string;
-  source_proposal_id: string | null;
-  note: string;
-  created_at: string;
-}
+export type AgentDescriptor = components["schemas"]["AgentDescriptor"];
+export type AgentLearningSummary = components["schemas"]["AgentLearningSummary"];
+export type AgentProposal = components["schemas"]["AgentProposal"];
+export type GoldenVersion = components["schemas"]["AgentGoldenSetVersion"];
+export type ConfigVersion = components["schemas"]["AgentConfigVersion"];
 
 export async function listAgents(): Promise<AgentDescriptor[]> {
   const response = await api.get<{ agents: AgentDescriptor[] }>("/agent/agents");

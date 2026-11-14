@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 
 // The FastAPI backend in development. A split deployment uses
 // VITE_API_BASE_URL at build time instead of this proxy.
-const DEV_BACKEND = "http://127.0.0.1:8000";
+const DEV_BACKEND = process.env.VITE_DEV_BACKEND ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

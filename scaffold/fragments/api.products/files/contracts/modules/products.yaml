@@ -11,6 +11,7 @@ paths:
           in: query
           schema:
             type: integer
+            format: int64
             minimum: 1
             maximum: 200
             default: 50
@@ -18,6 +19,7 @@ paths:
           in: query
           schema:
             type: integer
+            format: int64
             minimum: 0
             default: 0
       responses:
@@ -55,6 +57,7 @@ paths:
         required: true
         schema:
           type: integer
+          format: int64
     get:
       tags: [products]
       summary: Get one product
@@ -110,13 +113,16 @@ components:
       properties:
         id:
           type: integer
+          format: int64
         name:
           type: string
         description:
           type: string
         price_cents:
           type: integer
+          format: int32
           minimum: 0
+          maximum: 2147483647
         created_at:
           type: string
           format: date-time
@@ -137,7 +143,9 @@ components:
           default: ""
         price_cents:
           type: integer
+          format: int32
           minimum: 0
+          maximum: 2147483647
           default: 0
     ProductUpdate:
       type: object
@@ -151,4 +159,6 @@ components:
           maxLength: 10000
         price_cents:
           type: integer
+          format: int32
           minimum: 0
+          maximum: 2147483647

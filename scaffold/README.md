@@ -57,6 +57,11 @@ Phase 2 is in progress:
 - The desktop Tauri shell has an active macOS bundle and generated icon set;
   local sidecars, signing/notarization and the updater remain the next desktop
   phase.
+- Contract confidence: `make contracts` regenerates the web TypeScript client
+  from the composed OpenAPI file, `make contracts-check` fails on stale output,
+  `make contract-test` runs Schemathesis against a live scratch-DB API, and the
+  opt-in `make web-e2e-real` exercises login → chat → feedback → learning
+  against the real API.
 - The `ai-rust-bff` profile is planned but not implemented; `--plan` works, while
   `--apply` fails with a clear "not implemented" error until the Rust BFF and
   Python AgentCore service fragments exist.

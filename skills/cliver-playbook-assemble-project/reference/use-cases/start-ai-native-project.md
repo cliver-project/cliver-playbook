@@ -72,12 +72,16 @@ and the sub-agent tool loop. The UI never calls a provider.
 
 ```sh
 make check         # API/model tests, web checks, contract check, mobile tests
+make contract-test # Schemathesis against a live scratch-DB API
 make web-e2e       # mocked chat and learning-dashboard flows
+make web-e2e-real E2E_USERNAME=<admin> E2E_PASSWORD=<password>  # live API
 ```
 
-Expected baseline: 78 API tests in `ai-full`, the model-service health test,
-the web typecheck/lint/seam/build and two Playwright checks, iOS Core package
-tests and Android unit tests.
+Expected baseline: 87 API tests in `ai-full`, the model-service health test,
+the web typecheck/lint/seam/build and two mocked Playwright checks, iOS Core
+package tests and Android unit tests. `make contract-test` runs 1,000+ generated
+cases with no 5xx; `make web-e2e-real` signs in, chats, submits feedback and
+loads the learning dashboard.
 `make test-api` uses a scratch PostgreSQL database; set
 `CLIVER_TEST_DATABASE_URL` when the default local DSN does not apply.
 
@@ -113,6 +117,7 @@ overlay.
 ```sh
 make test-api
 make web-check
+make contract-test
 make test-ios
 make test-android
 make package

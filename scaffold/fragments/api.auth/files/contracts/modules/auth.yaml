@@ -145,6 +145,7 @@ components:
       properties:
         id:
           type: integer
+          format: int64
         username:
           type: string
         email:

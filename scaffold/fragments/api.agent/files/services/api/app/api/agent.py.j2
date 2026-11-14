@@ -13,7 +13,7 @@ import json
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -245,6 +245,7 @@ async def create_run(
 async def stream_run(
     run_id: str,
     request: Request,
+    last_event_id: int = Header(default=-1, alias="Last-Event-ID", ge=0, le=2**31 - 1),
 {% if enabled('api.auth') %}
     _viewer: Viewer = _VIEWER,
 {% endif %}
@@ -267,8 +268,6 @@ async def stream_run(
         raise HTTPException(status_code=403, detail="Run belongs to another user")
 {% endif %}
 
-    raw_last_id = request.headers.get("last-event-id", "")
-    last_event_id = int(raw_last_id) if raw_last_id.strip().lstrip("-").isdigit() else -1
     subscription = broadcaster.subscribe(run_id)
 
     async def events_stream():
@@ -481,7 +480,7 @@ async def get_agent_golden_cases(
 
 @router.delete("/golden-cases/{case_id}")
 async def delete_agent_golden_case(
-    case_id: int,
+    case_id: int = Path(ge=1, le=2**63 - 1),
 {% if enabled('api.auth') %}
     _viewer: Viewer = _VIEWER,
 {% endif %}
@@ -571,7 +570,7 @@ async def get_agent_golden_versions(
     response_model=AgentGoldenSetVersionRead,
 )
 async def activate_agent_golden_version(
-    version_id: int,
+    version_id: int = Path(ge=1, le=2**63 - 1),
 {% if enabled('api.auth') %}
     _viewer: Viewer = _VIEWER,
 {% endif %}
@@ -633,7 +632,7 @@ async def get_agent_config_versions(
 )
 async def rollback_agent_config(
     name: str,
-    version: int,
+    version: int = Path(ge=1, le=2**31 - 1),
     payload: AgentConfigRollbackRequest | None = None,
 {% if enabled('api.auth') %}
     _viewer: Viewer = _VIEWER,

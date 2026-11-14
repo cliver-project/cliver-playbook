@@ -173,7 +173,9 @@ manifests, and
 `make scaffold-plan MANIFEST=scaffold/examples/ai-web.yaml` prints a plan.
 `scripts/scaffold_project.py --apply MANIFEST --target DIR` writes the project.
 The web app installs and builds against the pinned tag, includes a chat-first
-home, enforces its `src/ui` seam in CI and has a Playwright chat E2E; the iOS
+home, enforces its `src/ui` seam in CI, uses TypeScript types generated from
+the composed OpenAPI contract, and has mocked plus real-API Playwright E2E
+paths; the iOS
 app builds with XcodeGen/Xcode unsigned, exposes an `AppComponents`
 environment seam and passed a simulator register → chat → feedback smoke; the
 Android app ships a Gradle 8.10.2 wrapper, builds with JDK 17/API 35 and passed
