@@ -319,10 +319,10 @@ rollout controls and `feedback_dataset` wiring. Until then the scaffold does
 not auto-apply improvements, and evaluator, generator and gate remain
 replaceable seams.
 
-Verified with 97 API tests in ai-full (learning/gate tests: redaction/source
+Verified with 104 API tests in ai-full (learning/gate tests: redaction/source
 enforcement, launch-bar evaluation, anonymous feedback upsert, proposal
 creation/approval/rejection, model distillation and deterministic fallback,
 runtime overlay injection, golden-case CRUD, gate pass/fail/skip/fail-closed,
-and reviewer scoping) and 75 passed + 1 skipped in the agent-only variant. The
+and reviewer scoping) and 82 passed + 1 skipped in the agent-only variant. The
 web typecheck, lint, seam-check, build and Playwright chat E2E (feedback
 button included) pass.
