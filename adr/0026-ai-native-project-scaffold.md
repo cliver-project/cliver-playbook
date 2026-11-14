@@ -1,6 +1,6 @@
 # ADR-0026: AI-native project scaffold and contracts
 
-**Status:** Proposed (2026-11-13).
+**Status:** Accepted (2026-11-14).
 **Context:** Every new project in this workspace is an AI-native application.
 The same setup is repeated each time: a UI target (web, desktop, native
 mobile), an API plane, a model-invocation plane, an OpenAPI contract, streaming

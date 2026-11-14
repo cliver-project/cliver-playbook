@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import copy
+import hashlib
 import io
 import json
 import plistlib
@@ -244,8 +245,12 @@ def validate_catalog(catalog: dict[str, Any]) -> list[str]:
         conflicts = _string_list(
             entry.get("conflicts", []), f"{where}.conflicts", errors
         )
-        _string_list(entry.get("outputs", []), f"{where}.outputs", errors)
+        outputs = _string_list(entry.get("outputs", []), f"{where}.outputs", errors)
         _string_list(entry.get("make_targets", []), f"{where}.make_targets", errors)
+        if kind == "ui" and not outputs:
+            errors.append(f"{where}: ui modules must declare outputs")
+        if kind == "pattern" and outputs:
+            errors.append(f"{where}: pattern modules must not declare outputs")
         _string_list(entry.get("ci", []), f"{where}.ci", errors)
         _string_list(entry.get("contracts", []), f"{where}.contracts", errors)
         parsed[module] = {"requires": requires, "conflicts": conflicts}
@@ -299,6 +304,7 @@ def validate_catalog(catalog: dict[str, Any]) -> list[str]:
         selectors = {}
 
     referenced: set[str] = set()
+    selector_targets: set[str] = set()
     for selected in profile_modules.values():
         referenced.update(selected)
     for selector in sorted(name for name in selectors if isinstance(name, str)):
@@ -309,6 +315,7 @@ def validate_catalog(catalog: dict[str, Any]) -> list[str]:
             if module not in module_ids:
                 errors.append(f"selectors.{selector}: unknown module {module!r}")
         referenced.update(targets)
+        selector_targets.update(targets)
 
     for module in sorted(module_ids):
         if module not in referenced:
@@ -324,6 +331,14 @@ def validate_catalog(catalog: dict[str, Any]) -> list[str]:
     conflicts = {
         module: parsed.get(module, {}).get("conflicts", []) for module in parsed
     }
+    required_by_any = {target for targets in requires.values() for target in targets}
+    for module in sorted(module_ids):
+        if modules[module].get("kind") == "pattern" and (
+            module not in selector_targets and module not in required_by_any
+        ):
+            errors.append(
+                f"modules.{module}: pattern must be selected or required by a host module"
+            )
     reported: set[str] = set()
     for profile in sorted(profile_modules):
         selected = _module_closure(profile_modules[profile], requires)
@@ -805,6 +820,24 @@ def apply_project(
             raise ScaffoldError([f"{target_path}: target directory is not empty"])
     if not fragments_path.is_dir():
         raise ScaffoldError([f"{fragments_path}: fragments directory is missing"])
+    unimplemented = (
+        [
+            module
+            for module in plan["modules"]
+            if catalog["modules"][module].get("outputs")
+            and not (fragments_path / module / "files").is_dir()
+        ]
+        if fragments_path.resolve() == FRAGMENTS_DIR.resolve()
+        else []
+    )
+    if unimplemented:
+        raise ScaffoldError(
+            [
+                f"module {module!r} declares outputs but has no fragment; "
+                "this profile is not implemented yet"
+                for module in unimplemented
+            ]
+        )
 
     target_path.parent.mkdir(parents=True, exist_ok=True)
     work = Path(
@@ -833,6 +866,9 @@ def apply_project(
             "reference_slices": plan["reference_slices"],
             "generated_at": datetime.now(UTC).isoformat(),
             "generator": "scaffold_project.py",
+            "manifest_sha256": hashlib.sha256(
+                yaml.safe_dump(data, sort_keys=True).encode("utf-8")
+            ).hexdigest(),
         }
         (state_dir / "state.json").write_text(
             json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -896,6 +932,19 @@ def _self_test() -> int:
     assert catalog["version"] == 1
     catalog_errors = validate_catalog(catalog)
     assert catalog_errors == [], catalog_errors
+
+    fragment_dirs = {path.name for path in FRAGMENTS_DIR.iterdir() if path.is_dir()}
+    assert fragment_dirs <= set(catalog["modules"]), fragment_dirs - set(catalog["modules"])
+    missing_fragments = {
+        module
+        for module, entry in catalog["modules"].items()
+        if entry.get("outputs")
+        and not (FRAGMENTS_DIR / module / "files").is_dir()
+    }
+    assert missing_fragments == {"api.rust", "api.agentcore"}, missing_fragments
+    for module, entry in catalog["modules"].items():
+        if entry.get("kind") == "ui":
+            assert (FRAGMENTS_DIR / module / "files").is_dir(), module
 
     examples = sorted(EXAMPLES_DIR.glob("*.yaml"))
     assert examples, "no example manifests found"
@@ -1079,6 +1128,14 @@ def _self_test() -> int:
     assert any("missing.module" in e for e in validate_catalog(broken))
 
     broken = copy.deepcopy(catalog)
+    broken["modules"]["ui.web"]["outputs"] = []
+    assert any("ui modules must declare outputs" in e for e in validate_catalog(broken))
+
+    broken = copy.deepcopy(catalog)
+    broken["modules"]["ui.settings"]["outputs"] = ["apps/settings"]
+    assert any("pattern modules must not" in e for e in validate_catalog(broken))
+
+    broken = copy.deepcopy(catalog)
     broken["selectors"]["ui.web"] = ["missing.module"]
     assert any("missing.module" in e for e in validate_catalog(broken))
 
@@ -1138,6 +1195,7 @@ def _self_test() -> int:
             (target / ".scaffold" / "state.json").read_text(encoding="utf-8")
         )
         assert "ui.web" in state["modules"]
+        assert len(state["manifest_sha256"]) == 64
         assert (target / "SCAFFOLD.md").is_file()
         assert summary["target"] == str(target)
 
@@ -1349,6 +1407,24 @@ def _self_test() -> int:
         assert "AuthScreen" not in none_app
         assert "ProfileScreen" not in none_app
         assert "ProductListScreen" not in none_app
+
+        desktop_target = Path(temporary) / "desktop"
+        apply_project(desktop, schema, catalog, desktop_target)
+        assert (desktop_target / "apps/desktop/src-tauri/tauri.conf.json").is_file()
+        assert (desktop_target / "infra/sidecars/README.md").is_file()
+
+        mobile_target = Path(temporary) / "mobile"
+        apply_project(mobile, schema, catalog, mobile_target)
+        assert (mobile_target / "apps/ios/project.yml").is_file()
+        assert (mobile_target / "apps/ios/App/Sources/App/ChatView.swift").is_file()
+        assert not (mobile_target / "apps/web").exists()
+
+        try:
+            apply_project(rust, schema, catalog, Path(temporary) / "rust-bff")
+        except ScaffoldError as exc:
+            assert any("api.rust" in error and "not implemented" in error for error in exc.errors), exc.errors
+        else:
+            raise AssertionError("applied the unimplemented Rust BFF profile")
 
         full_target = Path(temporary) / "full"
         apply_project(full, schema, catalog, full_target)

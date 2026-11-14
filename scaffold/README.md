@@ -51,7 +51,9 @@ Phase 2 is in progress:
   JDK 17, API 35, Build-Tools 35.0.0 and Gradle 8.10.2.
 - The desktop Tauri shell is minimal; local sidecars, signing and the updater
   are the next desktop phase.
-- The `ai-rust-bff` profile is planned but not implemented.
+- The `ai-rust-bff` profile is planned but not implemented; `--plan` works, while
+  `--apply` fails with a clear "not implemented" error until the Rust BFF and
+  Python AgentCore service fragments exist.
 - UI direction: a simple chat-first surface (intent routing in the API plane)
   with every visual component behind a replaceable per-platform seam. The web
   reference is implemented: `/` streams agent events, routes selected business
@@ -167,6 +169,10 @@ reference slices are examples. A Rust API cannot use the Python reference slice.
   catalog, schema, examples or fragments.
 - No domain logic is generated outside the clearly marked reference slices.
 - Generated files belong to the project; there is no automatic template update.
+  Regenerating into a non-empty directory is refused. Upgrades are explicit:
+  compare the new scaffold output, then copy or adapt the parts the project
+  wants; the generated `.scaffold/state.json` records modules, playbook
+  revision and a manifest hash.
 - The UI never calls a model provider directly; the API plane owns AgentCore.
 - The UI is chat-first and component-replaceable. Feature pages import only
   the platform UI seam, never a deep reference visual path. Intent recognition
