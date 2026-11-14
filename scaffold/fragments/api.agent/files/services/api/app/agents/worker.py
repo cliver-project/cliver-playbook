@@ -1,17 +1,12 @@
 """Run execution decoupled from HTTP requests.
 
-``POST /agent/runs`` persists the run and starts one worker task. The worker
-is the single executor: it claims the run atomically, drives the coordinator,
-persists every event before publishing the wakeup, honours cancellation even
-while the model is quiet, and heartbeats so another process can detect an
-orphaned run. Streams never execute a run — they replay and tail the event
-log, so reconnects and concurrent readers cannot repeat tool side effects.
-
-Single-process note: the task registry is process-local. Behind multiple
-uvicorn workers the claim still guarantees exactly-once execution, but a run
-started in one process is only tailed through the event log (plus the poll
-fallback) by the others — replace ``start_run_worker`` with a job queue when
-that stops being enough.
+``POST /agent/runs`` only persists a queued run and wakes the local queue.
+A PostgreSQL-backed queue leases one run per worker with
+``FOR UPDATE SKIP LOCKED``; every API process can run the queue safely.
+The executor persists every event before publishing the wakeup, honours
+cancellation while the model is quiet, and heartbeats so a crashed worker
+can be detected. Streams never execute a run — they replay and tail the
+event log, so reconnects and concurrent readers cannot repeat side effects.
 """
 
 from __future__ import annotations
@@ -37,40 +32,6 @@ TERMINAL_EVENT_TYPES = frozenset({"run.completed", "run.failed"})
 _HEARTBEAT_SECONDS = 2.0
 _QUEUE_CAPACITY = 100
 
-_tasks: dict[str, asyncio.Task[None]] = {}
-
-
-def has_local_worker(run_id: str) -> bool:
-    """Whether this process is executing the run right now."""
-    task = _tasks.get(run_id)
-    return task is not None and not task.done()
-
-
-def start_run_worker(
-    run_id: str,
-    *,
-    message: str,
-    user_id: int | None,
-    session_id: str | None,
-    settings: Any,
-    coordinator: Coordinator,
-) -> None:
-    """Spawn the run's single executor (no-op if one already exists)."""
-    if has_local_worker(run_id):
-        return
-    task = asyncio.create_task(
-        _execute_run(
-            run_id,
-            message=message,
-            user_id=user_id,
-            session_id=session_id,
-            settings=settings,
-            coordinator=coordinator,
-        )
-    )
-    _tasks[run_id] = task
-    task.add_done_callback(lambda _task, key=run_id: _tasks.pop(key, None))
-
 
 async def fail_run(
     store: DatabaseRunStore, events: EventStore, run_id: str, *, code: str, message: str
@@ -85,7 +46,7 @@ async def fail_run(
     broadcaster.notify(run_id)
 
 
-async def _execute_run(
+async def execute_run(
     run_id: str,
     *,
     message: str,
@@ -93,6 +54,7 @@ async def _execute_run(
     session_id: str | None,
     settings: Any,
     coordinator: Coordinator,
+    already_claimed: bool = False,
 ) -> None:
     store_db = open_session()
     tool_db = open_session()
@@ -111,7 +73,7 @@ async def _execute_run(
         },
     )
     try:
-        if not await store.claim(run_id):
+        if not already_claimed and not await store.claim(run_id):
             return  # cancelled while queued, or another worker claimed it
 
         queue: asyncio.Queue[dict | None] = asyncio.Queue(maxsize=_QUEUE_CAPACITY)

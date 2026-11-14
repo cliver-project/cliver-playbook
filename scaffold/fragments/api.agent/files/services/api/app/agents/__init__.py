@@ -5,7 +5,7 @@ from app.agents.coordinator import Coordinator
 from app.agents.events import EventStore, broadcaster
 from app.agents.registry import AgentRegistry, registry
 from app.agents.runs import DatabaseRunStore, InMemoryRunStore, RunRecord, RunStore
-from app.agents.worker import has_local_worker, start_run_worker
+from app.agents.worker import execute_run
 
 __all__ = [
     "AgentRegistry",
@@ -16,9 +16,8 @@ __all__ = [
     "RunRecord",
     "RunStore",
     "broadcaster",
-    "has_local_worker",
+    "execute_run",
     "register_default_agents",
     "register_project_agents",
     "registry",
-    "start_run_worker",
 ]

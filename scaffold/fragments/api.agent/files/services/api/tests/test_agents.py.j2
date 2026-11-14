@@ -799,6 +799,28 @@ async def test_run_state_persists_across_sessions(client, auth_headers) -> None:
 
 
 @pytest.mark.asyncio
+async def test_claim_next_leases_each_queued_run_once() -> None:
+    from app.agents.runs import DatabaseRunStore
+    from cliver_playbook.app.basic.db.session import open_session
+
+    run_ids = [uuid.uuid4().hex, uuid.uuid4().hex]
+    async with open_session() as db:
+        store = DatabaseRunStore(db)
+        for run_id in run_ids:
+            await store.create(run_id, message=f"queue {run_id}")
+
+    async def claim():
+        async with open_session() as db:
+            return await DatabaseRunStore(db).claim_next()
+
+    first, second = await asyncio.gather(claim(), claim())
+    assert first is not None and second is not None
+    assert {first.run_id, second.run_id} == set(run_ids)
+    async with open_session() as db:
+        assert await DatabaseRunStore(db).claim_next() is None
+
+
+@pytest.mark.asyncio
 async def test_stream_replays_a_completed_run(client, auth_headers) -> None:
     created = await client.post(
         "/api/v1/agent/runs",
@@ -846,7 +868,7 @@ async def test_stream_resumes_from_last_event_id(client, auth_headers) -> None:
 async def test_run_executes_once_for_concurrent_streams(client, auth_headers, monkeypatch) -> None:
     gate = asyncio.Event()
     calls: list[str] = []
-    monkeypatch.setattr("app.api.agent.build_runner", lambda settings: GateRunner(gate, calls))
+    monkeypatch.setattr("app.agents.factory.build_runner", lambda settings: GateRunner(gate, calls))
 
     created = await client.post(
         "/api/v1/agent/runs",
@@ -876,7 +898,7 @@ async def test_cancel_during_run_persists_cancelled_event(
     client, auth_headers, monkeypatch
 ) -> None:
     gate = asyncio.Event()
-    monkeypatch.setattr("app.api.agent.build_runner", lambda settings: GateRunner(gate))
+    monkeypatch.setattr("app.agents.factory.build_runner", lambda settings: GateRunner(gate))
 
     created = await client.post(
         "/api/v1/agent/runs",
@@ -960,8 +982,8 @@ async def test_http_run_streams_a_multi_step_plan(client, auth_headers, monkeypa
                 planner="test",
             )
 
-    monkeypatch.setattr("app.api.agent.build_planner", lambda settings: TwoStepPlanner())
-    monkeypatch.setattr("app.api.agent.build_runner", lambda settings: ToolRunner())
+    monkeypatch.setattr("app.agents.factory.build_planner", lambda settings: TwoStepPlanner())
+    monkeypatch.setattr("app.agents.factory.build_runner", lambda settings: ToolRunner())
 
     created = await client.post(
         "/api/v1/agent/runs",

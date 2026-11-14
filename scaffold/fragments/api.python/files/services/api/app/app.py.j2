@@ -10,12 +10,14 @@ from fastapi import FastAPI
 
 {% if enabled('api.agent') %}
 from app.agents.core import close_system_one_providers
+from app.agents.job_queue import start_job_queue, stop_job_queue
 {% endif %}
 from app.api.routes import ROUTERS as PROJECT_ROUTERS
 from app.settings import Settings
 from cliver_playbook.app.basic import runtime
 from cliver_playbook.app.basic.api.routes import ROUTERS as BASIC_ROUTERS
 from cliver_playbook.app.basic.runtime_settings import settings_lifespan
+from cliver_playbook.app.basic.settings import get_settings
 {% if enabled('api.mcp') %}
 from cliver_playbook.app.mcp.api.routes import ROUTERS as MCP_ROUTERS
 from cliver_playbook.app.mcp.api.streamable import install_streamable_app
@@ -38,10 +40,26 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with settings_lifespan(app):
         manager = install_streamable_app()
         async with manager.run():
+{% if enabled('api.agent') %}
+            await start_job_queue(get_settings())
+            try:
+                yield
+            finally:
+                await stop_job_queue()
+{% else %}
             yield
+{% endif %}
 {% else %}
     async with settings_lifespan(app):
+{% if enabled('api.agent') %}
+        await start_job_queue(get_settings())
+        try:
+            yield
+        finally:
+            await stop_job_queue()
+{% else %}
         yield
+{% endif %}
 {% endif %}
 {% if enabled('api.agent') %}
     await close_system_one_providers()

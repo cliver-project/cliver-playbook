@@ -39,6 +39,9 @@ os.environ["CLIVER_DATABASE_URL"] = TEST_DSN.replace("postgresql://", "postgresq
 os.environ.setdefault("CLIVER_AGENT_RUN_ORPHAN_SECONDS", "2")
 {% endif %}
 
+{% if enabled('api.agent') %}
+from app.agents.job_queue import start_job_queue, stop_job_queue
+{% endif %}
 from app.app import create_app
 from app.migrations import run_migrations_online as run_project
 from app.settings import Settings
@@ -66,6 +69,17 @@ run_rag(settings.sync_db_url)
 {% endif %}
 run_project(settings.sync_db_url)
 app = create_app(settings)
+{% if enabled('api.agent') %}
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def agent_job_queue():
+    if settings.agent_run_worker_enabled:
+        await start_job_queue(settings)
+    yield
+    if settings.agent_run_worker_enabled:
+        await stop_job_queue()
+{% endif %}
 
 
 @pytest.fixture

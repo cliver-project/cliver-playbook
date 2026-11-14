@@ -19,8 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.bootstrap import register_default_agents, register_project_agents
 from app.agents.contracts import SubAgent
-from app.agents.coordinator import Coordinator
 from app.agents.events import EventStore, broadcaster
+from app.agents.job_queue import wake_job_queue
 from app.agents.learning import (
     LearningError,
     approve_proposal,
@@ -40,7 +40,6 @@ from app.agents.models import (
     AgentImprovement,
     AgentRegressionRun,
 )
-from app.agents.planner import build_planner
 from app.agents.proposals import build_proposal_generator
 from app.agents.registry import registry
 from app.agents.regression import (
@@ -51,7 +50,6 @@ from app.agents.regression import (
     list_golden_cases,
 )
 from app.agents.regression_runner import build_regression_runner
-from app.agents.runner import build_runner
 from app.agents.runs import TERMINAL_STATUSES, DatabaseRunStore, RunStore
 from app.agents.versions import (
     VersionError,
@@ -62,7 +60,7 @@ from app.agents.versions import (
     publish_golden_set,
     rollback_config,
 )
-from app.agents.worker import TERMINAL_EVENT_TYPES, has_local_worker, start_run_worker
+from app.agents.worker import TERMINAL_EVENT_TYPES
 from app.schemas.agent import (
     AgentConfigRollbackRequest,
     AgentConfigVersionList,
@@ -100,17 +98,6 @@ router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 _VIEWER = Depends(get_current_user)
 {% endif %}
-
-
-def _coordinator() -> Coordinator:
-    """Build per request so settings and the event loop are current."""
-    settings = get_settings()
-    return Coordinator(
-        registry,
-        planner=build_planner(settings),
-        runner=build_runner(settings),
-        default_agent="general",
-    )
 
 
 def _run_store(db: AsyncSession) -> RunStore:
@@ -238,7 +225,6 @@ async def create_run(
 {% endif %}
     db: AsyncSession = Depends(get_db),
 ) -> AgentRunCreated:
-    settings = get_settings()
     run_id = uuid.uuid4().hex
 {% if enabled('api.auth') %}
     user_id = _viewer.user_id
@@ -251,14 +237,7 @@ async def create_run(
         user_id=user_id,
         session_id=payload.session_id,
     )
-    start_run_worker(
-        run_id,
-        message=payload.message,
-        user_id=user_id,
-        session_id=payload.session_id,
-        settings=settings,
-        coordinator=_coordinator(),
-    )
+    wake_job_queue()
     return AgentRunCreated(run_id=run_id, status="queued")
 
 
@@ -312,7 +291,6 @@ async def stream_run(
                 if (
                     current is not None
                     and current.status in {"queued", "running"}
-                    and not has_local_worker(run_id)
                     and await store.mark_orphaned_if_stale(
                         run_id, settings.agent_run_orphan_seconds
                     )
@@ -561,9 +539,7 @@ async def publish_agent_golden_set(
     actor_id = None
 {% endif %}
     try:
-        version = await publish_golden_set(
-            db, payload.agent, actor_id=actor_id, note=payload.note
-        )
+        version = await publish_golden_set(db, payload.agent, actor_id=actor_id, note=payload.note)
     except VersionError as exc:
         await db.rollback()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
@@ -648,9 +624,7 @@ async def get_agent_config_versions(
     if registry.get(name) is None:
         raise HTTPException(status_code=404, detail="Agent not found")
     versions = await list_config_versions(db, name)
-    return AgentConfigVersionList(
-        versions=[_config_version_read(version) for version in versions]
-    )
+    return AgentConfigVersionList(versions=[_config_version_read(version) for version in versions])
 
 
 @router.post(

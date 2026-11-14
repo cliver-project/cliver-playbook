@@ -9,7 +9,7 @@ small ephemeral alternative; it keeps run state only, without the event log.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from sqlalchemy import func, select, update
@@ -46,6 +46,8 @@ class RunStore(Protocol):
     async def get(self, run_id: str) -> RunRecord | None: ...
 
     async def claim(self, run_id: str) -> bool: ...
+
+    async def claim_next(self) -> RunRecord | None: ...
 
     async def cancel(self, run_id: str) -> RunRecord | None: ...
 
@@ -87,6 +89,13 @@ class InMemoryRunStore:
             return False
         record.status = "running"
         return True
+
+    async def claim_next(self) -> RunRecord | None:
+        for record in self._runs.values():
+            if record.status == "queued":
+                record.status = "running"
+                return record
+        return None
 
     async def cancel(self, run_id: str) -> RunRecord | None:
         record = self._runs.get(run_id)
@@ -148,6 +157,23 @@ class DatabaseRunStore:
         await self.db.commit()
         return bool(result.rowcount)
 
+    async def claim_next(self) -> RunRecord | None:
+        """Atomically lease the oldest queued run; SKIP LOCKED allows workers."""
+        row = await self.db.scalar(
+            select(AgentRun)
+            .where(AgentRun.status == "queued")
+            .order_by(AgentRun.created_at)
+            .with_for_update(skip_locked=True)
+            .limit(1)
+        )
+        if row is None:
+            return None
+        row.status = "running"
+        row.updated_at = datetime.now(UTC)
+        await self.db.commit()
+        await self.db.refresh(row)
+        return _record(row)
+
     async def cancel(self, run_id: str) -> RunRecord | None:
         row = await self._row(run_id)
         if row is None:
@@ -199,12 +225,16 @@ class DatabaseRunStore:
         await self.db.commit()
 
     async def mark_orphaned_if_stale(self, run_id: str, stale_seconds: float) -> bool:
-        """Fail a queued/running run whose worker stopped heartbeating."""
+        """Fail a running run whose worker stopped heartbeating.
+
+        Queued runs are left for a live queue consumer; a backlog is not an
+        orphan. A deployment with no worker should surface that separately.
+        """
         result = await self.db.execute(
             update(AgentRun)
             .where(
                 AgentRun.run_id == run_id,
-                AgentRun.status.in_(["queued", "running"]),
+                AgentRun.status == "running",
                 AgentRun.updated_at < func.now() - timedelta(seconds=stale_seconds),
             )
             .values(status="failed")

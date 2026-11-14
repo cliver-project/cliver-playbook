@@ -46,6 +46,11 @@ class Settings(PlaybookSettings):
     agent_run_tick_seconds: float = 0.5
     agent_run_orphan_seconds: float = 120.0
     agent_sse_keepalive_seconds: float = 15.0
+    # DB-backed run queue. Every API process consumes queued runs unless
+    # disabled for a dedicated worker deployment.
+    agent_run_worker_enabled: bool = True
+    agent_run_concurrency: int = 4
+    agent_job_poll_seconds: float = 1.0
     # System One/Laya selector. Empty provider disables it; the selector is
     # fail-open and only runs when a tool/skill catalogue exceeds its minimum.
     agent_system_one_provider: str = ""  # local | bailian | typesafe | http
@@ -85,9 +90,12 @@ class Settings(PlaybookSettings):
             "agent_run_tick_seconds",
             "agent_run_orphan_seconds",
             "agent_sse_keepalive_seconds",
+            "agent_job_poll_seconds",
         ):
             if getattr(self, field) <= 0:
                 raise ValueError(f"{field} must be positive")
+        if self.agent_run_concurrency < 1:
+            raise ValueError("CLIVER_AGENT_RUN_CONCURRENCY must be at least 1")
 
         system_one = self.agent_system_one_provider.strip().lower()
         if system_one not in {"", "local", "bailian", "typesafe", "http"}:
