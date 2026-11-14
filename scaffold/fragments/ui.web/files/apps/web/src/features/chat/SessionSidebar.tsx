@@ -1,0 +1,78 @@
+import { Button } from "../../ui";
+import type { AgentSession } from "./api";
+
+/** Keyboard-operable session history beside the chat surface. */
+export function SessionSidebar({
+  sessions,
+  currentSessionId,
+  loading,
+  error,
+  disabled,
+  title,
+  newLabel,
+  emptyLabel,
+  loadingLabel,
+  runCountLabel,
+  onSelect,
+  onNew,
+}: {
+  sessions: AgentSession[];
+  currentSessionId: string;
+  loading: boolean;
+  error: string | null;
+  disabled: boolean;
+  title: string;
+  newLabel: string;
+  emptyLabel: string;
+  loadingLabel: string;
+  runCountLabel: (count: number) => string;
+  onSelect: (sessionId: string) => void;
+  onNew: () => void;
+}) {
+  return (
+    <nav aria-label={title} className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <Button type="button" size="sm" variant="outline" onClick={onNew} disabled={disabled}>
+          {newLabel}
+        </Button>
+      </div>
+      {error ? (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
+      {loading && sessions.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{loadingLabel}</p>
+      ) : null}
+      {!loading && sessions.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : null}
+      <ul className="space-y-1">
+        {sessions.map((session) => {
+          const current = session.session_id === currentSessionId;
+          return (
+            <li key={session.session_id}>
+              <button
+                type="button"
+                disabled={disabled}
+                aria-current={current ? "page" : undefined}
+                onClick={() => onSelect(session.session_id)}
+                className={
+                  current
+                    ? "w-full rounded-lg border bg-muted px-3 py-2 text-left"
+                    : "w-full rounded-lg border border-transparent px-3 py-2 text-left hover:bg-muted"
+                }
+              >
+                <span className="line-clamp-2 text-sm">{session.last_message}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {runCountLabel(session.run_count)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}

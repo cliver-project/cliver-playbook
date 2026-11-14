@@ -44,6 +44,12 @@
     "notHelpful": "Not helpful",
     "feedbackThanks": "Thanks for the feedback.",
     "feedbackFailed": "Could not send feedback. Try again.",
+    "sessions": "Sessions",
+    "newSession": "New session",
+    "noSessions": "No conversations yet.",
+    "loadingSessions": "Loading sessions…",
+    "runCount_one": "{{count}} run",
+    "runCount_other": "{{count}} runs",
     "runDetails": "Run details",
     "runPlan": "Plan",
     "runAgents": "Agent results",
@@ -90,6 +96,11 @@
     "autonomyProposal": "Proposals",
     "autonomyAuto": "Auto",
     "pipelineOn": "Self-enhancement pipeline",
-    "pipelineOff": "No learning pipeline"
+    "pipelineOff": "No learning pipeline",
+    "model": "API model",
+    "mcpServers": "MCP servers",
+    "noMcpServers": "Enabled; no servers discovered.",
+    "customProvider": "Custom endpoint",
+    "unknown": "Unknown model"
   }
 }

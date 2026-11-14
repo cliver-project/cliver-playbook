@@ -97,6 +97,13 @@ test("chat streams events, shows a tool card and routes to products", async ({
       body: JSON.stringify({ user }),
     }),
   );
+  await page.route("**/api/v1/agent/sessions**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ sessions: [] }),
+    }),
+  );
   await page.route("**/api/v1/products**", (route) =>
     route.fulfill({
       status: 200,
@@ -143,8 +150,9 @@ test("chat streams events, shows a tool card and routes to products", async ({
   await expect(page.getByRole("heading", { name: "Ask anything" })).toBeVisible();
   await expect(page.getByRole("log")).toBeVisible();
 
-  await page.getByLabel("Ask a question…").fill("list products");
-  await page.getByRole("button", { name: "Send" }).click();
+  const composer = page.getByLabel("Ask a question…");
+  await composer.fill("list products");
+  await composer.press("Enter");
 
   await expect(page.getByText("Found 3 product(s).")).toBeVisible();
   await expect(page.getByText("products_list")).toBeVisible();
@@ -160,5 +168,80 @@ test("chat streams events, shows a tool card and routes to products", async ({
   await expect(openProducts).toBeVisible();
   await openProducts.click();
   await expect(page).toHaveURL(/\/products$/);
+});
+
+test("session history loads by keyboard and a new session clears it", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("cliver-token", "e2e-token");
+    window.localStorage.setItem("cliver-agent-session", "session-current");
+  });
+
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ user }),
+    }),
+  );
+  await page.route("**/api/v1/agent/sessions**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            session_id: "session-current",
+            last_message: "Current question",
+            run_count: 1,
+            updated_at: "2026-01-02T00:00:00Z",
+          },
+          {
+            session_id: "session-old",
+            last_message: "Previous question",
+            run_count: 1,
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    }),
+  );
+  await page.route("**/api/v1/agent/sessions/session-old**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "session-old",
+        runs: [
+          {
+            run_id: "run-old",
+            message: "Previous question",
+            status: "completed",
+            created_at: "2026-01-01T00:00:00Z",
+            events: [
+              { type: "message.delta", delta: "Previous answer" },
+              { type: "agent.result", agent: "general", message: "Previous answer" },
+              { type: "run.completed" },
+            ],
+          },
+        ],
+      }),
+    }),
+  );
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+  const previous = page.getByRole("button", { name: /Previous question/ });
+  await previous.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Previous answer")).toBeVisible();
+  await expect(previous).toHaveAttribute("aria-current", "page");
+
+  await page.getByRole("button", { name: "New session" }).click();
+  await expect(page.getByText("Previous answer")).not.toBeVisible();
+  await expect(
+    page.getByText("Start a conversation. Ask about products or your account."),
+  ).toBeVisible();
 });
 {% endif %}

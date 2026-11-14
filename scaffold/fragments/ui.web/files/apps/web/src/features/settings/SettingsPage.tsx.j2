@@ -59,6 +59,40 @@ export default function SettingsPage() {
         </Card>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="text-sm">{t("settings.model")}</CardTitle></CardHeader>
+          <CardContent>
+            {data.model_configured ? (
+              <div className="space-y-1">
+                <p className="font-semibold">{data.model_name || t("settings.unknown")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {data.model_provider || t("settings.customProvider")}
+                </p>
+              </div>
+            ) : (
+              <p className="text-lg font-semibold">{t("settings.disabled")}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-sm">{t("settings.mcpServers")}</CardTitle></CardHeader>
+          <CardContent>
+            {data.mcp_servers && data.mcp_servers.length > 0 ? (
+              <ul className="space-y-1 text-sm">
+                {data.mcp_servers.map((server) => (
+                  <li key={server} className="font-mono">{server}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {data.mcp_enabled ? t("settings.noMcpServers") : t("settings.disabled")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <section aria-labelledby="registered-agents" className="space-y-2">
         <h2 id="registered-agents" className="text-lg font-semibold">
           {t("settings.agents")}

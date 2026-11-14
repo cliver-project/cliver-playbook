@@ -44,6 +44,11 @@
     "notHelpful": "没帮助",
     "feedbackThanks": "感谢反馈。",
     "feedbackFailed": "反馈发送失败，请重试。",
+    "sessions": "会话",
+    "newSession": "新会话",
+    "noSessions": "暂无会话。",
+    "loadingSessions": "正在加载会话…",
+    "runCount_other": "{{count}} 次运行",
     "runDetails": "运行详情",
     "runPlan": "计划",
     "runAgents": "Agent 结果",
@@ -90,6 +95,11 @@
     "autonomyProposal": "提案模式",
     "autonomyAuto": "自动",
     "pipelineOn": "自增强流水线",
-    "pipelineOff": "无学习流水线"
+    "pipelineOff": "无学习流水线",
+    "model": "API 模型",
+    "mcpServers": "MCP 服务器",
+    "noMcpServers": "已启用，但未发现服务器。",
+    "customProvider": "自定义端点",
+    "unknown": "未知模型"
   }
 }

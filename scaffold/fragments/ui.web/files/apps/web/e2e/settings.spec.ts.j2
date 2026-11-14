@@ -32,6 +32,9 @@ test("runtime settings show safe feature flags", async ({ page }) => {
         compaction_enabled: false,
         tool_permission_mode: "scoped",
         system_one_provider: "local",
+        model_provider: "deepseek",
+        model_name: "deepseek-chat",
+        mcp_servers: ["echo", "catalog"],
       }),
     }),
   );
@@ -57,6 +60,9 @@ test("runtime settings show safe feature flags", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Runtime settings" })).toBeVisible();
   await expect(page.getByText("scoped")).toBeVisible();
   await expect(page.getByText("local")).toBeVisible();
+  await expect(page.getByText("deepseek-chat")).toBeVisible();
+  await expect(page.getByText("echo", { exact: true })).toBeVisible();
+  await expect(page.getByText("catalog")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Registered agents" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "products" })).toBeVisible();
   await expect(page.getByText("products.list")).toBeVisible();

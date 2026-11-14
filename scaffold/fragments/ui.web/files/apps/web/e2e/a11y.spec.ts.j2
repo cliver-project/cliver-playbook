@@ -1,0 +1,140 @@
+{% if enabled('ui.agent.chat') %}
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test } from "@playwright/test";
+
+const user = {
+  id: 1,
+  username: "reviewer",
+  email: null,
+  phone: null,
+  display_name: "Reviewer",
+  is_active: true,
+  must_change_password: false,
+  created_at: "2026-01-01T00:00:00Z",
+  role_codes: ["admin"],
+  permissions: ["*"],
+};
+
+const agent = {
+  name: "products",
+  description: "List the project's products.",
+  capabilities: ["products.list"],
+  autonomy_mode: "proposal",
+  has_pipeline: true,
+};
+
+const summary = {
+  agent: "products",
+  config_version: 1,
+  config_versions: 1,
+  prompt_overlay: "",
+  active_golden_version: 1,
+  golden_versions: 1,
+  proposal_counts: { pending: 0, applied: 0 },
+  feedback_count: 1,
+  positive_feedback: 1,
+  recent_pass_rate: 1,
+  recent_evaluations: 1,
+  rollout_percent: 100,
+  generated_at: "2026-01-01T00:00:00Z",
+};
+
+async function prepare(page: import("@playwright/test").Page, theme: "light" | "dark") {
+  await page.addInitScript((mode) => {
+    window.localStorage.setItem("cliver-token", "e2e-token");
+    window.localStorage.setItem("cliver-theme", mode);
+    window.localStorage.setItem("cliver-agent-session", "a11y-session");
+  }, theme);
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ user }),
+    }),
+  );
+  await page.route("**/api/v1/agent/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        model_configured: true,
+        judge_enabled: false,
+        mcp_enabled: true,
+        compaction_enabled: false,
+        tool_permission_mode: "scoped",
+        system_one_provider: "local",
+        model_provider: "deepseek",
+        model_name: "deepseek-chat",
+        mcp_servers: ["echo"],
+      }),
+    }),
+  );
+  await page.route("**/api/v1/agent/sessions**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ sessions: [] }),
+    }),
+  );
+  await page.route("**/api/v1/agent/agents/products/learning", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(summary),
+    }),
+  );
+  await page.route("**/api/v1/agent/agents/products/config/versions", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ versions: [] }),
+    }),
+  );
+  await page.route("**/api/v1/agent/agents", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ agents: [agent] }),
+    }),
+  );
+  await page.route("**/api/v1/agent/proposals**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ proposals: [] }),
+    }),
+  );
+  await page.route("**/api/v1/agent/golden-set/versions**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ versions: [] }),
+    }),
+  );
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`primary pages have no WCAG A/AA violations in ${theme} mode`, async ({
+    page,
+  }) => {
+    await prepare(page, theme);
+    for (const [path, heading, ready] of [
+      ["/", "Ask anything", "Sessions"],
+      ["/runtime", "Runtime settings", "deepseek-chat"],
+      ["/learning", "Agent learning", "products"],
+    ] as const) {
+      await page.goto(path);
+      await expect(page.getByRole("main")).toBeVisible();
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect(page.getByText(ready).first()).toBeVisible();
+      const results = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .analyze();
+      expect(
+        results.violations,
+        `${path} (${theme}): ${JSON.stringify(results.violations, null, 2)}`,
+      ).toEqual([]);
+    }
+  });
+}
+{% endif %}

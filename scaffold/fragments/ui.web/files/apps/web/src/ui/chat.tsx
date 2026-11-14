@@ -8,23 +8,36 @@ export function ChatShell({
   subtitle,
   children,
   footer,
+  aside,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   footer: ReactNode;
+  aside?: ReactNode;
 }) {
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl flex-col gap-4 p-4 md:p-8">
-      <header>
-        <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
-        {subtitle ? (
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-        ) : null}
-      </header>
-      <div className="flex-1 space-y-3 overflow-y-auto">{children}</div>
-      <div className="sticky bottom-0 space-y-3 bg-background/95 pb-2 pt-2 backdrop-blur">
-        {footer}
+    <section
+      className={
+        aside
+          ? "mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-6xl flex-col gap-4 p-4 md:p-8 lg:flex-row"
+          : "mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl flex-col gap-4 p-4 md:p-8"
+      }
+    >
+      {aside ? (
+        <aside className="shrink-0 lg:w-64">{aside}</aside>
+      ) : null}
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <header>
+          <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
+          {subtitle ? (
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          ) : null}
+        </header>
+        <div className="flex-1 space-y-3 overflow-y-auto">{children}</div>
+        <div className="sticky bottom-0 space-y-3 bg-background/95 pb-2 pt-2 backdrop-blur">
+          {footer}
+        </div>
       </div>
     </section>
   );

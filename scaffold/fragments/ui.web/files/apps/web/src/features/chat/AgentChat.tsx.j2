@@ -1,5 +1,6 @@
 {% if enabled('ui.agent.chat') %}
 {%- set has_agent_routes = enabled('ui.web.products') or enabled('api.auth') %}
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 {% if enabled('ui.web.products') or enabled('api.auth') %}
@@ -26,6 +27,8 @@ import {
 {% endif %}
 import {
   cancelRun,
+  getSession,
+  listSessions,
   startRun,
   streamRun,
   submitFeedback,
@@ -34,6 +37,13 @@ import {
 
 import { RunInspector } from "../../ui";
 import type { RunAgentResult, RunHandoff, RunPlanStep } from "../../ui";
+import { SessionSidebar } from "./SessionSidebar";
+import {
+  currentSessionId,
+  newSessionId,
+  rememberSessionId,
+  sessionHistory,
+} from "./history";
 
 type ChatEntry = {
   id: string;
@@ -61,6 +71,9 @@ export default function AgentChat() {
   const [plan, setPlan] = useState<RunPlanStep[]>([]);
   const [runAgents, setRunAgents] = useState<RunAgentResult[]>([]);
   const [handoffs, setHandoffs] = useState<RunHandoff[]>([]);
+  const [sessionId, setSessionId] = useState(currentSessionId);
+  const [loadingSession, setLoadingSession] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +85,11 @@ export default function AgentChat() {
 {% if has_agent_routes %}
   const [agentName, setAgentName] = useState<string | null>(null);
 {% endif %}
+  const queryClient = useQueryClient();
+  const sessionsQuery = useQuery({
+    queryKey: ["agent-sessions"],
+    queryFn: () => listSessions(50),
+  });
   const abortRef = useRef<AbortController | null>(null);
   const runIdRef = useRef<string | null>(null);
   const agentRef = useRef("general");
@@ -176,6 +194,54 @@ export default function AgentChat() {
     }
   };
 
+  const resetRunState = () => {
+    setTools([]);
+    setPlan([]);
+    setRunAgents([]);
+    setHandoffs([]);
+    setFeedbackTarget(null);
+    setFeedbackRating(null);
+    setFeedbackError(null);
+    setError(null);
+    setSessionError(null);
+  };
+
+  const openSession = async (nextSessionId: string) => {
+    if (busy || loadingSession || nextSessionId === sessionId) return;
+    setLoadingSession(true);
+    setSessionError(null);
+    try {
+      const detail = await getSession(nextSessionId);
+      const history = sessionHistory(detail);
+      rememberSessionId(nextSessionId);
+      setSessionId(nextSessionId);
+      setMessages(
+        history.messages.map((message) => ({ id: newId(), ...message })),
+      );
+      setPlan(history.plan);
+      setRunAgents(history.results);
+      setHandoffs(history.handoffs);
+      setTools([]);
+      setFeedbackTarget(null);
+      setFeedbackRating(null);
+      setFeedbackError(null);
+      setError(null);
+    } catch (reason) {
+      setSessionError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setLoadingSession(false);
+    }
+  };
+
+  const startNewSession = () => {
+    if (busy || loadingSession) return;
+    const nextSessionId = newSessionId();
+    setSessionId(nextSessionId);
+    setMessages([]);
+    setInput("");
+    resetRunState();
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -200,7 +266,7 @@ export default function AgentChat() {
       { id: assistantId, role: "assistant", text: "" },
     ]);
     try {
-      const runId = await startRun(text);
+      const runId = await startRun(text, sessionId);
       runIdRef.current = runId;
       const controller = new AbortController();
       abortRef.current = controller;
@@ -217,6 +283,7 @@ export default function AgentChat() {
       setBusy(false);
       abortRef.current = null;
       runIdRef.current = null;
+      void queryClient.invalidateQueries({ queryKey: ["agent-sessions"] });
     }
   };
 
@@ -244,6 +311,25 @@ export default function AgentChat() {
     <ChatShell
       title={t("chat.title")}
       subtitle={t("chat.subtitle")}
+      aside={
+        <SessionSidebar
+          sessions={sessionsQuery.data ?? []}
+          currentSessionId={sessionId}
+          loading={sessionsQuery.isPending || loadingSession}
+          error={
+            sessionError ??
+            (sessionsQuery.error ? readError(sessionsQuery.error) : null)
+          }
+          disabled={busy || loadingSession}
+          title={t("chat.sessions")}
+          newLabel={t("chat.newSession")}
+          emptyLabel={t("chat.noSessions")}
+          loadingLabel={t("chat.loadingSessions")}
+          runCountLabel={(count) => t("chat.runCount", { count })}
+          onSelect={(id) => void openSession(id)}
+          onNew={startNewSession}
+        />
+      }
       footer={
         <div className="space-y-2">
 {% if enabled('ui.web.products') %}
@@ -349,5 +435,9 @@ export default function AgentChat() {
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+
+function readError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 {% endif %}
