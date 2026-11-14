@@ -232,6 +232,13 @@ export default function AgentChat() {
         </div>
       }
     >
+      <div
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-busy={busy}
+        className="space-y-4"
+      >
       {messages.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("chat.empty")}</p>
       ) : null}
@@ -272,9 +279,16 @@ export default function AgentChat() {
         />
       ) : null}
       {feedbackError ? (
-        <p className="text-sm text-destructive">{feedbackError}</p>
+        <p role="alert" className="text-sm text-destructive">
+          {feedbackError}
+        </p>
       ) : null}
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      </div>
     </ChatShell>
   );
 }

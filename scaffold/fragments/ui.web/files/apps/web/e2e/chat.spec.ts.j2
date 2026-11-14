@@ -107,6 +107,7 @@ test("chat streams events, shows a tool card and routes to products", async ({
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Ask anything" })).toBeVisible();
+  await expect(page.getByRole("log")).toBeVisible();
 
   await page.getByLabel("Ask a question…").fill("list products");
   await page.getByRole("button", { name: "Send" }).click();
