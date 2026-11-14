@@ -62,6 +62,8 @@
     "activate": "启用",
     "configHistory": "Prompt 配置历史",
     "noConfig": "尚无 prompt 配置版本。",
-    "rollback": "回滚"
+    "rollback": "回滚",
+    "rollout": "分阶段发布",
+    "applyRollout": "应用比例"
   }
 }

@@ -65,4 +65,8 @@ export async function rollbackConfig(agent: string, version: number): Promise<vo
     note: `Rollback to v${version} from dashboard`,
   });
 }
+
+export async function setAgentRollout(agent: string, percent: number): Promise<void> {
+  await api.post(`/agent/agents/${agent}/config/rollout`, { percent });
+}
 {% endif %}

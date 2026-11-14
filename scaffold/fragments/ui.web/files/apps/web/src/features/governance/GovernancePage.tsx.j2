@@ -1,6 +1,6 @@
 {% if enabled('api.agent') %}
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button, Card, CardContent, CardHeader, CardTitle, ErrorState, LoadingState } from "../../ui";
@@ -15,6 +15,7 @@ import {
   publishGoldenSet,
   rejectProposal,
   rollbackConfig,
+  setAgentRollout,
 } from "./api";
 
 function readError(error: unknown): string {
@@ -27,6 +28,7 @@ export default function GovernancePage() {
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [rollout, setRollout] = useState(100);
 
   const agents = useQuery({ queryKey: ["agent-catalog"], queryFn: listAgents });
   const agent = selected || agents.data?.[0]?.name || "";
@@ -50,6 +52,10 @@ export default function GovernancePage() {
     queryFn: () => listConfigVersions(agent),
     enabled: Boolean(agent),
   });
+
+  useEffect(() => {
+    if (summary.data) setRollout(summary.data.rollout_percent);
+  }, [summary.data]);
 
   const refresh = async () => {
     await Promise.all([
@@ -99,6 +105,33 @@ export default function GovernancePage() {
 
       {actionError ? <ErrorState message={actionError} /> : null}
       {summary.error ? <ErrorState message={readError(summary.error)} /> : null}
+
+      {summary.data ? (
+        <Card>
+          <CardHeader><CardTitle>{t("governance.rollout")}</CardTitle></CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={rollout}
+              aria-label={t("governance.rollout")}
+              onChange={(event) =>
+                setRollout(Math.max(0, Math.min(100, Number(event.target.value) || 0)))
+              }
+              className="w-24 rounded border bg-background px-2 py-1 text-sm"
+            />
+            <span className="text-sm text-muted-foreground">%</span>
+            <Button
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => void act("rollout", () => setAgentRollout(agent, rollout))}
+            >
+              {t("governance.applyRollout")}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {summary.data ? (
         <div className="grid gap-3 md:grid-cols-4">

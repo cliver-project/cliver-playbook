@@ -62,6 +62,8 @@
     "activate": "Activate",
     "configHistory": "Prompt config history",
     "noConfig": "No prompt config versions yet.",
-    "rollback": "Roll back"
+    "rollback": "Roll back",
+    "rollout": "Staged rollout",
+    "applyRollout": "Apply rollout"
   }
 }

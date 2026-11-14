@@ -35,4 +35,5 @@ test("real API: sign in, chat, feedback and learning dashboard", async ({
   await page.goto("/learning");
   await expect(page.getByRole("heading", { name: "Agent learning" })).toBeVisible();
   await expect(page.getByText("Pass rate")).toBeVisible();
+  await expect(page.getByLabel("Staged rollout")).toBeVisible();
 });

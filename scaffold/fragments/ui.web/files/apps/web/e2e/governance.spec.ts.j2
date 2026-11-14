@@ -26,6 +26,7 @@ const summary = {
   positive_feedback: 3,
   recent_pass_rate: 0.75,
   recent_evaluations: 8,
+  rollout_percent: 75,
   generated_at: "2026-01-01T00:00:00Z",
 };
 
@@ -115,6 +116,17 @@ test("learning dashboard shows summary and approves a proposal", async ({ page }
       }),
     }),
   );
+  const rollout = page.waitForRequest(
+    "**/api/v1/agent/agents/products/config/rollout",
+  );
+  await page.route("**/api/v1/agent/agents/products/config/rollout", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ...summary, rollout_percent: 25 }),
+    }),
+  );
+
   const approved = page.waitForRequest("**/api/v1/agent/proposals/p1/approve");
   await page.route("**/api/v1/agent/proposals/p1/approve", (route) =>
     route.fulfill({
@@ -135,5 +147,10 @@ test("learning dashboard shows summary and approves a proposal", async ({ page }
   await expect(page.getByText("75%")).toBeVisible();
   await page.getByRole("button", { name: "Approve" }).click();
   await approved;
+
+  await page.getByLabel("Staged rollout").fill("25");
+  await page.getByRole("button", { name: "Apply rollout" }).click();
+  const request = await rollout;
+  expect(request.postDataJSON()).toEqual({ percent: 25 });
 });
 {% endif %}
