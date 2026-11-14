@@ -71,12 +71,13 @@ and the sub-agent tool loop. The UI never calls a provider.
 ### 5. Run the project gates
 
 ```sh
-make check         # API lint/tests, web checks, contract check, mobile tests
+make check         # API/model tests, web checks, contract check, mobile tests
 make web-e2e       # mocked chat and learning-dashboard flows
 ```
 
-Expected baseline: 78 API tests in `ai-full`, the web typecheck/lint/seam/build
-and two Playwright checks, iOS Core package tests and Android unit tests.
+Expected baseline: 78 API tests in `ai-full`, the model-service health test,
+the web typecheck/lint/seam/build and two Playwright checks, iOS Core package
+tests and Android unit tests.
 `make test-api` uses a scratch PostgreSQL database; set
 `CLIVER_TEST_DATABASE_URL` when the default local DSN does not apply.
 
