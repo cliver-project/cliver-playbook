@@ -20,6 +20,11 @@ export type AgentEvent = {
   target?: string;
   reason?: string;
   depth?: number;
+  steps?: Array<{
+    name?: string;
+    confidence?: number;
+    parallel_group?: number | null;
+  }>;
   tool_call_id?: string;
   name?: string;
   arguments?: Record<string, unknown>;

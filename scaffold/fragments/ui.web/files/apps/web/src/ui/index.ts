@@ -21,6 +21,8 @@ export {
   ToolCallCard,
 } from "./chat";
 export { EmptyState, ErrorState, LoadingState } from "./feedback";
+export { RunInspector } from "./RunInspector";
+export type { RunAgentResult, RunHandoff, RunPlanStep } from "./RunInspector";
 export { ProductEditor } from "./ProductEditor";
 export type { ProductForm } from "./ProductEditor";
 export { ProductList } from "./ProductList";

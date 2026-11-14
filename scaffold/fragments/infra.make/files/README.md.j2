@@ -98,7 +98,9 @@ The web app's visual seam is `apps/web/src/ui/`. Pages and features import
 components only from there; `pnpm seam-check` (part of `make web-check`) rejects
 a deep playbook visual import. Replace a component in that directory to
 customize the UI without touching feature data flow. The chat surface on `/`
-is the reference AI-native form; direct feature routes remain available.
+is the reference AI-native form; direct feature routes remain available. A
+collapsible run inspector shows the planner's steps, parallel groups, agent
+results and direct handoffs without mixing that detail into the conversation.
 Playbook package pages (for example the auth screens) are replaced at the route
 level or by the package, not by a generated page.
 

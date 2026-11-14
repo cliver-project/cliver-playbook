@@ -43,7 +43,13 @@
     "helpful": "有帮助",
     "notHelpful": "没帮助",
     "feedbackThanks": "感谢反馈。",
-    "feedbackFailed": "反馈发送失败，请重试。"
+    "feedbackFailed": "反馈发送失败，请重试。",
+    "runDetails": "运行详情",
+    "runPlan": "计划",
+    "runAgents": "Agent 结果",
+    "runHandoffs": "交接",
+    "runParallel": "并行组",
+    "runEmpty": "暂无运行详情。"
   },
   "governance": {
     "title": "Agent 学习",

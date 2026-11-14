@@ -32,6 +32,9 @@ import {
   type AgentEvent,
 } from "./api";
 
+import { RunInspector } from "../../ui";
+import type { RunAgentResult, RunHandoff, RunPlanStep } from "../../ui";
+
 type ChatEntry = {
   id: string;
   role: "user" | "assistant";
@@ -55,6 +58,9 @@ export default function AgentChat() {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatEntry[]>([]);
   const [tools, setTools] = useState<ToolRun[]>([]);
+  const [plan, setPlan] = useState<RunPlanStep[]>([]);
+  const [runAgents, setRunAgents] = useState<RunAgentResult[]>([]);
+  const [handoffs, setHandoffs] = useState<RunHandoff[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +87,15 @@ export default function AgentChat() {
 
   const handleEvent = (event: AgentEvent, assistantId: string) => {
     switch (event.type) {
+      case "coordinator.plan":
+        setPlan(
+          (event.steps ?? []).map((step) => ({
+            name: String(step.name ?? "general"),
+            confidence: step.confidence,
+            parallelGroup: step.parallel_group ?? null,
+          })),
+        );
+        break;
       case "agent.selected":
         agentRef.current = event.agent ?? "general";
 {% if has_agent_routes %}
@@ -91,9 +106,24 @@ export default function AgentChat() {
         // The final result, not the last selection, owns the feedback target
         // (a parallel group can select several agents).
         agentRef.current = event.agent ?? agentRef.current;
+        setRunAgents((current) => [
+          ...current,
+          { agent: event.agent ?? "general", message: event.message },
+        ]);
 {% if has_agent_routes %}
         setAgentName(event.agent ?? null);
 {% endif %}
+        break;
+      case "agent.handoff":
+        setHandoffs((current) => [
+          ...current,
+          {
+            from: event.agent ?? "unknown",
+            to: event.target ?? "unknown",
+            reason: event.reason,
+            depth: event.depth,
+          },
+        ]);
         break;
       case "run.completed": {
         const runId = runIdRef.current;
@@ -161,6 +191,9 @@ export default function AgentChat() {
     setAgentName(null);
 {% endif %}
     setTools([]);
+    setPlan([]);
+    setRunAgents([]);
+    setHandoffs([]);
     setMessages((current) => [
       ...current,
       { id: newId(), role: "user", text },
@@ -240,6 +273,19 @@ export default function AgentChat() {
         </div>
       }
     >
+      {plan.length > 0 || runAgents.length > 0 || handoffs.length > 0 ? (
+        <RunInspector
+          title={t("chat.runDetails")}
+          planLabel={t("chat.runPlan")}
+          agentsLabel={t("chat.runAgents")}
+          handoffsLabel={t("chat.runHandoffs")}
+          parallelLabel={t("chat.runParallel")}
+          emptyLabel={t("chat.runEmpty")}
+          steps={plan}
+          results={runAgents}
+          handoffs={handoffs}
+        />
+      ) : null}
       <div
         role="log"
         aria-live="polite"

@@ -18,9 +18,43 @@ const events = [
   { type: "run.started" },
   {
     type: "coordinator.plan",
-    intent: { name: "products", confidence: 1, payload: {} },
+    steps: [
+      {
+        name: "products",
+        confidence: 0.9,
+        payload: {},
+        parallel_group: 0,
+      },
+      {
+        name: "profile",
+        confidence: 0.8,
+        payload: {},
+        parallel_group: 0,
+      },
+    ],
   },
-  { type: "agent.selected", agent: "products", reason: "planner:deterministic" },
+  {
+    type: "agent.selected",
+    agent: "products",
+    reason: "planner:agentcore",
+    step: 0,
+    parallel_group: 0,
+  },
+  {
+    type: "agent.selected",
+    agent: "profile",
+    reason: "planner:agentcore",
+    step: 1,
+    parallel_group: 0,
+  },
+  {
+    type: "agent.handoff",
+    agent: "general",
+    target: "products",
+    reason: "product question",
+    step: 0,
+    depth: 1,
+  },
   {
     type: "tool.call",
     tool_call_id: "call-1",
@@ -114,6 +148,10 @@ test("chat streams events, shows a tool card and routes to products", async ({
 
   await expect(page.getByText("Found 3 product(s).")).toBeVisible();
   await expect(page.getByText("products_list")).toBeVisible();
+
+  await page.getByText("Run details (2)").click();
+  await expect(page.getByText("general → products")).toBeVisible();
+  await expect(page.getByText("parallel group 0").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Helpful", exact: true }).click();
   await expect(page.getByText("Thanks for the feedback.")).toBeVisible();

@@ -43,7 +43,13 @@
     "helpful": "Helpful",
     "notHelpful": "Not helpful",
     "feedbackThanks": "Thanks for the feedback.",
-    "feedbackFailed": "Could not send feedback. Try again."
+    "feedbackFailed": "Could not send feedback. Try again.",
+    "runDetails": "Run details",
+    "runPlan": "Plan",
+    "runAgents": "Agent results",
+    "runHandoffs": "Handoffs",
+    "runParallel": "parallel group",
+    "runEmpty": "No run details yet."
   },
   "governance": {
     "title": "Agent learning",
