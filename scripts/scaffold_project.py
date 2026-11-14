@@ -1461,6 +1461,18 @@ def _self_test() -> int:
         assert "package-desktop: build-web" in makefile
         assert "test-ios" in makefile
         assert "test-android" in makefile
+        desktop_ci = (
+            full_target / ".github/workflows/desktop.yml"
+        ).read_text(encoding="utf-8")
+        assert "pnpm tauri build --bundles app" in desktop_ci
+        assert "pnpm tauri build --bundles deb" in desktop_ci
+        mobile_ci = (
+            full_target / ".github/workflows/mobile.yml"
+        ).read_text(encoding="utf-8")
+        assert "swift test" in mobile_ci
+        assert "./gradlew assembleDebug testDebugUnitTest" in mobile_ci
+        for workflow in (full_target / ".github/workflows").glob("*.yml"):
+            yaml.safe_load(workflow.read_text(encoding="utf-8"))
         assert not list(full_target.rglob("*.j2"))
 
     with tempfile.TemporaryDirectory() as temporary:

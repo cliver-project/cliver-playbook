@@ -27,11 +27,15 @@ jobs:
         run: |
           brew install xcodegen
           cd apps/ios && xcodegen generate
+      - name: Run Core package tests
+        run: |
+          cd apps/ios/Packages/Core && swift test
       - name: Build for a generic iOS device
         run: |
           cd apps/ios
           xcodebuild -project {{ project_slug }}.xcodeproj -scheme {{ project_slug }} \
-            -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
 {% endif %}
 {% if enabled('ui.mobile.android') %}
   android:
@@ -43,7 +47,7 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Assemble the debug APK
-        run: cd apps/android && gradle assembleDebug
+      - name: Build and test the debug APK
+        run: cd apps/android && ./gradlew assembleDebug testDebugUnitTest
 {% endif %}
 {% endif %}
