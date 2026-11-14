@@ -1,0 +1,31 @@
+import importlib.util
+import sys
+from pathlib import Path
+
+MODELS_FILE = Path(__file__).resolve().parents[3] / "contracts/generated/python/models.py"
+
+
+def _load_models():
+    spec = importlib.util.spec_from_file_location("generated_contract_models", MODELS_FILE)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_generated_python_models_validate_contract_shapes():
+    models = _load_models()
+
+    request = models.AgentRunRequest(message="hello", session_id="session-1")
+    assert request.message == "hello"
+
+    product = models.Product(
+        id=1,
+        name="Example",
+        description="",
+        price_cents=0,
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    assert product.name == "Example"

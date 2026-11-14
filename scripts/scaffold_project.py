@@ -1466,6 +1466,7 @@ def _self_test() -> int:
         assert "contract-test" in makefile
         assert (full_target / "services/api/scripts/contract_test.py").is_file()
         assert (full_target / "apps/web/src/contracts/schema.d.ts").is_file()
+        assert (full_target / "contracts/generated/python/models.py").is_file()
         assert (full_target / "apps/web/e2e/real-api.spec.ts").is_file()
         assert "contracts:generate" in makefile
         assert "web-e2e-real" in makefile
