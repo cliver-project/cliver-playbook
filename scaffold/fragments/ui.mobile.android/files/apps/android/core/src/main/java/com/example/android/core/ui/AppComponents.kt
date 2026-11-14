@@ -35,6 +35,7 @@ data class AppComponents(
     val chatMessage: @Composable (Boolean, String) -> Unit,
     val composer: @Composable (String, Boolean, (String) -> Unit, () -> Unit, () -> Unit) -> Unit,
     val toolCall: @Composable (String, String) -> Unit,
+    val feedbackButtons: @Composable (Int?, (Int) -> Unit) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -140,6 +141,20 @@ val ReferenceAppComponents = AppComponents(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+            }
+        }
+    },
+    feedbackButtons = { rating, onRate ->
+        if (rating != null) {
+            Text(
+                text = "Thanks for the feedback.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onRate(5) }) { Text("Helpful") }
+                Button(onClick = { onRate(1) }) { Text("Not helpful") }
             }
         }
     },

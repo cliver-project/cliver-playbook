@@ -59,6 +59,9 @@ fun ChatScreen(
     var selectedAgent by remember { mutableStateOf<String?>(null) }
     var runID by remember { mutableStateOf<String?>(null) }
     var runJob by remember { mutableStateOf<Job?>(null) }
+    var feedbackTarget by remember { mutableStateOf<FeedbackTarget?>(null) }
+    var feedbackRating by remember { mutableStateOf<Int?>(null) }
+    var feedbackError by remember { mutableStateOf<String?>(null) }
 
     fun apply(event: AgentEvent, assistantID: String) {
         when (event.type) {
@@ -108,6 +111,9 @@ fun ChatScreen(
         selectedAgent = null
         tools = emptyList()
         busy = true
+        feedbackTarget = null
+        feedbackRating = null
+        feedbackError = null
         val assistantID = UUID.randomUUID().toString()
         messages = messages + listOf(
             ChatEntry(UUID.randomUUID().toString(), isUser = true, text = text),
@@ -115,11 +121,18 @@ fun ChatScreen(
         )
 
         runJob = scope.launch {
+            var agentName = "general"
             try {
                 val id = api.startAgentRun(text)
                 runID = id
                 api.streamAgentRun(id).collect { event ->
+                    if (event.type == "agent.selected") {
+                        agentName = event.agent ?: "general"
+                    }
                     apply(event, assistantID)
+                    if (event.type == "run.completed") {
+                        feedbackTarget = FeedbackTarget(runId = id, agent = agentName)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -142,6 +155,20 @@ fun ChatScreen(
         }
         runJob?.cancel()
         busy = false
+    }
+
+    fun rate(rating: Int) {
+        val target = feedbackTarget ?: return
+        feedbackError = null
+        scope.launch {
+            runCatching {
+                api.submitAgentFeedback(target.runId, target.agent, rating)
+            }.onSuccess {
+                feedbackRating = rating
+            }.onFailure {
+                feedbackError = it.userMessage()
+            }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -188,6 +215,20 @@ fun ChatScreen(
                         tool.detail,
                     )
                 }
+                if (feedbackTarget != null && !busy) {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            components.feedbackButtons(feedbackRating) { rate(it) }
+                            feedbackError?.let { message ->
+                                Text(
+                                    text = message,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                }
                 error?.let { message ->
                     item {
                         Text(
@@ -228,6 +269,11 @@ private data class ToolEntry(
     val name: String,
     val detail: String,
     val isError: Boolean = false,
+)
+
+private data class FeedbackTarget(
+    val runId: String,
+    val agent: String,
 )
 
 private fun JsonElement?.asDisplayText(): String = when (this) {

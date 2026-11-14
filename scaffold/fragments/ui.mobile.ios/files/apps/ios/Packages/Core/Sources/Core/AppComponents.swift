@@ -13,6 +13,7 @@ public struct AppComponents {
         Binding<String>, Bool, @escaping () -> Void, @escaping () -> Void
     ) -> AnyView
     public var toolCall: (String, String) -> AnyView
+    public var feedbackButtons: (Int?, @escaping (Int) -> Void) -> AnyView
 
     public init(
         productRow: @escaping (Product) -> AnyView,
@@ -22,7 +23,8 @@ public struct AppComponents {
         composer: @escaping (
             Binding<String>, Bool, @escaping () -> Void, @escaping () -> Void
         ) -> AnyView,
-        toolCall: @escaping (String, String) -> AnyView
+        toolCall: @escaping (String, String) -> AnyView,
+        feedbackButtons: @escaping (Int?, @escaping (Int) -> Void) -> AnyView
     ) {
         self.productRow = productRow
         self.emptyState = emptyState
@@ -30,6 +32,7 @@ public struct AppComponents {
         self.chatMessage = chatMessage
         self.composer = composer
         self.toolCall = toolCall
+        self.feedbackButtons = feedbackButtons
     }
 
     public static let reference = AppComponents(
@@ -54,6 +57,9 @@ public struct AppComponents {
         },
         toolCall: { name, detail in
             AnyView(ReferenceToolCall(name: name, detail: detail))
+        },
+        feedbackButtons: { rating, onRate in
+            AnyView(ReferenceFeedbackButtons(rating: rating, onRate: onRate))
         }
     )
 }
@@ -175,5 +181,25 @@ private struct ReferenceToolCall: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DesignSystem.Spacing.s)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: DesignSystem.Radius.control))
+    }
+}
+
+private struct ReferenceFeedbackButtons: View {
+    let rating: Int?
+    let onRate: (Int) -> Void
+
+    var body: some View {
+        if rating != nil {
+            Text("Thanks for the feedback.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: DesignSystem.Spacing.s) {
+                Button("Helpful") { onRate(5) }
+                    .buttonStyle(.bordered)
+                Button("Not helpful") { onRate(1) }
+                    .buttonStyle(.bordered)
+            }
+        }
     }
 }

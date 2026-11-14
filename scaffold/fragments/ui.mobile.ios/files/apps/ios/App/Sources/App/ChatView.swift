@@ -17,6 +17,9 @@ struct ChatView: View {
     @State private var selectedAgent: String?
     @State private var runID: String?
     @State private var runTask: Task<Void, Never>?
+    @State private var feedbackTarget: FeedbackTarget?
+    @State private var feedbackRating: Int?
+    @State private var feedbackError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +46,14 @@ struct ChatView: View {
                                 tool.isError ? "\(tool.name) (error)" : tool.name,
                                 tool.detail
                             )
+                        }
+                        if feedbackTarget != nil, !busy {
+                            components.feedbackButtons(feedbackRating, rate)
+                            if let feedbackError {
+                                Text(feedbackError)
+                                    .font(.footnote)
+                                    .foregroundStyle(.red)
+                            }
                         }
                         if let error {
                             Text(error)
@@ -89,16 +100,26 @@ struct ChatView: View {
         selectedAgent = nil
         tools = []
         busy = true
+        feedbackTarget = nil
+        feedbackRating = nil
+        feedbackError = nil
         messages.append(ChatEntry(isUser: true, text: text))
         let assistantID = UUID()
         messages.append(ChatEntry(id: assistantID, isUser: false, text: ""))
 
         runTask = Task { @MainActor in
+            var runAgent = "general"
             do {
                 let id = try await session.api.startAgentRun(message: text)
                 runID = id
                 for try await event in session.api.streamAgentRun(runID: id) {
+                    if event.type == "agent.selected" {
+                        runAgent = event.agent ?? "general"
+                    }
                     apply(event, assistantID: assistantID)
+                    if event.type == "run.completed" {
+                        feedbackTarget = FeedbackTarget(runID: id, agent: runAgent)
+                    }
                 }
             } catch is CancellationError {
                 // The user stopped the run or left the screen.
@@ -118,6 +139,23 @@ struct ChatView: View {
             }
         }
         busy = false
+    }
+
+    private func rate(_ rating: Int) {
+        guard let feedbackTarget else { return }
+        feedbackError = nil
+        Task { @MainActor in
+            do {
+                try await session.api.submitAgentFeedback(
+                    runID: feedbackTarget.runID,
+                    agent: feedbackTarget.agent,
+                    rating: rating
+                )
+                feedbackRating = rating
+            } catch {
+                feedbackError = error.localizedDescription
+            }
+        }
     }
 
     private func apply(_ event: AgentEvent, assistantID: UUID) {
@@ -171,4 +209,9 @@ private struct ToolEntry: Identifiable {
     let name: String
     var detail: String
     var isError = false
+}
+
+private struct FeedbackTarget {
+    let runID: String
+    let agent: String
 }

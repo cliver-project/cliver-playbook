@@ -62,6 +62,18 @@ class ModelsTest {
     }
 
     @Test
+    fun encodesAgentFeedbackRequest() {
+        val encoded = apiJson.encodeToString(
+            AgentFeedbackRequest.serializer(),
+            AgentFeedbackRequest(agent = "products", rating = 5, comment = "useful"),
+        )
+
+        assertTrue(encoded.contains("\"agent\":\"products\""))
+        assertTrue(encoded.contains("\"rating\":5"))
+        assertTrue(encoded.contains("\"comment\":\"useful\""))
+    }
+
+    @Test
     fun omitsNullProfileFieldsWhenEncoding() {
         val encoded = apiJson.encodeToString(
             ProfileUpdate.serializer(),

@@ -1,6 +1,7 @@
 package com.example.android.core.network
 
 import com.example.android.core.model.AgentEvent
+import com.example.android.core.model.AgentFeedbackRequest
 import com.example.android.core.model.LoginRequest
 import com.example.android.core.model.LoginResponse
 import com.example.android.core.model.MeResponse
@@ -132,6 +133,25 @@ class ApiClient(
         executeNoContent(
             requestBuilder("/agent/runs/$runID/cancel")
                 .post("{}".toRequestBody(JSON))
+                .build(),
+        )
+    }
+
+    /** Attach the user's outcome rating to one completed run. */
+    suspend fun submitAgentFeedback(
+        runID: String,
+        agent: String,
+        rating: Int,
+        comment: String = "",
+    ) {
+        executeNoContent(
+            requestBuilder("/agent/runs/$runID/feedback")
+                .post(
+                    jsonBody(
+                        AgentFeedbackRequest(agent = agent, rating = rating, comment = comment),
+                        AgentFeedbackRequest.serializer(),
+                    ),
+                )
                 .build(),
         )
     }

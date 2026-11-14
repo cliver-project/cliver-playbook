@@ -209,6 +209,25 @@ public final class APIClient: @unchecked Sendable {
         _ = try await send("POST", path: "/agent/runs/\(runID)/cancel")
     }
 
+    /// Attach the user's outcome rating to one completed run.
+    public func submitAgentFeedback(
+        runID: String,
+        agent: String,
+        rating: Int,
+        comment: String = ""
+    ) async throws {
+        struct Body: Encodable {
+            let agent: String
+            let rating: Int
+            let comment: String
+        }
+        _ = try await send(
+            "POST",
+            path: "/agent/runs/\(runID)/feedback",
+            body: Body(agent: agent, rating: rating, comment: comment)
+        )
+    }
+
     /// Stream typed events for a run until the server closes the response.
     /// Pass the last seen sequence to resume after a reconnect instead of
     /// replaying from the start.

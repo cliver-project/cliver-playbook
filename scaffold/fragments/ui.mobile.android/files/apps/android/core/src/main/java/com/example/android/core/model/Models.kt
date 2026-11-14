@@ -58,6 +58,13 @@ data class MeResponse(
 )
 
 @Serializable
+data class AgentFeedbackRequest(
+    val agent: String,
+    val rating: Int,
+    val comment: String = "",
+)
+
+@Serializable
 data class ProfileUpdate(
     val email: String? = null,
     val phone: String? = null,
