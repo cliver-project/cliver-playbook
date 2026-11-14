@@ -1,0 +1,25 @@
+{% if enabled('api.agent') %}
+import type { RouteObject } from "react-router-dom";
+
+{% if enabled('api.auth') %}
+import type { AuthedNavItem } from "cliver-playbook-app-user";
+{% else %}
+import type { NavItem } from "cliver-playbook-app-basic";
+{% endif %}
+
+import SettingsPage from "./SettingsPage";
+
+export const settingsRoutes: RouteObject[] = [
+  { path: "runtime", element: <SettingsPage /> },
+];
+
+{% if enabled('api.auth') %}
+export const settingsNavItems: AuthedNavItem[] = [
+  { to: "/runtime", labelKey: "nav.runtime", perm: "agent:improve" },
+];
+{% else %}
+export const settingsNavItems: NavItem[] = [
+  { to: "/runtime", labelKey: "nav.runtime" },
+];
+{% endif %}
+{% endif %}

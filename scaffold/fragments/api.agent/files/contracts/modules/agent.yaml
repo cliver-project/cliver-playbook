@@ -474,6 +474,22 @@ paths:
           description: Reviewer permission required
         "404":
           description: Agent or config version not found
+  /api/v1/agent/runtime:
+    get:
+      tags: [agent]
+      summary: Read safe runtime configuration status
+      operationId: getAgentRuntimeStatus
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Runtime feature flags without secrets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRuntimeStatus"
+        "403":
+          description: Reviewer permission required
   /api/v1/agent/agents:
     get:
       tags: [agent]
@@ -914,6 +930,24 @@ components:
           enum: [off, proposal, auto]
         has_pipeline:
           type: boolean
+    AgentRuntimeStatus:
+      type: object
+      required:
+        [model_configured, judge_enabled, mcp_enabled, compaction_enabled,
+         tool_permission_mode, system_one_provider]
+      properties:
+        model_configured:
+          type: boolean
+        judge_enabled:
+          type: boolean
+        mcp_enabled:
+          type: boolean
+        compaction_enabled:
+          type: boolean
+        tool_permission_mode:
+          type: string
+        system_one_provider:
+          type: string
     AgentList:
       type: object
       required: [agents]

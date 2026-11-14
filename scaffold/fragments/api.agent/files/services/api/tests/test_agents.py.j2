@@ -1391,3 +1391,29 @@ def test_read_only_permission_mode_denies_ask_tools():
         )
     )
     assert denied.action is DecisionAction.DENY
+
+
+@pytest.mark.asyncio
+async def test_runtime_status_reports_safe_flags(client, app_instance) -> None:
+    from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
+
+    async def _admin_viewer():
+        return Viewer(
+            user_id=999999,
+            username="reviewer",
+            display_name="Reviewer",
+            must_change_password=False,
+            role_codes=frozenset({"admin"}),
+            permissions=frozenset({"*"}),
+        )
+
+    app_instance.dependency_overrides[get_current_user] = _admin_viewer
+    try:
+        response = await client.get("/api/v1/agent/runtime")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["tool_permission_mode"] == "scoped"
+        assert "model_configured" in body
+        assert "judge_enabled" in body
+    finally:
+        app_instance.dependency_overrides.clear()

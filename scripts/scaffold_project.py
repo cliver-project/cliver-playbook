@@ -1468,6 +1468,8 @@ def _self_test() -> int:
         assert (full_target / "apps/web/src/contracts/schema.d.ts").is_file()
         assert (full_target / "contracts/generated/python/models.py").is_file()
         assert (full_target / "apps/web/e2e/real-api.spec.ts").is_file()
+        assert (full_target / "apps/web/e2e/settings.spec.ts").is_file()
+        assert (full_target / "apps/web/src/features/settings/SettingsPage.tsx").is_file()
         assert "contracts:generate" in makefile
         assert "web-e2e-real" in makefile
         for line in makefile.splitlines():

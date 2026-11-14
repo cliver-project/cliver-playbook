@@ -29,6 +29,15 @@ class AgentListRead(BaseModel):
     agents: list[AgentDescriptorRead]
 
 
+class AgentRuntimeStatusRead(BaseModel):
+    model_configured: bool
+    judge_enabled: bool
+    mcp_enabled: bool
+    compaction_enabled: bool
+    tool_permission_mode: str
+    system_one_provider: str
+
+
 class AgentFeedbackRequest(BaseModel):
     agent: str = Field(min_length=1, max_length=64)
     rating: int = Field(ge=1, le=5)

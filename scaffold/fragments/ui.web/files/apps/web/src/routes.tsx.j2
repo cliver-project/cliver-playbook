@@ -10,6 +10,7 @@ import { productNavItems, productRoutes } from "./features/products/routes";
 {% endif %}
 {% if enabled('api.agent') %}
 import { governanceNavItems, governanceRoutes } from "./features/governance/routes";
+import { settingsNavItems, settingsRoutes } from "./features/settings/routes";
 {% endif %}
 
 import HomePage from "./pages/HomePage";
@@ -21,6 +22,7 @@ export const projectRoutes: RouteObject[] = [
 {% endif %}
 {% if enabled('api.agent') %}
   ...governanceRoutes,
+  ...settingsRoutes,
 {% endif %}
 ];
 
@@ -31,6 +33,7 @@ export const projectNavItems: AuthedNavItem[] = [
 {% endif %}
 {% if enabled('api.agent') %}
   ...governanceNavItems,
+  ...settingsNavItems,
 {% endif %}
 ];
 {% else %}
@@ -40,6 +43,7 @@ export const projectNavItems: NavItem[] = [
 {% endif %}
 {% if enabled('api.agent') %}
   ...governanceNavItems,
+  ...settingsNavItems,
 {% endif %}
 ];
 {% endif %}

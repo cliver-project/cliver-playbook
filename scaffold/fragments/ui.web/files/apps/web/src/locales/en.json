@@ -5,7 +5,8 @@
   "nav": {
     "home": "Home",
     "products": "Products",
-    "learning": "Agent learning"
+    "learning": "Agent learning",
+    "runtime": "Runtime settings"
   },
   "home": {
     "title": "Welcome",
@@ -65,5 +66,17 @@
     "rollback": "Roll back",
     "rollout": "Staged rollout",
     "applyRollout": "Apply rollout"
+  },
+  "settings": {
+    "title": "Runtime settings",
+    "subtitle": "Safe feature flags; credentials and endpoints are never shown.",
+    "modelConfigured": "API model",
+    "judgeEnabled": "LLM judge",
+    "mcpEnabled": "MCP",
+    "compactionEnabled": "Context compaction",
+    "permissionMode": "Tool permission mode",
+    "systemOne": "System One provider",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
   }
 }

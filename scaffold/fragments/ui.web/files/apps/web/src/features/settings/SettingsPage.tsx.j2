@@ -1,0 +1,58 @@
+{% if enabled('api.agent') %}
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+
+import { Card, CardContent, CardHeader, CardTitle, ErrorState, LoadingState } from "../../ui";
+import { getRuntimeStatus } from "./api";
+
+function readError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export default function SettingsPage() {
+  const { t } = useTranslation();
+  const status = useQuery({ queryKey: ["agent-runtime"], queryFn: getRuntimeStatus });
+
+  if (status.isPending) return <LoadingState />;
+  if (status.error) return <ErrorState message={readError(status.error)} />;
+
+  const data = status.data;
+  if (!data) return null;
+  const flags = [
+    ["modelConfigured", data.model_configured],
+    ["judgeEnabled", data.judge_enabled],
+    ["mcpEnabled", data.mcp_enabled],
+    ["compactionEnabled", data.compaction_enabled],
+  ] as const;
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4 md:p-8">
+      <header>
+        <h1 className="text-2xl font-semibold md:text-3xl">{t("settings.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t("settings.subtitle")}</p>
+      </header>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {flags.map(([key, enabled]) => (
+          <Card key={key}>
+            <CardHeader><CardTitle className="text-sm">{t(`settings.${key}`)}</CardTitle></CardHeader>
+            <CardContent className="text-lg font-semibold">
+              {enabled ? t("settings.enabled") : t("settings.disabled")}
+            </CardContent>
+          </Card>
+        ))}
+        <Card>
+          <CardHeader><CardTitle className="text-sm">{t("settings.permissionMode")}</CardTitle></CardHeader>
+          <CardContent className="text-lg font-semibold">{data.tool_permission_mode}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-sm">{t("settings.systemOne")}</CardTitle></CardHeader>
+          <CardContent className="text-lg font-semibold">
+            {data.system_one_provider || t("settings.disabled")}
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+{% endif %}

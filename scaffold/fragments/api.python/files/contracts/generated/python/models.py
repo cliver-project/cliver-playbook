@@ -214,6 +214,15 @@ class AgentDescriptor(BaseModel):
     has_pipeline: bool
 
 
+class AgentRuntimeStatus(BaseModel):
+    model_configured: bool
+    judge_enabled: bool
+    mcp_enabled: bool
+    compaction_enabled: bool
+    tool_permission_mode: str
+    system_one_provider: str
+
+
 class AgentList(BaseModel):
     agents: list[AgentDescriptor]
 

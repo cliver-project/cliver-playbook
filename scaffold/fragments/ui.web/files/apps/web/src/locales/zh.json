@@ -5,7 +5,8 @@
   "nav": {
     "home": "首页",
     "products": "产品",
-    "learning": "Agent 学习"
+    "learning": "Agent 学习",
+    "runtime": "运行时设置"
   },
   "home": {
     "title": "欢迎",
@@ -65,5 +66,17 @@
     "rollback": "回滚",
     "rollout": "分阶段发布",
     "applyRollout": "应用比例"
+  },
+  "settings": {
+    "title": "运行时设置",
+    "subtitle": "仅展示安全的功能开关；不会显示凭据或端点。",
+    "modelConfigured": "API 模型",
+    "judgeEnabled": "LLM 评审",
+    "mcpEnabled": "MCP",
+    "compactionEnabled": "上下文压缩",
+    "permissionMode": "工具权限模式",
+    "systemOne": "System One 提供方",
+    "enabled": "已启用",
+    "disabled": "未启用"
   }
 }

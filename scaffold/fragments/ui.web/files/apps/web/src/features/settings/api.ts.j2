@@ -1,0 +1,12 @@
+{% if enabled('api.agent') %}
+import { api } from "cliver-playbook-app-basic";
+
+import type { components } from "../../contracts/schema";
+
+export type AgentRuntimeStatus = components["schemas"]["AgentRuntimeStatus"];
+
+export async function getRuntimeStatus(): Promise<AgentRuntimeStatus> {
+  const response = await api.get<AgentRuntimeStatus>("/agent/runtime");
+  return response.data;
+}
+{% endif %}

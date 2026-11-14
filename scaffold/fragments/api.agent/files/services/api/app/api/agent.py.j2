@@ -86,6 +86,7 @@ from app.schemas.agent import (
     AgentRegressionRead,
     AgentRunCreated,
     AgentRunRequest,
+    AgentRuntimeStatusRead,
 )
 from cliver_playbook.app.basic.db.session import get_db, open_session
 from cliver_playbook.app.basic.settings import get_settings
@@ -771,6 +772,26 @@ async def reject_agent_proposal(
         proposal=_proposal_read(proposal),
         applied=False,
         requires_manual_apply=False,
+    )
+
+
+@router.get("/runtime", response_model=AgentRuntimeStatusRead)
+async def get_agent_runtime_status(
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+) -> AgentRuntimeStatusRead:
+{% if enabled('api.auth') %}
+    _require_reviewer(_viewer)
+{% endif %}
+    settings = get_settings()
+    return AgentRuntimeStatusRead(
+        model_configured=bool(settings.agent_llm_model.strip()),
+        judge_enabled=settings.agent_judge_enabled,
+        mcp_enabled=settings.agent_mcp_enabled,
+        compaction_enabled=settings.agent_compaction_enabled,
+        tool_permission_mode=settings.agent_tool_permission_mode,
+        system_one_provider=settings.agent_system_one_provider,
     )
 
 

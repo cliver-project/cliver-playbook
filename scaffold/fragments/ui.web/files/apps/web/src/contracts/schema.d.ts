@@ -320,6 +320,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read safe runtime configuration status */
+        get: operations["getAgentRuntimeStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/agents": {
         parameters: {
             query?: never;
@@ -658,6 +675,14 @@ export interface components {
             /** @enum {string} */
             autonomy_mode: false | "proposal" | "auto";
             has_pipeline: boolean;
+        };
+        AgentRuntimeStatus: {
+            model_configured: boolean;
+            judge_enabled: boolean;
+            mcp_enabled: boolean;
+            compaction_enabled: boolean;
+            tool_permission_mode: string;
+            system_one_provider: string;
         };
         AgentList: {
             agents: components["schemas"]["AgentDescriptor"][];
@@ -1410,6 +1435,33 @@ export interface operations {
             };
             /** @description Agent or config version not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentRuntimeStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime feature flags without secrets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRuntimeStatus"];
+                };
+            };
+            /** @description Reviewer permission required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
