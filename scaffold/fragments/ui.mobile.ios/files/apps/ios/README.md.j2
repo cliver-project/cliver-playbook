@@ -43,7 +43,8 @@ apps/ios/
     Sources/App/RootView.swift # adaptive shell and auth gate
     Tests/AppTests/           # app-level smoke tests
   Packages/
-    Core/                     # API client, models, session, design tokens
+    Contracts/                # generated wire client (do not edit by hand)
+    Core/                     # API client, model aliases, session, design tokens
 {% if enabled('ui.mobile.auth') %}
     FeatureAuth/              # sign-in and registration
 {% endif %}
@@ -57,6 +58,25 @@ apps/ios/
 
 Generated files belong to the project. Change them freely; the scaffold is not
 a runtime dependency and will not overwrite the app.
+
+## Generated API client
+
+`Packages/Contracts` is generated from `contracts/openapi.yaml` with OpenAPI
+Generator (Swift 5, async/await). `Core` re-exports the generated models as
+`User`, `AuthSession`, `Product` and friends, and its `APIClient` calls the
+generated `AuthAPI`, `ProductsAPI` and `AgentAPI`. The SSE stream stays a small
+custom transport because OpenAPI does not model server-sent events.
+
+Do not edit `Packages/Contracts` by hand. After changing a contract fragment:
+
+```sh
+./scripts/generate-contracts.sh          # from apps/ios
+```
+
+`scripts/generate-contracts.sh --check` verifies the recorded contract hash;
+`--verify` regenerates in a temporary directory and diffs the result. Both
+need Node and Java 17+. Generation is also wired to `make contracts` and
+`make contracts-verify-native` at the project root.
 
 ## UI seam
 

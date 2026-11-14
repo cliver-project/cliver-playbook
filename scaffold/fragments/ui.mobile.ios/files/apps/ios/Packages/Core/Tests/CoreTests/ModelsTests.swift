@@ -22,7 +22,9 @@ final class ModelsTests: XCTestCase {
         }
         """
 
-        let session = try JSONDecoder().decode(
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let session = try decoder.decode(
             AuthSession.self,
             from: Data(json.utf8)
         )
@@ -37,7 +39,10 @@ final class ModelsTests: XCTestCase {
         XCTAssertTrue(session.user.isActive)
         XCTAssertEqual(session.user.roleCodes, ["admin", "member"])
         XCTAssertEqual(session.user.permissions, ["products.read", "products.write"])
-        XCTAssertEqual(session.user.createdAt, "2026-01-02T03:04:05Z")
+        XCTAssertEqual(
+            session.user.createdAt,
+            ISO8601DateFormatter().date(from: "2026-01-02T03:04:05Z")
+        )
     }
 
     func testDecodesProduct() throws {
@@ -52,13 +57,18 @@ final class ModelsTests: XCTestCase {
         }
         """
 
-        let product = try JSONDecoder().decode(Product.self, from: Data(json.utf8))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let product = try decoder.decode(Product.self, from: Data(json.utf8))
 
         XCTAssertEqual(product.id, 3)
         XCTAssertEqual(product.name, "Reference widget")
         XCTAssertEqual(product.description, "Replace with the project's domain.")
         XCTAssertEqual(product.priceCents, 1999)
-        XCTAssertEqual(product.updatedAt, "2026-01-03T04:05:06Z")
+        XCTAssertEqual(
+            product.updatedAt,
+            ISO8601DateFormatter().date(from: "2026-01-03T04:05:06Z")
+        )
     }
 
     func testDefaultBaseURLIsTheDocumentedLocalDevelopmentURL() {

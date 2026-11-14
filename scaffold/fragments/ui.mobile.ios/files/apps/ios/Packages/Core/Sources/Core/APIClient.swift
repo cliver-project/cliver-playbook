@@ -1,3 +1,4 @@
+import Contracts
 import Foundation
 
 public enum APIError: Error, LocalizedError {
@@ -37,8 +38,6 @@ public final class APIClient: @unchecked Sendable {
     public let baseURL: URL
 
     private let session: URLSession
-    private let decoder = JSONDecoder()
-    private let encoder = JSONEncoder()
     private let lock = NSLock()
     private var token: String?
     private var unauthorizedHandler: (@Sendable () async -> Void)?
@@ -46,6 +45,10 @@ public final class APIClient: @unchecked Sendable {
     public init(baseURL: URL? = nil, session: URLSession = .shared) {
         self.baseURL = baseURL ?? APIClient.configuredBaseURL()
         self.session = session
+        var components = URLComponents(url: self.baseURL, resolvingAgainstBaseURL: false)
+        components?.path = ""
+        components?.query = nil
+        ContractsAPI.basePath = components?.url?.absoluteString ?? self.baseURL.absoluteString
     }
 
     public static func configuredBaseURL(
@@ -63,8 +66,13 @@ public final class APIClient: @unchecked Sendable {
     /// Sets the bearer token used for authenticated requests.
     public func setToken(_ token: String?) {
         lock.lock()
-        defer { lock.unlock() }
         self.token = token
+        lock.unlock()
+        if let token, !token.isEmpty {
+            ContractsAPI.customHeaders["Authorization"] = "Bearer \(token)"
+        } else {
+            ContractsAPI.customHeaders.removeValue(forKey: "Authorization")
+        }
     }
 
     /// Called exactly once per authenticated 401 response, after the client
@@ -79,12 +87,11 @@ public final class APIClient: @unchecked Sendable {
     // MARK: - Auth
 
     public func login(username: String, password: String) async throws -> AuthSession {
-        try await request(
-            "POST",
-            path: "/auth/login",
-            body: LoginRequest(username: username, password: password),
-            authenticated: false
-        )
+        try await perform {
+            try await AuthAPI.login(
+                loginRequest: Contracts.LoginRequest(username: username, password: password)
+            )
+        }
     }
 
     public func register(
@@ -93,21 +100,20 @@ public final class APIClient: @unchecked Sendable {
         email: String?,
         displayName: String?
     ) async throws -> AuthSession {
-        try await request(
-            "POST",
-            path: "/auth/register",
-            body: RegisterRequest(
-                username: username,
-                password: password,
-                email: email,
-                displayName: displayName
-            ),
-            authenticated: false
-        )
+        try await perform {
+            try await AuthAPI.register(
+                registerRequest: Contracts.RegisterRequest(
+                    username: username,
+                    password: password,
+                    email: email,
+                    displayName: displayName
+                )
+            )
+        }
     }
 
     public func me() async throws -> User {
-        let response: MeResponse = try await request("GET", path: "/auth/me")
+        let response = try await perform { try await AuthAPI.me() }
         return response.user
     }
 
@@ -116,33 +122,31 @@ public final class APIClient: @unchecked Sendable {
         phone: String?,
         displayName: String?
     ) async throws -> User {
-        let response: MeResponse = try await request(
-            "PATCH",
-            path: "/auth/profile",
-            body: ProfileUpdateRequest(
-                email: email,
-                phone: phone,
-                displayName: displayName
+        let response = try await perform {
+            try await AuthAPI.updateProfile(
+                profileUpdate: Contracts.ProfileUpdate(
+                    email: email,
+                    phone: phone,
+                    displayName: displayName
+                )
             )
-        )
+        }
         return response.user
     }
 
     // MARK: - Products
 
     public func products(limit: Int = 50, offset: Int = 0) async throws -> [Product] {
-        try await request(
-            "GET",
-            path: "/products",
-            query: [
-                URLQueryItem(name: "limit", value: String(limit)),
-                URLQueryItem(name: "offset", value: String(offset)),
-            ]
-        )
+        try await perform {
+            try await ProductsAPI.listProducts(
+                limit: Int64(limit),
+                offset: Int64(offset)
+            )
+        }
     }
 
-    public func product(id: Int) async throws -> Product {
-        try await request("GET", path: "/products/\(id)")
+    public func product(id: Int64) async throws -> Product {
+        try await perform { try await ProductsAPI.getProduct(productId: id) }
     }
 
     public func createProduct(
@@ -150,63 +154,54 @@ public final class APIClient: @unchecked Sendable {
         description: String,
         priceCents: Int
     ) async throws -> Product {
-        try await request(
-            "POST",
-            path: "/products",
-            body: ProductCreateRequest(
-                name: name,
-                description: description,
-                priceCents: priceCents
+        try await perform {
+            try await ProductsAPI.createProduct(
+                productCreate: Contracts.ProductCreate(
+                    name: name,
+                    description: description,
+                    priceCents: priceCents
+                )
             )
-        )
+        }
     }
 
     public func updateProduct(
-        id: Int,
+        id: Int64,
         name: String,
         description: String,
         priceCents: Int
     ) async throws -> Product {
-        try await request(
-            "PATCH",
-            path: "/products/\(id)",
-            body: ProductUpdateRequest(
-                name: name,
-                description: description,
-                priceCents: priceCents
+        try await perform {
+            try await ProductsAPI.updateProduct(
+                productId: id,
+                productUpdate: Contracts.ProductUpdate(
+                    name: name,
+                    description: description,
+                    priceCents: priceCents
+                )
             )
-        )
+        }
     }
 
-    public func deleteProduct(id: Int) async throws {
-        _ = try await send("DELETE", path: "/products/\(id)")
+    public func deleteProduct(id: Int64) async throws {
+        try await perform { try await ProductsAPI.deleteProduct(productId: id) }
     }
 
     // MARK: - Agent runs
 
     /// Start a coordinator run and return its id.
     public func startAgentRun(message: String) async throws -> String {
-        struct Body: Encodable {
-            let message: String
+        let created = try await perform {
+            try await AgentAPI.createAgentRun(
+                agentRunRequest: Contracts.AgentRunRequest(message: message)
+            )
         }
-        struct Created: Decodable {
-            let runID: String
-
-            private enum CodingKeys: String, CodingKey {
-                case runID = "run_id"
-            }
-        }
-        let created: Created = try await request(
-            "POST",
-            path: "/agent/runs",
-            body: Body(message: message)
-        )
-        return created.runID
+        return created.runId
     }
 
     /// Ask the API to cancel a run. Best-effort from the chat surface.
     public func cancelAgentRun(runID: String) async throws {
-        _ = try await send("POST", path: "/agent/runs/\(runID)/cancel")
+        try await perform { try await AgentAPI.cancelAgentRun(runId: runID) }
     }
 
     /// Attach the user's outcome rating to one completed run.
@@ -216,16 +211,37 @@ public final class APIClient: @unchecked Sendable {
         rating: Int,
         comment: String = ""
     ) async throws {
-        struct Body: Encodable {
-            let agent: String
-            let rating: Int
-            let comment: String
+        _ = try await perform {
+            try await AgentAPI.submitAgentFeedback(
+                runId: runID,
+                agentFeedbackRequest: Contracts.AgentFeedbackRequest(
+                    agent: agent,
+                    rating: Int64(rating),
+                    comment: comment
+                )
+            )
         }
-        _ = try await send(
-            "POST",
-            path: "/agent/runs/\(runID)/feedback",
-            body: Body(agent: agent, rating: rating, comment: comment)
-        )
+    }
+
+    /// Map generated-client failures to the existing APIError surface and run
+    /// the session-expiry handler exactly once on a 401.
+    private func perform<T>(_ operation: () async throws -> T) async throws -> T {
+        do {
+            return try await operation()
+        } catch let ErrorResponse.error(status, data, _, underlying) {
+            if status == 401 {
+                setToken(nil)
+                await notifyUnauthorized()
+                throw APIError.unauthorized
+            }
+            let message = data.flatMap { APIClient.serverMessage(from: $0) }
+                ?? underlying.localizedDescription
+            throw APIError.http(status: status, message: message)
+        } catch let error as APIError {
+            throw error
+        } catch {
+            throw APIError.transport(error)
+        }
     }
 
     /// Stream typed events for a run until the server closes the response.
@@ -362,83 +378,6 @@ public final class APIClient: @unchecked Sendable {
     }
 
     // MARK: - Transport
-
-    private func request<T: Decodable>(
-        _ method: String,
-        path: String,
-        query: [URLQueryItem] = [],
-        body: (any Encodable)? = nil,
-        authenticated: Bool = true
-    ) async throws -> T {
-        let data = try await send(
-            method,
-            path: path,
-            query: query,
-            body: body,
-            authenticated: authenticated
-        )
-        do {
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            throw APIError.decoding(error)
-        }
-    }
-
-    @discardableResult
-    private func send(
-        _ method: String,
-        path: String,
-        query: [URLQueryItem] = [],
-        body: (any Encodable)? = nil,
-        authenticated: Bool = true
-    ) async throws -> Data {
-        let url = try makeURL(path: path, query: query)
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        if let body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            do {
-                request.httpBody = try encoder.encode(body)
-            } catch {
-                throw APIError.decoding(error)
-            }
-        }
-
-        if authenticated, let token = currentToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        do {
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw APIError.invalidResponse
-            }
-
-            if http.statusCode == 401, authenticated {
-                setToken(nil)
-                await notifyUnauthorized()
-                throw APIError.unauthorized
-            }
-
-            guard (200..<300).contains(http.statusCode) else {
-                throw APIError.http(
-                    status: http.statusCode,
-                    message: APIClient.serverMessage(from: data) ?? "Request failed"
-                )
-            }
-            return data
-        } catch let error as APIError {
-            throw error
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as URLError where error.code == .cancelled {
-            throw CancellationError()
-        } catch {
-            throw APIError.transport(error)
-        }
-    }
 
     private func makeURL(path: String, query: [URLQueryItem]) throws -> URL {
         guard var components = URLComponents(

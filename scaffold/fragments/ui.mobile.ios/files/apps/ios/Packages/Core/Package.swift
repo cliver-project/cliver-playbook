@@ -12,8 +12,15 @@ let package = Package(
     products: [
         .library(name: "Core", targets: ["Core"]),
     ],
+    dependencies: [
+        .package(path: "../Contracts"),
+    ],
     targets: [
-        .target(name: "Core", path: "Sources/Core"),
+        .target(
+            name: "Core",
+            dependencies: [.product(name: "Contracts", package: "Contracts")],
+            path: "Sources/Core"
+        ),
         .testTarget(name: "CoreTests", dependencies: ["Core"], path: "Tests/CoreTests"),
     ]
 )
