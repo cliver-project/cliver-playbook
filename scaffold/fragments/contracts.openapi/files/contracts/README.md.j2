@@ -18,10 +18,23 @@ Generated clients:
   `openapi-typescript`; regenerate with `make contracts`.
 - `contracts/generated/python/models.py` — Pydantic models from
   `datamodel-code-generator`; regenerate with `make contracts`.
+{% if enabled('ui.mobile.ios') %}
+- `apps/ios/Packages/Contracts/` — Swift client from OpenAPI Generator
+  (`swift5`, async/await); regenerate with
+  `apps/ios/scripts/generate-contracts.sh`.
+{% endif %}
+{% if enabled('ui.mobile.android') %}
+- `apps/android/contracts/` — Kotlin client from OpenAPI Generator
+  (`jvm-okhttp4`, Gson, coroutines); regenerate with
+  `apps/android/scripts/generate-contracts.sh`.
+{% endif %}
 
-Both are checked for staleness by `make contracts-check`. Swift, Kotlin and
-Rust clients remain later; the native apps use hand-written DTOs against the
-same shapes.
+Every generated client is checked for staleness by `make contracts-check`.
+{% if enabled('ui.mobile.ios') or enabled('ui.mobile.android') %}
+Native clients record the contract SHA-256 in `.contract-client.json`;
+`make contracts-verify-native` regenerates them in a temporary directory and
+diffs the result, which requires Node and Java 17+.
+{% endif %}
 
 ## Versioning and deprecation
 

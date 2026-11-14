@@ -1,0 +1,40 @@
+{% if enabled('contracts.openapi') and (enabled('ui.mobile.ios') or enabled('ui.mobile.android')) %}
+name: Native contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "apps/ios/Packages/Contracts/**"
+      - "apps/android/contracts/**"
+      - "apps/ios/scripts/generate-contracts.sh"
+      - "apps/android/scripts/generate-contracts.sh"
+      - ".github/workflows/native-contracts.yml"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "apps/ios/Packages/Contracts/**"
+      - "apps/android/contracts/**"
+      - "apps/ios/scripts/generate-contracts.sh"
+      - "apps/android/scripts/generate-contracts.sh"
+      - ".github/workflows/native-contracts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Regenerate native clients and diff
+        run: make contracts-verify-native
+{% endif %}

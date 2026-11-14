@@ -80,6 +80,12 @@ contracts: ## Compose the OpenAPI fragments and regenerate clients
 {% if enabled('ui.web') %}
 	pnpm --filter $(WEB_FILTER) contracts:generate
 {% endif %}
+{% if enabled('ui.mobile.ios') %}
+	apps/ios/scripts/generate-contracts.sh
+{% endif %}
+{% if enabled('ui.mobile.android') %}
+	apps/android/scripts/generate-contracts.sh
+{% endif %}
 
 .PHONY: contracts-check
 contracts-check: ## Fail when the composed contract or a generated client is stale
@@ -89,6 +95,23 @@ contracts-check: ## Fail when the composed contract or a generated client is sta
 {% endif %}
 {% if enabled('ui.web') %}
 	pnpm --filter $(WEB_FILTER) contracts:check
+{% endif %}
+{% if enabled('ui.mobile.ios') %}
+	apps/ios/scripts/generate-contracts.sh --check
+{% endif %}
+{% if enabled('ui.mobile.android') %}
+	apps/android/scripts/generate-contracts.sh --check
+{% endif %}
+{% endif %}
+
+{% if enabled('ui.mobile.ios') or enabled('ui.mobile.android') %}
+.PHONY: contracts-verify-native
+contracts-verify-native: ## Regenerate native clients in a temp dir and diff them
+{% if enabled('ui.mobile.ios') %}
+	apps/ios/scripts/generate-contracts.sh --verify
+{% endif %}
+{% if enabled('ui.mobile.android') %}
+	apps/android/scripts/generate-contracts.sh --verify
 {% endif %}
 {% endif %}
 

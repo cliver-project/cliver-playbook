@@ -936,12 +936,13 @@ def _self_test() -> int:
     assert catalog_errors == [], catalog_errors
 
     fragment_dirs = {path.name for path in FRAGMENTS_DIR.iterdir() if path.is_dir()}
-    assert fragment_dirs <= set(catalog["modules"]), fragment_dirs - set(catalog["modules"])
+    assert fragment_dirs <= set(catalog["modules"]), fragment_dirs - set(
+        catalog["modules"]
+    )
     missing_fragments = {
         module
         for module, entry in catalog["modules"].items()
-        if entry.get("outputs")
-        and not (FRAGMENTS_DIR / module / "files").is_dir()
+        if entry.get("outputs") and not (FRAGMENTS_DIR / module / "files").is_dir()
     }
     assert missing_fragments == {"api.rust", "api.agentcore"}, missing_fragments
     for module, entry in catalog["modules"].items():
@@ -1424,7 +1425,10 @@ def _self_test() -> int:
         try:
             apply_project(rust, schema, catalog, Path(temporary) / "rust-bff")
         except ScaffoldError as exc:
-            assert any("api.rust" in error and "not implemented" in error for error in exc.errors), exc.errors
+            assert any(
+                "api.rust" in error and "not implemented" in error
+                for error in exc.errors
+            ), exc.errors
         else:
             raise AssertionError("applied the unimplemented Rust BFF profile")
 
@@ -1468,13 +1472,49 @@ def _self_test() -> int:
         assert (full_target / "services/api/scripts/contract_test.py").is_file()
         assert (full_target / "apps/web/src/contracts/schema.d.ts").is_file()
         assert (full_target / "contracts/generated/python/models.py").is_file()
+        for relative in (
+            "apps/ios/Packages/Contracts/Package.swift",
+            "apps/ios/Packages/Contracts/Contracts/Classes/OpenAPIs/APIs/AuthAPI.swift",
+            "apps/ios/Packages/Contracts/.contract-client.json",
+            "apps/android/contracts/src/main/kotlin/com/example/android/contracts/apis/AuthApi.kt",
+            "apps/android/contracts/.contract-client.json",
+        ):
+            assert (full_target / relative).is_file(), relative
+        for relative in (
+            "apps/ios/scripts/generate-contracts.sh",
+            "apps/android/scripts/generate-contracts.sh",
+        ):
+            script = full_target / relative
+            assert script.is_file(), relative
+            assert script.stat().st_mode & 0o111, f"{relative} must be executable"
+        assert ":contracts" in (
+            full_target / "apps/android/settings.gradle.kts"
+        ).read_text(encoding="utf-8")
+        for relative in (
+            "apps/ios/scripts/generate-contracts.sh",
+            "apps/android/scripts/generate-contracts.sh",
+        ):
+            check = subprocess.run(
+                [str(full_target / relative), "--check"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            assert check.returncode == 0, f"{relative}: {check.stderr}"
         assert (full_target / "apps/web/e2e/real-api.spec.ts").is_file()
         assert (full_target / "apps/web/e2e/settings.spec.ts").is_file()
-        assert (full_target / "apps/web/src/features/settings/SettingsPage.tsx").is_file()
+        assert (
+            full_target / "apps/web/src/features/settings/SettingsPage.tsx"
+        ).is_file()
         assert "contracts:generate" in makefile
+        assert "apps/ios/scripts/generate-contracts.sh --check" in makefile
+        assert "apps/android/scripts/generate-contracts.sh --check" in makefile
+        assert "contracts-verify-native" in makefile
         assert "web-e2e-real" in makefile
         for line in makefile.splitlines():
-            if line.startswith(("DEV_TARGETS :=", "CHECK_TARGETS :=", "BUILD_TARGETS :=")):
+            if line.startswith(
+                ("DEV_TARGETS :=", "CHECK_TARGETS :=", "BUILD_TARGETS :=")
+            ):
                 assert line.count(":=") == 1, f"joined make assignment: {line}"
         migrations_dir = full_target / "services/api/app/migrations/versions"
         for migration in migrations_dir.glob("*.py"):
@@ -1482,18 +1522,16 @@ def _self_test() -> int:
             assert "\nCreate Date:" in migration_text, (
                 f"{migration.name}: joined Revises/Create Date metadata"
             )
-        api_ci = (
-            full_target / ".github/workflows/api.yml"
-        ).read_text(encoding="utf-8")
+        api_ci = (full_target / ".github/workflows/api.yml").read_text(encoding="utf-8")
         assert "scripts/contract_test.py" in api_ci
-        desktop_ci = (
-            full_target / ".github/workflows/desktop.yml"
-        ).read_text(encoding="utf-8")
+        desktop_ci = (full_target / ".github/workflows/desktop.yml").read_text(
+            encoding="utf-8"
+        )
         assert "pnpm tauri build --bundles app" in desktop_ci
         assert "pnpm tauri build --bundles deb" in desktop_ci
-        mobile_ci = (
-            full_target / ".github/workflows/mobile.yml"
-        ).read_text(encoding="utf-8")
+        mobile_ci = (full_target / ".github/workflows/mobile.yml").read_text(
+            encoding="utf-8"
+        )
         assert "swift test" in mobile_ci
         assert "./gradlew assembleDebug testDebugUnitTest" in mobile_ci
         for workflow in (full_target / ".github/workflows").glob("*.yml"):
