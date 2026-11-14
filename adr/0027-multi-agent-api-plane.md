@@ -275,6 +275,16 @@ endpoint no longer consults a process-local task registry: a running run is
 orphaned only when its heartbeat is stale. Queued runs wait for a consumer;
 they are not failed as orphans.
 
+MCP discovery and auth are opt-in. `CLIVER_AGENT_MCP_ENABLED` plus a
+gitignored `CLIVER_AGENT_MCP_CONFIG` file feed cliver-core discovery; `${VAR}`
+expansion keeps tokens in the environment, and discovery problems are logged
+without config values. A per-run `MCPClient` is started after the run is
+claimed and closed in the worker's `finally`; a discovery or start failure
+leaves the run without MCP tools rather than failing it. Per-agent allow-lists
+and the intent selector still narrow the connected servers. A shared
+process-wide client is a later optimization; no live MCP server was available
+in this environment, so only the discovery/config seam is verified offline.
+
 MCP server selection is a separate seam from the System One tool/skill
 selector. The agent's static `mcp_servers` list is an allow-list, the run's
 `mcp_servers` resource is the deployed catalogue, and a replaceable

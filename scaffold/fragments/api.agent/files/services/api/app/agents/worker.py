@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.agents.contracts import AgentContext
 from app.agents.events import EventStore, broadcaster
+from app.agents.mcp_runtime import close_mcp_runtime, open_mcp_runtime
 from app.agents.proposals import build_proposal_generator
 from app.agents.runs import DatabaseRunStore
 from cliver_playbook.app.basic.db.session import open_session
@@ -61,6 +62,7 @@ async def execute_run(
     learning_db = open_session()
     store = DatabaseRunStore(store_db)
     events = EventStore(store_db)
+    mcp_runtime = None
     context = AgentContext(
         run_id=run_id,
         message=message,
@@ -75,6 +77,16 @@ async def execute_run(
     try:
         if not already_claimed and not await store.claim(run_id):
             return  # cancelled while queued, or another worker claimed it
+
+        mcp_runtime = await open_mcp_runtime(settings)
+        if mcp_runtime is not None:
+            context.resources.update(
+                {
+                    "mcp_client": mcp_runtime.client,
+                    "mcp_servers": list(mcp_runtime.servers),
+                    "mcp_server_catalog": list(mcp_runtime.descriptors),
+                }
+            )
 
         queue: asyncio.Queue[dict | None] = asyncio.Queue(maxsize=_QUEUE_CAPACITY)
         failures: list[BaseException] = []
@@ -151,6 +163,7 @@ async def execute_run(
             await store_db.rollback()
             await fail_run(store, events, run_id, code="agent_error", message=str(exc))
     finally:
+        await close_mcp_runtime(mcp_runtime)
         with contextlib.suppress(Exception):
             await store_db.close()
         with contextlib.suppress(Exception):

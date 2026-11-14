@@ -42,6 +42,11 @@ class Settings(PlaybookSettings):
     # Optional semantic judge for golden-set approval. Enabling it without a
     # configured model fails closed; deterministic assertions always run too.
     agent_judge_enabled: bool = False
+    # MCP is opt-in. Config paths are deployment data and stay out of git;
+    # ${VAR} expansion in the config keeps tokens in the environment.
+    agent_mcp_enabled: bool = False
+    agent_mcp_config: str = ""
+    agent_mcp_extra_paths: str = ""
     # Run eventing: subscriber poll, worker tick, orphan threshold and SSE
     # keepalive. A run whose worker vanished (crashed process) is marked
     # failed after the orphan threshold instead of tailing forever.

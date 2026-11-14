@@ -1,0 +1,53 @@
+import json
+
+from app.agents.mcp_runtime import (
+    build_mcp_client,
+    descriptors_from_discovery,
+    discover_servers,
+)
+from app.settings import Settings
+
+
+def _server_config(tmp_path):
+    path = tmp_path / "mcp.json"
+    path.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "knowledge": {
+                        "transport": "stdio",
+                        "command": "mcp-example",
+                        "args": [],
+                        "env": {"API_TOKEN": "${MCP_API_TOKEN}"},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_mcp_discovery_reads_configured_file_and_redacts_secrets(tmp_path):
+    path = _server_config(tmp_path)
+    settings = Settings(
+        agent_mcp_enabled=True,
+        agent_mcp_config=str(path),
+    )
+
+    discovery = discover_servers(settings)
+
+    assert "knowledge" in discovery.servers
+    assert discovery.redacted()["knowledge"]["env"]["API_TOKEN"] == "***"
+    descriptors = descriptors_from_discovery(discovery)
+    assert descriptors[0].name == "knowledge"
+
+
+def test_mcp_client_is_opt_in(tmp_path):
+    path = _server_config(tmp_path)
+    disabled = Settings(agent_mcp_enabled=False, agent_mcp_config=str(path))
+    assert build_mcp_client(disabled) is None
+
+    enabled = Settings(agent_mcp_enabled=True, agent_mcp_config=str(path))
+    client = build_mcp_client(enabled)
+    assert client is not None
