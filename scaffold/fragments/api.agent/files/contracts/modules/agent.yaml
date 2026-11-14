@@ -101,6 +101,63 @@ paths:
           description: Run, agent or observed experience not found
         "422":
           description: Invalid rating, agent or step
+  /api/v1/agent/sessions:
+    get:
+      tags: [agent]
+      summary: List recent conversation sessions
+      operationId: listAgentSessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Sessions owned by the current user, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSessionList"
+  /api/v1/agent/sessions/{session_id}:
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+    get:
+      tags: [agent]
+      summary: Read a conversation session and its replayable run events
+      operationId: getAgentSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum runs to return, newest selected first and replayed oldest-first.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Session runs with stored events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSessionDetail"
+        "404":
+          description: No runs for this session belong to the current user
   /api/v1/agent/proposals:
     get:
       tags: [agent]
@@ -948,6 +1005,65 @@ components:
           type: string
         system_one_provider:
           type: string
+        model_provider:
+          type: string
+        model_name:
+          type: string
+        mcp_servers:
+          type: array
+          items:
+            type: string
+    AgentSessionRead:
+      type: object
+      required: [session_id, last_message, run_count, updated_at]
+      properties:
+        session_id:
+          type: string
+        last_message:
+          type: string
+        run_count:
+          type: integer
+          minimum: 1
+        updated_at:
+          type: string
+          format: date-time
+    AgentSessionList:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSessionRead"
+    AgentSessionRunRead:
+      type: object
+      required: [run_id, message, status, created_at, events]
+      properties:
+        run_id:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        events:
+          type: array
+          description: Stored run events in sequence order, capped per run.
+          items:
+            type: object
+            additionalProperties: true
+    AgentSessionDetail:
+      type: object
+      required: [session_id, runs]
+      properties:
+        session_id:
+          type: string
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSessionRunRead"
     AgentList:
       type: object
       required: [agents]

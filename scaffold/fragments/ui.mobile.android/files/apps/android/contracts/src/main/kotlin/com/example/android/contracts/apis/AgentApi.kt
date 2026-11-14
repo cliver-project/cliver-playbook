@@ -48,6 +48,8 @@ import com.example.android.contracts.models.AgentRegression
 import com.example.android.contracts.models.AgentRunCreated
 import com.example.android.contracts.models.AgentRunRequest
 import com.example.android.contracts.models.AgentRuntimeStatus
+import com.example.android.contracts.models.AgentSessionDetail
+import com.example.android.contracts.models.AgentSessionList
 
 import com.google.gson.annotations.SerializedName
 
@@ -801,6 +803,87 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
     }
 
     /**
+     * GET /api/v1/agent/sessions/{session_id}
+     * Read a conversation session and its replayable run events
+     * 
+     * @param sessionId 
+     * @param limit Maximum runs to return, newest selected first and replayed oldest-first. (optional, default to 20)
+     * @return AgentSessionDetail
+     * @throws IllegalStateException If the request is not correctly configured
+     * @throws IOException Rethrows the OkHttp execute method exception
+     * @throws UnsupportedOperationException If the API returns an informational or redirection response
+     * @throws ClientException If the API returns a client error response
+     * @throws ServerException If the API returns a server error response
+     */
+    @Suppress("UNCHECKED_CAST")
+    @Throws(IllegalStateException::class, IOException::class, UnsupportedOperationException::class, ClientException::class, ServerException::class)
+    suspend fun getAgentSession(sessionId: kotlin.String, limit: kotlin.Int? = 20) : AgentSessionDetail = withContext(Dispatchers.IO) {
+        val localVarResponse = getAgentSessionWithHttpInfo(sessionId = sessionId, limit = limit)
+
+        return@withContext when (localVarResponse.responseType) {
+            ResponseType.Success -> (localVarResponse as Success<*>).data as AgentSessionDetail
+            ResponseType.Informational -> throw UnsupportedOperationException("Client does not support Informational responses.")
+            ResponseType.Redirection -> throw UnsupportedOperationException("Client does not support Redirection responses.")
+            ResponseType.ClientError -> {
+                val localVarError = localVarResponse as ClientError<*>
+                throw ClientException("Client error : ${localVarError.statusCode} ${localVarError.message.orEmpty()}", localVarError.statusCode, localVarResponse)
+            }
+            ResponseType.ServerError -> {
+                val localVarError = localVarResponse as ServerError<*>
+                throw ServerException("Server error : ${localVarError.statusCode} ${localVarError.message.orEmpty()} ${localVarError.body}", localVarError.statusCode, localVarResponse)
+            }
+        }
+    }
+
+    /**
+     * GET /api/v1/agent/sessions/{session_id}
+     * Read a conversation session and its replayable run events
+     * 
+     * @param sessionId 
+     * @param limit Maximum runs to return, newest selected first and replayed oldest-first. (optional, default to 20)
+     * @return ApiResponse<AgentSessionDetail?>
+     * @throws IllegalStateException If the request is not correctly configured
+     * @throws IOException Rethrows the OkHttp execute method exception
+     */
+    @Suppress("UNCHECKED_CAST")
+    @Throws(IllegalStateException::class, IOException::class)
+    suspend fun getAgentSessionWithHttpInfo(sessionId: kotlin.String, limit: kotlin.Int?) : ApiResponse<AgentSessionDetail?> = withContext(Dispatchers.IO) {
+        val localVariableConfig = getAgentSessionRequestConfig(sessionId = sessionId, limit = limit)
+
+        return@withContext request<Unit, AgentSessionDetail>(
+            localVariableConfig
+        )
+    }
+
+    /**
+     * To obtain the request config of the operation getAgentSession
+     *
+     * @param sessionId 
+     * @param limit Maximum runs to return, newest selected first and replayed oldest-first. (optional, default to 20)
+     * @return RequestConfig
+     */
+    fun getAgentSessionRequestConfig(sessionId: kotlin.String, limit: kotlin.Int?) : RequestConfig<Unit> {
+        val localVariableBody = null
+        val localVariableQuery: MultiValueMap = mutableMapOf<kotlin.String, kotlin.collections.List<kotlin.String>>()
+            .apply {
+                if (limit != null) {
+                    put("limit", listOf(limit.toString()))
+                }
+            }
+        val localVariableHeaders: MutableMap<String, String> = mutableMapOf()
+        localVariableHeaders["Accept"] = "application/json"
+
+        return RequestConfig(
+            method = RequestMethod.GET,
+            path = "/api/v1/agent/sessions/{session_id}".replace("{"+"session_id"+"}", encodeURIComponent(sessionId.toString())),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = true,
+            body = localVariableBody
+        )
+    }
+
+    /**
      * GET /api/v1/agent/agents
      * List the coordinator&#39;s registered sub-agents
      * 
@@ -1193,6 +1276,84 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
         return RequestConfig(
             method = RequestMethod.GET,
             path = "/api/v1/agent/proposals",
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = true,
+            body = localVariableBody
+        )
+    }
+
+    /**
+     * GET /api/v1/agent/sessions
+     * List recent conversation sessions
+     * 
+     * @param limit  (optional, default to 50)
+     * @return AgentSessionList
+     * @throws IllegalStateException If the request is not correctly configured
+     * @throws IOException Rethrows the OkHttp execute method exception
+     * @throws UnsupportedOperationException If the API returns an informational or redirection response
+     * @throws ClientException If the API returns a client error response
+     * @throws ServerException If the API returns a server error response
+     */
+    @Suppress("UNCHECKED_CAST")
+    @Throws(IllegalStateException::class, IOException::class, UnsupportedOperationException::class, ClientException::class, ServerException::class)
+    suspend fun listAgentSessions(limit: kotlin.Int? = 50) : AgentSessionList = withContext(Dispatchers.IO) {
+        val localVarResponse = listAgentSessionsWithHttpInfo(limit = limit)
+
+        return@withContext when (localVarResponse.responseType) {
+            ResponseType.Success -> (localVarResponse as Success<*>).data as AgentSessionList
+            ResponseType.Informational -> throw UnsupportedOperationException("Client does not support Informational responses.")
+            ResponseType.Redirection -> throw UnsupportedOperationException("Client does not support Redirection responses.")
+            ResponseType.ClientError -> {
+                val localVarError = localVarResponse as ClientError<*>
+                throw ClientException("Client error : ${localVarError.statusCode} ${localVarError.message.orEmpty()}", localVarError.statusCode, localVarResponse)
+            }
+            ResponseType.ServerError -> {
+                val localVarError = localVarResponse as ServerError<*>
+                throw ServerException("Server error : ${localVarError.statusCode} ${localVarError.message.orEmpty()} ${localVarError.body}", localVarError.statusCode, localVarResponse)
+            }
+        }
+    }
+
+    /**
+     * GET /api/v1/agent/sessions
+     * List recent conversation sessions
+     * 
+     * @param limit  (optional, default to 50)
+     * @return ApiResponse<AgentSessionList?>
+     * @throws IllegalStateException If the request is not correctly configured
+     * @throws IOException Rethrows the OkHttp execute method exception
+     */
+    @Suppress("UNCHECKED_CAST")
+    @Throws(IllegalStateException::class, IOException::class)
+    suspend fun listAgentSessionsWithHttpInfo(limit: kotlin.Int?) : ApiResponse<AgentSessionList?> = withContext(Dispatchers.IO) {
+        val localVariableConfig = listAgentSessionsRequestConfig(limit = limit)
+
+        return@withContext request<Unit, AgentSessionList>(
+            localVariableConfig
+        )
+    }
+
+    /**
+     * To obtain the request config of the operation listAgentSessions
+     *
+     * @param limit  (optional, default to 50)
+     * @return RequestConfig
+     */
+    fun listAgentSessionsRequestConfig(limit: kotlin.Int?) : RequestConfig<Unit> {
+        val localVariableBody = null
+        val localVariableQuery: MultiValueMap = mutableMapOf<kotlin.String, kotlin.collections.List<kotlin.String>>()
+            .apply {
+                if (limit != null) {
+                    put("limit", listOf(limit.toString()))
+                }
+            }
+        val localVariableHeaders: MutableMap<String, String> = mutableMapOf()
+        localVariableHeaders["Accept"] = "application/json"
+
+        return RequestConfig(
+            method = RequestMethod.GET,
+            path = "/api/v1/agent/sessions",
             query = localVariableQuery,
             headers = localVariableHeaders,
             requiresAuthentication = true,

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 import uuid
 
@@ -34,6 +35,7 @@ from app.agents.learning import (
     record_feedback,
     reject_proposal,
 )
+from app.agents.mcp_runtime import discover_servers
 from app.agents.models import (
     AgentConfigVersion,
     AgentGoldenCase,
@@ -52,6 +54,7 @@ from app.agents.regression import (
 )
 from app.agents.regression_runner import build_regression_runner
 from app.agents.runs import TERMINAL_STATUSES, DatabaseRunStore, RunStore
+from app.agents.sessions import get_session_runs, list_sessions
 from app.agents.versions import (
     VersionError,
     activate_golden_version,
@@ -87,6 +90,10 @@ from app.schemas.agent import (
     AgentRunCreated,
     AgentRunRequest,
     AgentRuntimeStatusRead,
+    AgentSessionDetail,
+    AgentSessionList,
+    AgentSessionRead,
+    AgentSessionRunRead,
 )
 from cliver_playbook.app.basic.db.session import get_db, open_session
 from cliver_playbook.app.basic.settings import get_settings
@@ -96,6 +103,8 @@ from cliver_playbook.app.user.auth.dependencies import Viewer, get_current_user
 
 register_default_agents()
 register_project_agents()
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 {% if enabled('api.auth') %}
@@ -244,6 +253,70 @@ async def create_run(
     )
     wake_job_queue()
     return AgentRunCreated(run_id=run_id, status="queued")
+
+
+@router.get("/sessions", response_model=AgentSessionList)
+async def list_agent_sessions(
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> AgentSessionList:
+{% if enabled('api.auth') %}
+    user_id = _viewer.user_id
+{% else %}
+    user_id = None
+{% endif %}
+    summaries = await list_sessions(db, user_id=user_id, limit=limit)
+    return AgentSessionList(
+        sessions=[
+            AgentSessionRead(
+                session_id=summary.session_id,
+                last_message=summary.last_message,
+                run_count=summary.run_count,
+                updated_at=summary.updated_at,
+            )
+            for summary in summaries
+        ]
+    )
+
+
+@router.get("/sessions/{session_id}", response_model=AgentSessionDetail)
+async def get_agent_session(
+    session_id: str = Path(min_length=1, max_length=200),
+{% if enabled('api.auth') %}
+    _viewer: Viewer = _VIEWER,
+{% endif %}
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=20, ge=1, le=50),
+) -> AgentSessionDetail:
+{% if enabled('api.auth') %}
+    user_id = _viewer.user_id
+{% else %}
+    user_id = None
+{% endif %}
+    runs = await get_session_runs(
+        db,
+        session_id=session_id,
+        user_id=user_id,
+        limit=limit,
+    )
+    if runs is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return AgentSessionDetail(
+        session_id=session_id,
+        runs=[
+            AgentSessionRunRead(
+                run_id=run.run_id,
+                message=run.message,
+                status=run.status,
+                created_at=run.created_at,
+                events=run.events,
+            )
+            for run in runs
+        ],
+    )
 
 
 @router.get("/runs/{run_id}/events")
@@ -787,13 +860,23 @@ async def get_agent_runtime_status() -> AgentRuntimeStatusRead:
     _require_reviewer(_viewer)
 {% endif %}
     settings = get_settings()
+    model_configured = bool(settings.agent_llm_model.strip())
+    mcp_servers: list[str] = []
+    if settings.agent_mcp_enabled:
+        try:
+            mcp_servers = sorted(discover_servers(settings).servers)
+        except Exception:  # the status page must stay available
+            logger.exception("Could not list MCP servers for the runtime status")
     return AgentRuntimeStatusRead(
-        model_configured=bool(settings.agent_llm_model.strip()),
+        model_configured=model_configured,
         judge_enabled=settings.agent_judge_enabled,
         mcp_enabled=settings.agent_mcp_enabled,
         compaction_enabled=settings.agent_compaction_enabled,
         tool_permission_mode=settings.agent_tool_permission_mode,
         system_one_provider=settings.agent_system_one_provider,
+        model_provider=((settings.agent_llm_provider or "custom") if model_configured else ""),
+        model_name=settings.agent_llm_model if model_configured else "",
+        mcp_servers=mcp_servers,
     )
 
 

@@ -221,6 +221,36 @@ class AgentRuntimeStatus(BaseModel):
     compaction_enabled: bool
     tool_permission_mode: str
     system_one_provider: str
+    model_provider: str | None = None
+    model_name: str | None = None
+    mcp_servers: list[str] | None = None
+
+
+class AgentSessionRead(BaseModel):
+    session_id: str
+    last_message: str
+    run_count: Annotated[int, Field(ge=1)]
+    updated_at: AwareDatetime
+
+
+class AgentSessionList(BaseModel):
+    sessions: list[AgentSessionRead]
+
+
+class AgentSessionRunRead(BaseModel):
+    run_id: str
+    message: str
+    status: str
+    created_at: AwareDatetime
+    events: Annotated[
+        list[dict[str, Any]],
+        Field(description='Stored run events in sequence order, capped per run.'),
+    ]
+
+
+class AgentSessionDetail(BaseModel):
+    session_id: str
+    runs: list[AgentSessionRunRead]
 
 
 class AgentList(BaseModel):

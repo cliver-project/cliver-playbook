@@ -18,14 +18,20 @@ public struct AgentRuntimeStatus: Codable, JSONEncodable, Hashable {
     public var compactionEnabled: Bool
     public var toolPermissionMode: String
     public var systemOneProvider: String
+    public var modelProvider: String?
+    public var modelName: String?
+    public var mcpServers: [String]?
 
-    public init(modelConfigured: Bool, judgeEnabled: Bool, mcpEnabled: Bool, compactionEnabled: Bool, toolPermissionMode: String, systemOneProvider: String) {
+    public init(modelConfigured: Bool, judgeEnabled: Bool, mcpEnabled: Bool, compactionEnabled: Bool, toolPermissionMode: String, systemOneProvider: String, modelProvider: String? = nil, modelName: String? = nil, mcpServers: [String]? = nil) {
         self.modelConfigured = modelConfigured
         self.judgeEnabled = judgeEnabled
         self.mcpEnabled = mcpEnabled
         self.compactionEnabled = compactionEnabled
         self.toolPermissionMode = toolPermissionMode
         self.systemOneProvider = systemOneProvider
+        self.modelProvider = modelProvider
+        self.modelName = modelName
+        self.mcpServers = mcpServers
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
@@ -35,6 +41,9 @@ public struct AgentRuntimeStatus: Codable, JSONEncodable, Hashable {
         case compactionEnabled = "compaction_enabled"
         case toolPermissionMode = "tool_permission_mode"
         case systemOneProvider = "system_one_provider"
+        case modelProvider = "model_provider"
+        case modelName = "model_name"
+        case mcpServers = "mcp_servers"
     }
 
     // Encodable protocol methods
@@ -47,6 +56,9 @@ public struct AgentRuntimeStatus: Codable, JSONEncodable, Hashable {
         try container.encode(compactionEnabled, forKey: .compactionEnabled)
         try container.encode(toolPermissionMode, forKey: .toolPermissionMode)
         try container.encode(systemOneProvider, forKey: .systemOneProvider)
+        try container.encodeIfPresent(modelProvider, forKey: .modelProvider)
+        try container.encodeIfPresent(modelName, forKey: .modelName)
+        try container.encodeIfPresent(mcpServers, forKey: .mcpServers)
     }
 }
 

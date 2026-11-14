@@ -412,6 +412,53 @@ open class AgentAPI {
     }
 
     /**
+     Read a conversation session and its replayable run events
+     
+     - parameter sessionId: (path)  
+     - parameter limit: (query) Maximum runs to return, newest selected first and replayed oldest-first. (optional, default to 20)
+     - returns: AgentSessionDetail
+     */
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    open class func getAgentSession(sessionId: String, limit: Int? = nil) async throws -> AgentSessionDetail {
+        return try await getAgentSessionWithRequestBuilder(sessionId: sessionId, limit: limit).execute().body
+    }
+
+    /**
+     Read a conversation session and its replayable run events
+     - GET /api/v1/agent/sessions/{session_id}
+     - Bearer Token:
+       - type: http
+       - name: bearerAuth
+     - parameter sessionId: (path)  
+     - parameter limit: (query) Maximum runs to return, newest selected first and replayed oldest-first. (optional, default to 20)
+     - returns: RequestBuilder<AgentSessionDetail> 
+     */
+    open class func getAgentSessionWithRequestBuilder(sessionId: String, limit: Int? = nil) -> RequestBuilder<AgentSessionDetail> {
+        var localVariablePath = "/api/v1/agent/sessions/{session_id}"
+        let sessionIdPreEscape = "\(APIHelper.mapValueToPathItem(sessionId))"
+        let sessionIdPostEscape = sessionIdPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        localVariablePath = localVariablePath.replacingOccurrences(of: "{session_id}", with: sessionIdPostEscape, options: .literal, range: nil)
+        let localVariableURLString = ContractsAPI.basePath + localVariablePath
+        let localVariableParameters: [String: Any]? = nil
+
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: Any?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.encodeToJSON(), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
+
+        let localVariableNillableHeaders: [String: Any?] = [
+            :
+        ]
+
+        let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
+
+        let localVariableRequestBuilder: RequestBuilder<AgentSessionDetail>.Type = ContractsAPI.requestBuilderFactory.getBuilder()
+
+        return localVariableRequestBuilder.init(method: "GET", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true)
+    }
+
+    /**
      List the coordinator's registered sub-agents
      
      - returns: AgentList
@@ -623,6 +670,48 @@ open class AgentAPI {
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
         let localVariableRequestBuilder: RequestBuilder<AgentProposalList>.Type = ContractsAPI.requestBuilderFactory.getBuilder()
+
+        return localVariableRequestBuilder.init(method: "GET", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true)
+    }
+
+    /**
+     List recent conversation sessions
+     
+     - parameter limit: (query)  (optional, default to 50)
+     - returns: AgentSessionList
+     */
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    open class func listAgentSessions(limit: Int? = nil) async throws -> AgentSessionList {
+        return try await listAgentSessionsWithRequestBuilder(limit: limit).execute().body
+    }
+
+    /**
+     List recent conversation sessions
+     - GET /api/v1/agent/sessions
+     - Bearer Token:
+       - type: http
+       - name: bearerAuth
+     - parameter limit: (query)  (optional, default to 50)
+     - returns: RequestBuilder<AgentSessionList> 
+     */
+    open class func listAgentSessionsWithRequestBuilder(limit: Int? = nil) -> RequestBuilder<AgentSessionList> {
+        let localVariablePath = "/api/v1/agent/sessions"
+        let localVariableURLString = ContractsAPI.basePath + localVariablePath
+        let localVariableParameters: [String: Any]? = nil
+
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: Any?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.encodeToJSON(), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
+
+        let localVariableNillableHeaders: [String: Any?] = [
+            :
+        ]
+
+        let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
+
+        let localVariableRequestBuilder: RequestBuilder<AgentSessionList>.Type = ContractsAPI.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "GET", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true)
     }

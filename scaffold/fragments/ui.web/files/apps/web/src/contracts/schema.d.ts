@@ -79,6 +79,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent conversation sessions */
+        get: operations["listAgentSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        /** Read a conversation session and its replayable run events */
+        get: operations["getAgentSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/proposals": {
         parameters: {
             query?: never;
@@ -683,6 +719,34 @@ export interface components {
             compaction_enabled: boolean;
             tool_permission_mode: string;
             system_one_provider: string;
+            model_provider?: string;
+            model_name?: string;
+            mcp_servers?: string[];
+        };
+        AgentSessionRead: {
+            session_id: string;
+            last_message: string;
+            run_count: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AgentSessionList: {
+            sessions: components["schemas"]["AgentSessionRead"][];
+        };
+        AgentSessionRunRead: {
+            run_id: string;
+            message: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Stored run events in sequence order, capped per run. */
+            events: {
+                [key: string]: unknown;
+            }[];
+        };
+        AgentSessionDetail: {
+            session_id: string;
+            runs: components["schemas"]["AgentSessionRunRead"][];
         };
         AgentList: {
             agents: components["schemas"]["AgentDescriptor"][];
@@ -880,6 +944,60 @@ export interface operations {
             };
             /** @description Invalid rating, agent or step */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAgentSessions: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions owned by the current user, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSessionList"];
+                };
+            };
+        };
+    };
+    getAgentSession: {
+        parameters: {
+            query?: {
+                /** @description Maximum runs to return, newest selected first and replayed oldest-first. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session runs with stored events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSessionDetail"];
+                };
+            };
+            /** @description No runs for this session belong to the current user */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

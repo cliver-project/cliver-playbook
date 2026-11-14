@@ -1455,6 +1455,59 @@ async def test_http_run_streams_a_multi_step_plan(client, auth_headers, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_sessions_group_runs_and_return_replayable_history(client, auth_headers) -> None:
+    headers = auth_headers if AUTH_ENABLED else {}
+    session_id = uuid.uuid4().hex
+    run_ids: list[str] = []
+    for message in ("first turn", "second turn"):
+        created = await client.post(
+            "/api/v1/agent/runs",
+            json={"message": message, "session_id": session_id},
+            headers=headers,
+        )
+        assert created.status_code == 202, created.text
+        run_id = created.json()["run_id"]
+        run_ids.append(run_id)
+        await _wait_status(run_id, "completed")
+
+    listed = await client.get("/api/v1/agent/sessions", headers=headers)
+    assert listed.status_code == 200, listed.text
+    session = next(item for item in listed.json()["sessions"] if item["session_id"] == session_id)
+    assert session["run_count"] == 2
+    assert session["last_message"] == "second turn"
+
+    detail = await client.get(f"/api/v1/agent/sessions/{session_id}", headers=headers)
+    assert detail.status_code == 200, detail.text
+    runs = detail.json()["runs"]
+    assert [run["message"] for run in runs] == ["first turn", "second turn"]
+    assert [run["run_id"] for run in runs] == run_ids
+    assert runs[0]["events"][0]["sequence"] == 0
+    assert any(event["type"] == "run.completed" for event in runs[-1]["events"])
+
+
+@pytest.mark.asyncio
+async def test_sessions_are_scoped_to_the_owner(client, auth_headers) -> None:
+    from app.agents.runs import DatabaseRunStore
+    from cliver_playbook.app.basic.db.session import open_session
+
+    headers = auth_headers if AUTH_ENABLED else {}
+    private_session = f"private-{uuid.uuid4().hex}"
+    async with open_session() as db:
+        await DatabaseRunStore(db).create(
+            uuid.uuid4().hex,
+            message="another user's turn",
+            user_id=987654,
+            session_id=private_session,
+        )
+
+    listed = await client.get("/api/v1/agent/sessions", headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert private_session not in {item["session_id"] for item in listed.json()["sessions"]}
+    missing = await client.get(f"/api/v1/agent/sessions/{private_session}", headers=headers)
+    assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_worker_runs_parallel_steps_with_isolated_sessions() -> None:
     from app.agents.events import EventStore
     from app.agents.runs import DatabaseRunStore
@@ -1873,5 +1926,8 @@ async def test_runtime_status_reports_safe_flags(client, app_instance) -> None:
         assert body["tool_permission_mode"] == "scoped"
         assert "model_configured" in body
         assert "judge_enabled" in body
+        assert "model_provider" in body
+        assert "model_name" in body
+        assert isinstance(body["mcp_servers"], list)
     finally:
         app_instance.dependency_overrides.clear()

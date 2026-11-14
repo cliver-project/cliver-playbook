@@ -33,6 +33,9 @@ import com.google.gson.annotations.SerializedName
  * @param compactionEnabled
  * @param toolPermissionMode
  * @param systemOneProvider
+ * @param modelProvider
+ * @param modelName
+ * @param mcpServers
  */
 
 
@@ -54,7 +57,16 @@ data class AgentRuntimeStatus (
     val toolPermissionMode: kotlin.String,
 
     @SerializedName("system_one_provider")
-    val systemOneProvider: kotlin.String
+    val systemOneProvider: kotlin.String,
+
+    @SerializedName("model_provider")
+    val modelProvider: kotlin.String? = null,
+
+    @SerializedName("model_name")
+    val modelName: kotlin.String? = null,
+
+    @SerializedName("mcp_servers")
+    val mcpServers: kotlin.collections.List<kotlin.String>? = null
 
 ) {
 

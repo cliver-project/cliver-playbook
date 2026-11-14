@@ -36,6 +36,33 @@ class AgentRuntimeStatusRead(BaseModel):
     compaction_enabled: bool
     tool_permission_mode: str
     system_one_provider: str
+    model_provider: str = ""
+    model_name: str = ""
+    mcp_servers: list[str] = Field(default_factory=list)
+
+
+class AgentSessionRead(BaseModel):
+    session_id: str
+    last_message: str
+    run_count: int = Field(ge=1)
+    updated_at: datetime
+
+
+class AgentSessionList(BaseModel):
+    sessions: list[AgentSessionRead]
+
+
+class AgentSessionRunRead(BaseModel):
+    run_id: str
+    message: str
+    status: str
+    created_at: datetime
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AgentSessionDetail(BaseModel):
+    session_id: str
+    runs: list[AgentSessionRunRead]
 
 
 class AgentFeedbackRequest(BaseModel):
