@@ -13,7 +13,7 @@ import AnyCodable
 public struct AgentDescriptor: Codable, JSONEncodable, Hashable {
 
     public enum AutonomyMode: String, Codable, CaseIterable {
-        case _false = "false"
+        case off = "off"
         case proposal = "proposal"
         case auto = "auto"
     }

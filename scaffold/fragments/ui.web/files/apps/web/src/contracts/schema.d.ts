@@ -673,7 +673,7 @@ export interface components {
             description: string;
             capabilities: string[];
             /** @enum {string} */
-            autonomy_mode: false | "proposal" | "auto";
+            autonomy_mode: "off" | "proposal" | "auto";
             has_pipeline: boolean;
         };
         AgentRuntimeStatus: {

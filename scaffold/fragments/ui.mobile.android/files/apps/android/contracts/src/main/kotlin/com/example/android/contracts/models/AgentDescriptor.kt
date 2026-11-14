@@ -55,10 +55,10 @@ data class AgentDescriptor (
 ) {
 
     /**
-     * Values: `false`,proposal,auto
+     * Values: off,proposal,auto
      */
     enum class AutonomyMode(val value: kotlin.String) {
-        @SerializedName(value = "false") `false`("false"),
+        @SerializedName(value = "off") off("off"),
         @SerializedName(value = "proposal") proposal("proposal"),
         @SerializedName(value = "auto") auto("auto");
     }

@@ -201,7 +201,7 @@ class AgentLearningSummary(BaseModel):
 
 
 class AutonomyMode(Enum):
-    False_ = False
+    off = 'off'
     proposal = 'proposal'
     auto = 'auto'
 
