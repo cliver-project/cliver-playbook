@@ -15,6 +15,31 @@ The API is the public entry point. The web and mobile clients call it over
 HTTP; the API owns the agent runtime, authentication and provider routing. The
 model service is internal.
 
+## Build artifacts
+
+```sh
+make build         # API wheel, web bundle, and enabled mobile builds
+make package       # desktop bundle for this host plus local mobile artifacts
+```
+
+Local outputs:
+
+- `services/api/dist/` — API wheel.
+- `apps/web/dist/` — static web bundle.
+{% if enabled('ui.mobile.ios') %}
+- `apps/ios/build/Build/Products/Debug-iphonesimulator/` — unsigned simulator app.
+{% endif %}
+{% if enabled('ui.mobile.android') %}
+- `apps/android/app/build/outputs/apk/debug/app-debug.apk` — debug APK.
+{% endif %}
+{% if enabled('ui.desktop.tauri') %}
+- `apps/desktop/src-tauri/target/release/bundle/` — host desktop bundle.
+{% endif %}
+
+Desktop and mobile distribution builds require the platform signing identity;
+`make package` produces unsigned local artifacts so the app can be launched
+and inspected without credentials.
+
 ## Layout
 
 - `services/api/` — API plane (FastAPI; AgentCore planner and sub-agent tools).
@@ -24,7 +49,7 @@ model service is internal.
 - `apps/ios/` — native SwiftUI client; run `cd apps/ios && xcodegen generate` once.
 {% endif %}
 {% if enabled('ui.mobile.android') %}
-- `apps/android/` — native Kotlin/Compose client; open it in Android Studio or run `gradle wrapper` first.
+- `apps/android/` — native Kotlin/Compose client with a checked-in Gradle wrapper.
 {% endif %}
 {% if enabled('ui.desktop.tauri') %}
 - `apps/desktop/` — Tauri 2 shell (desktop phase).

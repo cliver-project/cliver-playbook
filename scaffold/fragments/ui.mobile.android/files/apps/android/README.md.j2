@@ -23,11 +23,12 @@ when the project has its own entities.
 
 ## Requirements
 
-JDK 17, Android SDK Platform 35, Build-Tools 35.0.0 and Android Studio (or a
-Gradle 8.10.2 installation). The versions in the build files are the scaffold's
-defaults; a project may bump them together with AGP. Newer platforms (for
-example API 37) can stay installed, but AGP 8.8 still needs Platform 35 and
-Build-Tools 35.0.0 for this project's `compileSdk = 35`.
+JDK 17, Android SDK Platform 35, Build-Tools 35.0.0 and Android Studio. The
+Gradle 8.10.2 wrapper is checked in, so a separate Gradle installation is not
+required. The versions in the build files are the scaffold's defaults; a
+project may bump them together with AGP. Newer platforms (for example API 37)
+can stay installed, but AGP 8.8 still needs Platform 35 and Build-Tools 35.0.0
+for this project's `compileSdk = 35`.
 
 ## Optional static check
 
@@ -40,18 +41,16 @@ ktlint "**/*.kt"
 ./gradlew :app:assembleDebug test
 ```
 
-## No checked-in Gradle wrapper
+## Gradle wrapper
 
-The wrapper binary is intentionally absent. Generate it once, or open the
-project in Android Studio:
+The Gradle 8.10.2 wrapper is checked in and matches Android Gradle Plugin
+8.8.0, so the project builds without a machine-wide Gradle installation:
 
 ```sh
-gradle wrapper --gradle-version 8.10.2
-./gradlew :app:assembleDebug
+./gradlew :app:assembleDebug test
 ```
 
-Gradle 8.10.2 matches Android Gradle Plugin 8.8.0. Android Studio can also
-create the wrapper and sync the project.
+Android Studio can also sync the project and use the same wrapper.
 
 ## API base URL
 

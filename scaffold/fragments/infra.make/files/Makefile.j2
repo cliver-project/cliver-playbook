@@ -9,6 +9,22 @@ MODEL_PORT ?= 8010
 WEB_UI_HOST ?= 127.0.0.1
 WEB_UI_PORT ?= 5173
 WEB_FILTER := @{{ project_slug }}/web
+IOS_DESTINATION ?= generic/platform=iOS Simulator
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+DESKTOP_BUNDLES ?= app
+else ifeq ($(UNAME_S),Linux)
+DESKTOP_BUNDLES ?= deb
+endif
+# Use the selected Xcode, or the standard install when only Command Line Tools
+# are selected (the iOS build needs xcodebuild).
+XCODE_DEVELOPER_DIR ?= $(shell xcode-select -p 2>/dev/null)
+ifeq ($(strip $(XCODE_DEVELOPER_DIR)),)
+XCODE_DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
+endif
+ifeq ($(findstring CommandLineTools,$(XCODE_DEVELOPER_DIR)),CommandLineTools)
+XCODE_DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
+endif
 
 DEV_TARGETS :={% if enabled('api.python') %} dev-api{% endif %}{% if enabled('model.python') %} dev-model{% endif %}{% if enabled('ui.web') %} dev-web{% endif %}
 CHECK_TARGETS :={% if enabled('api.python') %} lint-api test-api{% endif %}{% if enabled('ui.web') %} web-check{% endif %}{% if enabled('contracts.openapi') %} contracts-check{% endif %}
@@ -171,9 +187,9 @@ build-web: ## Build the web bundle
 
 {% if enabled('ui.mobile.ios') %}
 .PHONY: build-ios
-build-ios: ## Generate the Xcode project and build for a generic iOS device
+build-ios: ## Generate the Xcode project and build an unsigned simulator app
 	cd apps/ios && xcodegen generate
-	cd apps/ios && xcodebuild -project {{ project_slug }}.xcodeproj -scheme {{ project_slug }} -destination 'generic/platform=iOS' build
+	cd apps/ios && DEVELOPER_DIR='$(XCODE_DEVELOPER_DIR)' xcodebuild -project {{ project_slug }}.xcodeproj -scheme {{ project_slug }} -destination '$(IOS_DESTINATION)' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
 {% endif %}
 
 {% if enabled('ui.mobile.android') %}
@@ -189,14 +205,14 @@ build: ## Build every enabled target
 
 {% if enabled('ui.desktop.tauri') %}
 .PHONY: package-desktop
-package-desktop: ## Build the desktop installers
-	cd apps/desktop && pnpm tauri build
+package-desktop: build-web ## Build the desktop bundle for this host
+	cd apps/desktop && pnpm tauri build $(if $(DESKTOP_BUNDLES),--bundles $(DESKTOP_BUNDLES),)
 {% endif %}
 
 {% if enabled('ui.mobile.ios') or enabled('ui.mobile.android') %}
 .PHONY: package-mobile
-package-mobile: ## Build the mobile release artifacts
-	@echo "Open apps/ios in Xcode and apps/android in Android Studio for signed archives."
+package-mobile:{% if enabled('ui.mobile.ios') %} build-ios{% endif %}{% if enabled('ui.mobile.android') %} build-android{% endif %} ## Build local mobile artifacts
+	@echo "{% if enabled('ui.mobile.ios') %}iOS simulator app built without signing. {% endif %}{% if enabled('ui.mobile.android') %}Android debug APK built. {% endif %}Use Xcode or Android Studio for signed distribution builds."
 {% endif %}
 
 .PHONY: package
@@ -213,5 +229,5 @@ release: ## Print the release procedure
 
 .PHONY: clean
 clean: ## Remove local build and cache output
-	rm -rf dist .pytest_cache .ruff_cache .venv services/api/.venv services/model/.venv apps/web/dist apps/ios/build apps/android/app/build
+	rm -rf dist .pytest_cache .ruff_cache .venv services/api/.venv services/model/.venv apps/web/dist apps/ios/build apps/android/app/build apps/desktop/src-tauri/target
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

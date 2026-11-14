@@ -1,4 +1,4 @@
-# Android and Gradle local state. The Gradle wrapper is generated, not checked in.
+# Android and Gradle local state. The Gradle wrapper is checked in.
 .gradle/
 .kotlin/
 build/

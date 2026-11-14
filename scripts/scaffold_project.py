@@ -762,6 +762,8 @@ def _render_fragment(
         if previous is None:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(content)
+            if source.stat().st_mode & 0o111:
+                output_path.chmod(output_path.stat().st_mode | 0o111)
             written[output_path] = content
 
 
@@ -1433,11 +1435,30 @@ def _self_test() -> int:
             "apps/ios/project.yml",
             "apps/ios/Packages/FeatureAuth/Sources/FeatureAuth/AuthView.swift",
             "apps/android/settings.gradle.kts",
+            "apps/android/gradlew",
+            "apps/android/gradle/wrapper/gradle-wrapper.jar",
             "apps/desktop/src-tauri/tauri.conf.json",
+            "apps/desktop/src-tauri/icons/icon.icns",
+            "apps/desktop/src-tauri/icons/icon.ico",
             "services/api/app/app.py",
             "services/model/model_app/main.py",
         ):
             assert (full_target / relative).is_file(), relative
+        gradlew = full_target / "apps/android/gradlew"
+        assert gradlew.stat().st_mode & 0o111, "gradlew must be executable"
+        wrapper = (
+            full_target / "apps/android/gradle/wrapper/gradle-wrapper.properties"
+        ).read_text(encoding="utf-8")
+        assert "gradle-8.10.2-bin.zip" in wrapper, wrapper
+        desktop_conf = json.loads(
+            (full_target / "apps/desktop/src-tauri/tauri.conf.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert desktop_conf["bundle"]["active"] is True
+        makefile = (full_target / "Makefile").read_text(encoding="utf-8")
+        assert "CODE_SIGNING_ALLOWED=NO" in makefile
+        assert "package-desktop: build-web" in makefile
         assert not list(full_target.rglob("*.j2"))
 
     with tempfile.TemporaryDirectory() as temporary:
