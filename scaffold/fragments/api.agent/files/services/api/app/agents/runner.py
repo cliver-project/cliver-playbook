@@ -33,6 +33,7 @@ from app.agents.core import (
 )
 from app.agents.learning import load_prompt_overlay
 from app.agents.mcp import select_mcp_servers
+from app.agents.permissions import build_permission_callback
 from app.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -253,7 +254,8 @@ def _default_core_factory(
         builtin_tools=toolkit.tools,
         skill_manager=build_skill_manager(settings, toolkit.agent_name or None),
         mcp_client=context.resources.get("mcp_client"),
-        permission_callback=context.resources.get("permission_callback"),
+        permission_callback=context.resources.get("permission_callback")
+        or build_permission_callback(toolkit, context),
         execution_policy=context.resources.get("execution_policy"),
         candidate_selector=build_system_one_selector(settings),
     )

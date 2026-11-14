@@ -1310,3 +1310,84 @@ def test_context_compaction_is_opt_in_and_model_backed():
 
     no_model = Settings(agent_compaction_enabled=True)
     assert build_context_compactor(no_model) is None
+
+
+def test_scoped_permission_callback_allows_declared_and_selected_mcp_tools():
+    from cliver_core import tool
+    from cliver_core.policy import DecisionAction, ToolCallContext, ToolCategory
+
+    from app.agents.contracts import AgentToolkit
+    from app.agents.permissions import build_permission_callback
+
+    @tool(name="declared_tool", safety="safe")
+    def declared_tool() -> list[dict]:
+        return []
+
+    context = _context("use tools")
+    context.resources["mcp_servers"] = ["crm"]
+    toolkit = AgentToolkit(system_prompt="", tools=[declared_tool], mcp_servers=[])
+    callback = build_permission_callback(toolkit, context)
+
+    allowed = callback(
+        ToolCallContext(
+            tool_name="declared_tool",
+            args={},
+            server=None,
+            category=ToolCategory.SAFE,
+        )
+    )
+    assert allowed.action is DecisionAction.ALLOW
+
+    unknown = callback(
+        ToolCallContext(
+            tool_name="not_declared",
+            args={},
+            server=None,
+            category=ToolCategory.SAFE,
+        )
+    )
+    assert unknown.action is DecisionAction.DENY
+
+    mcp_allowed = callback(
+        ToolCallContext(
+            tool_name="mcp__crm__search",
+            args={},
+            server="crm",
+            category=ToolCategory.ASK,
+        )
+    )
+    assert mcp_allowed.action is DecisionAction.ALLOW
+
+    mcp_denied = callback(
+        ToolCallContext(
+            tool_name="mcp__other__search",
+            args={},
+            server="other",
+            category=ToolCategory.ASK,
+        )
+    )
+    assert mcp_denied.action is DecisionAction.DENY
+
+
+def test_read_only_permission_mode_denies_ask_tools():
+    from cliver_core import tool
+    from cliver_core.policy import DecisionAction, ToolCallContext, ToolCategory
+
+    from app.agents.contracts import AgentToolkit
+    from app.agents.permissions import build_permission_callback
+
+    @tool(name="mutating_tool", safety="mutating")
+    def mutating_tool() -> list[dict]:
+        return []
+
+    toolkit = AgentToolkit(system_prompt="", tools=[mutating_tool], permission_mode="read_only")
+    callback = build_permission_callback(toolkit, _context())
+    denied = callback(
+        ToolCallContext(
+            tool_name="mutating_tool",
+            args={},
+            server=None,
+            category=ToolCategory.ASK,
+        )
+    )
+    assert denied.action is DecisionAction.DENY

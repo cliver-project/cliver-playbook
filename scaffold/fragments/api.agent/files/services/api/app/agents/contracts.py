@@ -76,6 +76,10 @@ class AgentToolkit:
     mcp_servers: list[str] = field(default_factory=list)
     # Set by the runner when a sub-agent omits it, so Core can scope skills.
     agent_name: str = ""
+    # Tool permission scope; see app.agents.permissions. A non-empty
+    # allowed_tools list is an additional allow-list over declared tools.
+    permission_mode: str = "scoped"
+    allowed_tools: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

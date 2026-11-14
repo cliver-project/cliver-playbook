@@ -275,6 +275,13 @@ endpoint no longer consults a process-local task registry: a running run is
 orphaned only when its heartbeat is stale. Queued runs wait for a consumer;
 they are not failed as orphans.
 
+Tool permissions are scoped by default. `AgentToolkit` names its declared
+tools, MCP servers and optional allow-list; `build_permission_callback` allows
+only declared builtin tools and tools from the selected MCP servers. The
+`read_only` mode also denies ASK-category tools, while `allow_all` preserves
+the legacy opt-out. The gate still installs its own deny-ASK callback. A
+project can replace the callback through the run resource seam.
+
 Context compaction is opt-in. `CLIVER_AGENT_COMPACTION_ENABLED` builds a
 cliver-core `LlmCompactor` with a separate tool-free AgentCore summarizer; it
 triggers from the previous call's input token usage and keeps the most recent

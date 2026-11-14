@@ -72,6 +72,7 @@ async def execute_run(
             "db": tool_db,
             "learning_db": learning_db,
             "proposal_generator": build_proposal_generator(settings),
+            "tool_permission_mode": settings.agent_tool_permission_mode,
         },
     )
     try:

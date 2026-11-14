@@ -52,6 +52,9 @@ class Settings(PlaybookSettings):
     agent_compaction_enabled: bool = False
     agent_compaction_threshold_tokens: int = 60000
     agent_compaction_keep_turns: int = 2
+    # scoped: declared builtin tools + selected MCP servers; read_only also
+    # denies ASK-category tools; allow_all is the project opt-out.
+    agent_tool_permission_mode: str = "scoped"
     # Run eventing: subscriber poll, worker tick, orphan threshold and SSE
     # keepalive. A run whose worker vanished (crashed process) is marked
     # failed after the orphan threshold instead of tailing forever.
@@ -113,6 +116,10 @@ class Settings(PlaybookSettings):
             raise ValueError("agent_compaction_threshold_tokens must be positive")
         if self.agent_compaction_keep_turns < 1:
             raise ValueError("agent_compaction_keep_turns must be positive")
+        if self.agent_tool_permission_mode not in {"scoped", "read_only", "allow_all"}:
+            raise ValueError(
+                "CLIVER_AGENT_TOOL_PERMISSION_MODE must be scoped, read_only or allow_all"
+            )
 
         system_one = self.agent_system_one_provider.strip().lower()
         if system_one not in {"", "local", "bailian", "typesafe", "http"}:

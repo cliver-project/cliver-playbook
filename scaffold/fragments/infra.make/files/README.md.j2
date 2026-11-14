@@ -142,6 +142,11 @@ is marked `orphaned` rather than retried. Skills live in
 `services/api/app/agents/subagents/`. The UI never calls a model provider
 directly.
 
+Tool calls are scoped by `CLIVER_AGENT_TOOL_PERMISSION_MODE`: `scoped`
+(default) allows declared builtin tools plus the selected MCP servers;
+`read_only` also denies ASK-category tools; `allow_all` is the project
+opt-out. A sub-agent's `AgentToolkit.allowed_tools` can narrow its own list.
+
 Long runs can enable context compaction with
 `CLIVER_AGENT_COMPACTION_ENABLED=true` (threshold
 `CLIVER_AGENT_COMPACTION_THRESHOLD_TOKENS`, default 60000; keep
