@@ -49,7 +49,7 @@ import kotlinx.coroutines.CancellationException
 @Composable
 fun ProductListScreen(
     api: ApiClient,
-    onOpenProduct: (Int) -> Unit,
+    onOpenProduct: (Long) -> Unit,
     onCreateProduct: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -148,7 +148,7 @@ fun ProductListScreen(
 @Composable
 private fun ProductCollection(
     products: List<Product>,
-    onOpenProduct: (Int) -> Unit,
+    onOpenProduct: (Long) -> Unit,
 ) {
     val components = LocalAppComponents.current
     if (currentLayoutMode() == LayoutMode.Compact) {

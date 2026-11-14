@@ -1,0 +1,16 @@
+{
+  "generator": "kotlin",
+  "options": {
+    "apiPackage": "com.example.android.contracts.apis",
+    "dateLibrary": "java8",
+    "invokerPackage": "com.example.android.contracts.infrastructure",
+    "library": "jvm-okhttp4",
+    "modelPackage": "com.example.android.contracts.models",
+    "packageName": "com.example.android.contracts",
+    "serializationLibrary": "gson",
+    "sourceFolder": "src/main/kotlin",
+    "useCoroutines": "true"
+  },
+  "openapi_sha256": "7cf93b5e5a707506fa62af7783524751c34ae790e5a10668c1b885242b8af8f0",
+  "version": "7.27.0"
+}

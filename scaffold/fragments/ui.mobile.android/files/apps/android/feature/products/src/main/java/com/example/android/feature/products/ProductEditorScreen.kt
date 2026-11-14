@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProductEditorScreen(
     api: ApiClient,
-    productId: Int?,
+    productId: Long?,
     onBack: () -> Unit,
     onSaved: () -> Unit,
     modifier: Modifier = Modifier,

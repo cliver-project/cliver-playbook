@@ -131,8 +131,8 @@ private sealed interface Destination {
     data object Home : Destination
 {% if enabled('ui.mobile.crud') %}
     data object ProductList : Destination
-    data class ProductDetail(val id: Int) : Destination
-    data class ProductEditor(val id: Int?) : Destination
+    data class ProductDetail(val id: Long) : Destination
+    data class ProductEditor(val id: Long?) : Destination
 {% endif %}
 {% if enabled('ui.mobile.profile') %}
     data object Profile : Destination

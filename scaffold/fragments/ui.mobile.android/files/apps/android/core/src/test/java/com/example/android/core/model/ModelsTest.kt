@@ -1,9 +1,11 @@
 package com.example.android.core.model
 
+import com.example.android.contracts.infrastructure.Serializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.OffsetDateTime
 
 class ModelsTest {
     @Test
@@ -27,13 +29,17 @@ class ModelsTest {
             }
         """.trimIndent()
 
-        val response = apiJson.decodeFromString(LoginResponse.serializer(), payload)
+        val response = Serializer.gson.fromJson(payload, LoginResponse::class.java)
 
         assertEquals("session-token", response.token)
         assertEquals("alice", response.user.username)
         assertEquals("Alice", response.user.displayName)
         assertEquals(listOf("admin", "user"), response.user.roleCodes)
         assertTrue(response.user.isActive)
+        assertEquals(
+            OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+            response.user.createdAt,
+        )
     }
 
     @Test
@@ -51,10 +57,7 @@ class ModelsTest {
             ]
         """.trimIndent()
 
-        val products = apiJson.decodeFromString(
-            kotlinx.serialization.builtins.ListSerializer(Product.serializer()),
-            payload,
-        )
+        val products = Serializer.gson.fromJson(payload, Array<Product>::class.java).toList()
 
         assertEquals(1, products.size)
         assertEquals(4250, products.single().priceCents)
@@ -63,8 +66,7 @@ class ModelsTest {
 
     @Test
     fun encodesAgentFeedbackRequest() {
-        val encoded = apiJson.encodeToString(
-            AgentFeedbackRequest.serializer(),
+        val encoded = Serializer.gson.toJson(
             AgentFeedbackRequest(agent = "products", rating = 5, comment = "useful"),
         )
 
@@ -75,10 +77,7 @@ class ModelsTest {
 
     @Test
     fun omitsNullProfileFieldsWhenEncoding() {
-        val encoded = apiJson.encodeToString(
-            ProfileUpdate.serializer(),
-            ProfileUpdate(displayName = "Alice"),
-        )
+        val encoded = Serializer.gson.toJson(ProfileUpdate(displayName = "Alice"))
 
         assertTrue(encoded.contains("display_name"))
         assertFalse(encoded.contains("\"email\""))

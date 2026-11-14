@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.example.android.core.model.Product
 import com.example.android.core.network.ApiClient
 import com.example.android.core.network.userMessage
+import com.example.android.core.ui.formatApiDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -42,7 +43,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProductDetailScreen(
     api: ApiClient,
-    productId: Int,
+    productId: Long,
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDeleted: () -> Unit,
@@ -174,8 +175,8 @@ private fun ProductDetails(product: Product) {
         )
         HorizontalDivider()
         DetailValue("Description", product.description.ifBlank { "No description." })
-        DetailValue("Created", product.createdAt)
-        DetailValue("Updated", product.updatedAt)
+        DetailValue("Created", formatApiDate(product.createdAt))
+        DetailValue("Updated", formatApiDate(product.updatedAt))
         DetailValue("Product ID", product.id.toString())
     }
 }

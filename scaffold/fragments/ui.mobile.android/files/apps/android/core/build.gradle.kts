@@ -33,6 +33,7 @@ kotlin {
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.01.00")
+    api(project(":contracts"))
     api(composeBom)
 
     api("androidx.compose.ui:ui")

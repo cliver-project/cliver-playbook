@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.android.core.auth.AuthStore
 import com.example.android.core.model.User
+import com.example.android.core.ui.formatApiDate
 import kotlinx.coroutines.launch
 
 /**
@@ -201,11 +202,12 @@ private fun ProfileDetails(user: User) {
                 DetailRow("Email", user.email ?: "Not set")
                 DetailRow("Phone", user.phone ?: "Not set")
                 DetailRow("Status", if (user.isActive) "Active" else "Inactive")
+                val roles = user.roleCodes.orEmpty()
                 DetailRow(
                     "Roles",
-                    if (user.roleCodes.isEmpty()) "None" else user.roleCodes.joinToString(", "),
+                    if (roles.isEmpty()) "None" else roles.joinToString(", "),
                 )
-                DetailRow("Member since", user.createdAt)
+                DetailRow("Member since", formatApiDate(user.createdAt))
             }
         }
     }

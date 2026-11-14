@@ -8,7 +8,8 @@ cliver-playbook scaffold. The project owns these files; edit them freely.
 | Module | Purpose |
 |---|---|
 | `app` | Single activity, theme, adaptive navigation shell and home screen. |
-| `core` | HTTP client, serializable models, secure token storage, auth state, theme and window-size helpers. |
+| `contracts` | Generated Kotlin wire client (Gson, coroutines); do not edit by hand. |
+| `core` | HTTP client over the generated APIs, model aliases, secure token storage, auth state, theme and window-size helpers. |
 | `feature/auth` | Sign-in and registration (only when the auth feature is enabled). |
 | `feature/profile` | Profile view and edit (only when the profile feature is enabled). |
 | `feature/products` | Reference product list, detail, create, edit and delete screens (only when the CRUD feature is enabled). |
@@ -20,6 +21,27 @@ feature.
 
 `feature/products` is a reference slice, not domain code. Replace or delete it
 when the project has its own entities.
+
+## Generated API client
+
+`contracts` is generated from `contracts/openapi.yaml` with OpenAPI Generator
+(`kotlin`, `jvm-okhttp4`, Gson, coroutines, Java 8 dates). `core` aliases the
+generated models as `User`, `AuthSession`, `Product` and friends; its
+`ApiClient` calls the generated `AuthApi`, `ProductsApi` and `AgentApi`. The
+SSE stream stays a small custom OkHttp transport because OpenAPI does not
+model server-sent events.
+
+Do not edit `contracts/src/main/kotlin` by hand. After changing a contract
+fragment:
+
+```sh
+./scripts/generate-contracts.sh          # from apps/android
+```
+
+`scripts/generate-contracts.sh --check` verifies the recorded contract hash;
+`--verify` regenerates in a temporary directory and diffs the result. Both
+need Node and Java 17+. Generation is also wired to `make contracts` and
+`make contracts-verify-native` at the project root.
 
 ## Requirements
 
