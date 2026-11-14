@@ -35,6 +35,8 @@ source tree. A recipe that is insufficient is a skill bug: fix the recipe.
 
 ## Choose the entry point
 
+- **New AI-native application:** use the project scaffold instead of package
+  composition; read `reference/use-cases/start-ai-native-project.md`.
 - **New project, or first playbook adoption:** follow steps 0–7. Use the full
   composition references once for the initial shell, then one use-case page per
   capability.
@@ -70,6 +72,7 @@ names the smallest composition where the recipe applies (`minimal` = basic,
 
 | Task | Read this one file | Profile |
 |---|---|---|
+| Start a new AI-native app from the project scaffold | `reference/use-cases/start-ai-native-project.md` | ai-native |
 | Adopt the playbook in an existing project, or add a package | `reference/use-cases/adopt-playbook.md` | any |
 | Add a domain table, migration, service, and API | `reference/use-cases/add-backend-domain-slice.md` | any |
 | Add or change permission codes | `reference/use-cases/add-backend-permission-codes.md` | web, rag, mcp |

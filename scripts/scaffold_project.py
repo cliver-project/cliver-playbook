@@ -1459,6 +1459,8 @@ def _self_test() -> int:
         makefile = (full_target / "Makefile").read_text(encoding="utf-8")
         assert "CODE_SIGNING_ALLOWED=NO" in makefile
         assert "package-desktop: build-web" in makefile
+        assert "test-ios" in makefile
+        assert "test-android" in makefile
         assert not list(full_target.rglob("*.j2"))
 
     with tempfile.TemporaryDirectory() as temporary:

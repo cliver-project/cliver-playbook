@@ -27,7 +27,7 @@ XCODE_DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
 endif
 
 DEV_TARGETS :={% if enabled('api.python') %} dev-api{% endif %}{% if enabled('model.python') %} dev-model{% endif %}{% if enabled('ui.web') %} dev-web{% endif %}
-CHECK_TARGETS :={% if enabled('api.python') %} lint-api test-api{% endif %}{% if enabled('ui.web') %} web-check{% endif %}{% if enabled('contracts.openapi') %} contracts-check{% endif %}
+CHECK_TARGETS :={% if enabled('api.python') %} lint-api test-api{% endif %}{% if enabled('ui.web') %} web-check{% endif %}{% if enabled('ui.mobile.ios') %} test-ios{% endif %}{% if enabled('ui.mobile.android') %} test-android{% endif %}{% if enabled('contracts.openapi') %} contracts-check{% endif %}
 BUILD_TARGETS :={% if enabled('api.python') %} build-api{% endif %}{% if enabled('ui.web') %} build-web{% endif %}{% if enabled('ui.mobile.ios') %} build-ios{% endif %}{% if enabled('ui.mobile.android') %} build-android{% endif %}
 
 .PHONY: help
@@ -164,6 +164,18 @@ web-check: ## Type-check, lint, seam-check and build the web UI
 .PHONY: web-e2e
 web-e2e: ## Run the chat E2E with a mocked API (needs `playwright install chromium`)
 	pnpm --filter $(WEB_FILTER) test:e2e
+{% endif %}
+
+{% if enabled('ui.mobile.ios') %}
+.PHONY: test-ios
+test-ios: ## Run the iOS Core package tests
+	cd apps/ios/Packages/Core && DEVELOPER_DIR='$(XCODE_DEVELOPER_DIR)' swift test
+{% endif %}
+
+{% if enabled('ui.mobile.android') %}
+.PHONY: test-android
+test-android: ## Run the Android unit tests
+	cd apps/android && (test -x ./gradlew && ./gradlew testDebugUnitTest || gradle testDebugUnitTest)
 {% endif %}
 
 .PHONY: check
