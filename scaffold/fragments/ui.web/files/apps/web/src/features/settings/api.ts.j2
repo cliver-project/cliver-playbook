@@ -4,9 +4,16 @@ import { api } from "cliver-playbook-app-basic";
 import type { components } from "../../contracts/schema";
 
 export type AgentRuntimeStatus = components["schemas"]["AgentRuntimeStatus"];
+export type AgentList = components["schemas"]["AgentList"];
+export type AgentDescriptor = components["schemas"]["AgentDescriptor"];
 
 export async function getRuntimeStatus(): Promise<AgentRuntimeStatus> {
   const response = await api.get<AgentRuntimeStatus>("/agent/runtime");
   return response.data;
+}
+
+export async function getAgentCatalog(): Promise<AgentDescriptor[]> {
+  const response = await api.get<AgentList>("/agent/agents");
+  return response.data.agents;
 }
 {% endif %}

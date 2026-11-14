@@ -83,6 +83,13 @@
     "permissionMode": "Tool permission mode",
     "systemOne": "System One provider",
     "enabled": "Enabled",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "agents": "Registered agents",
+    "agentsEmpty": "No sub-agents are registered.",
+    "autonomyOff": "Improvement off",
+    "autonomyProposal": "Proposals",
+    "autonomyAuto": "Auto",
+    "pipelineOn": "Self-enhancement pipeline",
+    "pipelineOff": "No learning pipeline"
   }
 }

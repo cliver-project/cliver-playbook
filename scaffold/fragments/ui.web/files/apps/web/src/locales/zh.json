@@ -83,6 +83,13 @@
     "permissionMode": "工具权限模式",
     "systemOne": "System One 提供方",
     "enabled": "已启用",
-    "disabled": "未启用"
+    "disabled": "未启用",
+    "agents": "已注册 Agent",
+    "agentsEmpty": "尚未注册子 Agent。",
+    "autonomyOff": "不改进",
+    "autonomyProposal": "提案模式",
+    "autonomyAuto": "自动",
+    "pipelineOn": "自增强流水线",
+    "pipelineOff": "无学习流水线"
   }
 }

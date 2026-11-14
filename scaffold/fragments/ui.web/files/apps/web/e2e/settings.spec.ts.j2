@@ -35,10 +35,32 @@ test("runtime settings show safe feature flags", async ({ page }) => {
       }),
     }),
   );
+  await page.route("**/api/v1/agent/agents", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        agents: [
+          {
+            name: "products",
+            description: "List the project's products.",
+            capabilities: ["products.list"],
+            autonomy_mode: "proposal",
+            has_pipeline: true,
+          },
+        ],
+      }),
+    }),
+  );
 
   await page.goto("/runtime");
   await expect(page.getByRole("heading", { name: "Runtime settings" })).toBeVisible();
   await expect(page.getByText("scoped")).toBeVisible();
   await expect(page.getByText("local")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Registered agents" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "products" })).toBeVisible();
+  await expect(page.getByText("products.list")).toBeVisible();
+  await expect(page.getByText("Proposals")).toBeVisible();
+  await expect(page.getByText("Self-enhancement pipeline")).toBeVisible();
 });
 {% endif %}
