@@ -26,9 +26,9 @@ ifeq ($(findstring CommandLineTools,$(XCODE_DEVELOPER_DIR)),CommandLineTools)
 XCODE_DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
 endif
 
-DEV_TARGETS :={% if enabled('api.python') %} dev-api{% endif %}{% if enabled('model.python') %} dev-model{% endif %}{% if enabled('ui.web') %} dev-web{% endif %}
-CHECK_TARGETS :={% if enabled('api.python') %} lint-api test-api{% endif %}{% if enabled('model.python') %} test-model{% endif %}{% if enabled('ui.web') %} web-check{% endif %}{% if enabled('ui.mobile.ios') %} test-ios{% endif %}{% if enabled('ui.mobile.android') %} test-android{% endif %}{% if enabled('contracts.openapi') %} contracts-check{% endif %}
-BUILD_TARGETS :={% if enabled('api.python') %} build-api{% endif %}{% if enabled('ui.web') %} build-web{% endif %}{% if enabled('ui.mobile.ios') %} build-ios{% endif %}{% if enabled('ui.mobile.android') %} build-android{% endif %}
+DEV_TARGETS := {{ 'dev-api' if enabled('api.python') else '' }} {{ 'dev-model' if enabled('model.python') else '' }} {{ 'dev-web' if enabled('ui.web') else '' }}
+CHECK_TARGETS := {{ 'lint-api test-api' if enabled('api.python') else '' }} {{ 'test-model' if enabled('model.python') else '' }} {{ 'web-check' if enabled('ui.web') else '' }} {{ 'test-ios' if enabled('ui.mobile.ios') else '' }} {{ 'test-android' if enabled('ui.mobile.android') else '' }} {{ 'contracts-check' if enabled('contracts.openapi') else '' }}
+BUILD_TARGETS := {{ 'build-api' if enabled('api.python') else '' }} {{ 'build-web' if enabled('ui.web') else '' }} {{ 'build-ios' if enabled('ui.mobile.ios') else '' }} {{ 'build-android' if enabled('ui.mobile.android') else '' }}
 
 .PHONY: help
 help: ## Display this help.
@@ -234,7 +234,7 @@ package-mobile:{% if enabled('ui.mobile.ios') %} build-ios{% endif %}{% if enabl
 {% endif %}
 
 .PHONY: package
-package: ## Build the platform installers/artifacts
+package: build ## Build every artifact and the platform installers
 {% if enabled('ui.desktop.tauri') or enabled('ui.mobile.ios') or enabled('ui.mobile.android') %}
 	@$(MAKE) {% if enabled('ui.desktop.tauri') %}package-desktop {% endif %}{% if enabled('ui.mobile.ios') or enabled('ui.mobile.android') %}package-mobile{% endif %}
 {% else %}

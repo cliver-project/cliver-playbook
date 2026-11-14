@@ -1,7 +1,7 @@
 """Golden cases and offline regression reports for agent proposals.
 
 Revision ID: {{ "0005_agent_regression_gate" if enabled('api.products') else "0004_agent_regression_gate" }}
-Revises:{% if enabled('api.products') %} 0004_agent_learning{% else %} 0003_agent_learning{% endif %}
+Revises: {{ "0004_agent_learning" if enabled("api.products") else "0003_agent_learning" }}
 Create Date: 2026-01-01 00:00:00
 """
 

@@ -1459,9 +1459,19 @@ def _self_test() -> int:
         makefile = (full_target / "Makefile").read_text(encoding="utf-8")
         assert "CODE_SIGNING_ALLOWED=NO" in makefile
         assert "package-desktop: build-web" in makefile
+        assert "package: build" in makefile
         assert "test-ios" in makefile
         assert "test-android" in makefile
         assert "test-model" in makefile
+        for line in makefile.splitlines():
+            if line.startswith(("DEV_TARGETS :=", "CHECK_TARGETS :=", "BUILD_TARGETS :=")):
+                assert line.count(":=") == 1, f"joined make assignment: {line}"
+        migrations_dir = full_target / "services/api/app/migrations/versions"
+        for migration in migrations_dir.glob("*.py"):
+            migration_text = migration.read_text(encoding="utf-8")
+            assert "\nCreate Date:" in migration_text, (
+                f"{migration.name}: joined Revises/Create Date metadata"
+            )
         desktop_ci = (
             full_target / ".github/workflows/desktop.yml"
         ).read_text(encoding="utf-8")

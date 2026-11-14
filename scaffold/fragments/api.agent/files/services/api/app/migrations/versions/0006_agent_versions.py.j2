@@ -1,7 +1,7 @@
 """Golden-set snapshots and prompt-config version history.
 
 Revision ID: {{ "0006_agent_versions" if enabled('api.products') else "0005_agent_versions" }}
-Revises:{% if enabled('api.products') %} 0005_agent_regression_gate{% else %} 0004_agent_regression_gate{% endif %}
+Revises: {{ "0005_agent_regression_gate" if enabled("api.products") else "0004_agent_regression_gate" }}
 Create Date: 2026-01-01 00:00:00
 """
 
