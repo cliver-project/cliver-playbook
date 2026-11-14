@@ -289,24 +289,36 @@ public final class APIClient: @unchecked Sendable {
             )
         }
 
-        var dataLines: [String] = []
-        for try await rawLine in bytes.lines {
-            let line = rawLine.hasSuffix("\r")
-                ? String(rawLine.dropLast())
-                : rawLine
-            if line.isEmpty {
-                if let event = Self.agentEvent(from: dataLines.joined(separator: "\n")) {
-                    yield(event)
-                }
-                dataLines.removeAll()
-            } else if line.hasPrefix("data:") {
-                dataLines.append(
-                    String(line.dropFirst(5))
-                        .trimmingCharacters(in: .whitespaces)
-                )
+        // Read raw bytes so blank lines survive: AsyncBytes.lines drops them,
+        // and the blank line is what terminates an SSE frame.
+        var decoder = ServerSentEventDecoder()
+        var lineBytes = Data()
+
+        func consumeLine() {
+            var line = String(decoding: lineBytes, as: UTF8.self)
+            lineBytes.removeAll(keepingCapacity: true)
+            if line.hasSuffix("\r") {
+                line.removeLast()
+            }
+            guard let frame = decoder.consume(line: line) else {
+                return
+            }
+            if let event = Self.agentEvent(from: frame.data) {
+                yield(event)
             }
         }
-        if let event = Self.agentEvent(from: dataLines.joined(separator: "\n")) {
+
+        for try await byte in bytes {
+            if byte == 0x0A {
+                consumeLine()
+            } else {
+                lineBytes.append(byte)
+            }
+        }
+        if !lineBytes.isEmpty {
+            consumeLine()
+        }
+        if let frame = decoder.finish(), let event = Self.agentEvent(from: frame.data) {
             yield(event)
         }
     }

@@ -1,0 +1,70 @@
+import Foundation
+
+/// One Server-Sent Events frame. The scaffold's agent stream uses `data` as a
+/// JSON `AgentEvent`; `id` carries the sequence for `Last-Event-ID` resume.
+struct ServerSentEvent: Equatable {
+    var id: String?
+    var event: String?
+    var data: String
+}
+
+/// Incremental SSE frame decoder. `URLSession.AsyncBytes.lines` omits empty
+/// lines, so the stream reader feeds complete lines here and this type owns the
+/// blank-line boundary instead of relying on the line sequence.
+struct ServerSentEventDecoder {
+    private var id: String?
+    private var event: String?
+    private var dataLines: [String] = []
+
+    mutating func consume(line: String) -> ServerSentEvent? {
+        if line.isEmpty {
+            return flush()
+        }
+        if line.hasPrefix(":") {
+            return nil
+        }
+
+        let parts = line.split(
+            separator: ":",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        )
+        let field = String(parts[0])
+        var value = parts.count == 2 ? String(parts[1]) : ""
+        if value.hasPrefix(" ") {
+            value.removeFirst()
+        }
+
+        switch field {
+        case "id":
+            id = value
+        case "event":
+            event = value
+        case "data":
+            dataLines.append(value)
+        default:
+            break
+        }
+        return nil
+    }
+
+    mutating func finish() -> ServerSentEvent? {
+        flush()
+    }
+
+    private mutating func flush() -> ServerSentEvent? {
+        defer {
+            id = nil
+            event = nil
+            dataLines.removeAll()
+        }
+        guard !dataLines.isEmpty else {
+            return nil
+        }
+        return ServerSentEvent(
+            id: id,
+            event: event,
+            data: dataLines.joined(separator: "\n")
+        )
+    }
+}
