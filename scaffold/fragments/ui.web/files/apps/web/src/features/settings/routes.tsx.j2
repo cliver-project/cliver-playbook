@@ -1,4 +1,5 @@
 {% if enabled('api.agent') %}
+import { lazy, Suspense } from "react";
 import type { RouteObject } from "react-router-dom";
 
 {% if enabled('api.auth') %}
@@ -7,10 +8,19 @@ import type { AuthedNavItem } from "cliver-playbook-app-user";
 import type { NavItem } from "cliver-playbook-app-basic";
 {% endif %}
 
-import SettingsPage from "./SettingsPage";
+import { LoadingState } from "../../ui";
+
+const SettingsPage = lazy(() => import("./SettingsPage"));
 
 export const settingsRoutes: RouteObject[] = [
-  { path: "runtime", element: <SettingsPage /> },
+  {
+    path: "runtime",
+    element: (
+      <Suspense fallback={<LoadingState />}>
+        <SettingsPage />
+      </Suspense>
+    ),
+  },
 ];
 
 {% if enabled('api.auth') %}

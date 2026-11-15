@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import type { RouteObject } from "react-router-dom";
 
 {% if enabled('api.auth') %}
@@ -13,10 +14,19 @@ import { governanceNavItems, governanceRoutes } from "./features/governance/rout
 import { settingsNavItems, settingsRoutes } from "./features/settings/routes";
 {% endif %}
 
-import HomePage from "./pages/HomePage";
+import { LoadingState } from "./ui";
+
+const HomePage = lazy(() => import("./pages/HomePage"));
 
 export const projectRoutes: RouteObject[] = [
-  { index: true, element: <HomePage /> },
+  {
+    index: true,
+    element: (
+      <Suspense fallback={<LoadingState />}>
+        <HomePage />
+      </Suspense>
+    ),
+  },
 {% if enabled('ui.web.products') %}
   ...productRoutes,
 {% endif %}

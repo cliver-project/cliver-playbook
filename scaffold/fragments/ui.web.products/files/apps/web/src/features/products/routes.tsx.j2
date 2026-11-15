@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import type { RouteObject } from "react-router-dom";
 
 {% if enabled('api.auth') %}
@@ -6,15 +7,45 @@ import type { AuthedNavItem } from "cliver-playbook-app-user";
 import type { NavItem } from "cliver-playbook-app-basic";
 {% endif %}
 
-import ProductDetailPage from "./ProductDetailPage";
-import ProductEditPage from "./ProductEditPage";
-import ProductsPage from "./ProductsPage";
+import { LoadingState } from "../../ui";
+
+const ProductDetailPage = lazy(() => import("./ProductDetailPage"));
+const ProductEditPage = lazy(() => import("./ProductEditPage"));
+const ProductsPage = lazy(() => import("./ProductsPage"));
 
 export const productRoutes: RouteObject[] = [
-  { path: "products", element: <ProductsPage /> },
-  { path: "products/new", element: <ProductEditPage /> },
-  { path: "products/:productId", element: <ProductDetailPage /> },
-  { path: "products/:productId/edit", element: <ProductEditPage /> },
+  {
+    path: "products",
+    element: (
+      <Suspense fallback={<LoadingState />}>
+        <ProductsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "products/new",
+    element: (
+      <Suspense fallback={<LoadingState />}>
+        <ProductEditPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "products/:productId",
+    element: (
+      <Suspense fallback={<LoadingState />}>
+        <ProductDetailPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: "products/:productId/edit",
+    element: (
+      <Suspense fallback={<LoadingState />}>
+        <ProductEditPage />
+      </Suspense>
+    ),
+  },
 ];
 
 {% if enabled('api.auth') %}

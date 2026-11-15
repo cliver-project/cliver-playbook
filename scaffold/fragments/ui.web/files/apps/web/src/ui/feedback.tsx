@@ -19,7 +19,11 @@ export function EmptyState({
 }
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
-  return <p className="p-4 text-sm text-muted-foreground">{label}</p>;
+  return (
+    <p role="status" className="p-4 text-sm text-muted-foreground">
+      {label}
+    </p>
+  );
 }
 
 export function ErrorState({ message }: { message: string }) {
