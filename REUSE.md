@@ -34,7 +34,14 @@ and `npx skills update` re-fetches it. The skill is versioned independently of
 the packages and always describes the latest guidance.
 It lands in the agent's skills directory (`.claude/skills/`,
 `.agents/skills/`, …); use `-g` for a user-level install and `--list` to see
-what the repository offers. Its references are the detailed versions of the
+what the repository offers. For a local checkout, symlink
+`<playbook-root>/skills/cliver-playbook-assemble-project` into a project's
+`.claude/skills/` or into `~/.claude/skills/`; Claude Code reads it directly.
+
+For a new AI-native app the skill routes to `scripts/scaffold_project.py`: the
+natural-language brief becomes a manifest, the agent shows the plan, then
+applies it. Package composition is the separate path for existing and
+non-AI-native projects. Its references are the detailed versions of the
 decision tree, the backend and frontend composition, the production gates, and
 the upstream loop.
 

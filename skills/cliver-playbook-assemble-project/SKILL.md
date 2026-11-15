@@ -1,6 +1,6 @@
 ---
 name: cliver-playbook-assemble-project
-description: Assemble or extend a production-grade project on cliver-playbook. Use when starting a new app or service, when an existing project should adopt a playbook package or capability, when adding a backend or frontend feature (settings, permissions, OIDC, pagination, RAG, MCP, pages), or when deciding what to compose, configure, copy, or build.
+description: Assemble, scaffold or extend a production-grade project on cliver-playbook. Use when starting a new app or service, including an AI-native app whose natural-language brief is turned into a scaffold manifest and generated with scaffold_project.py; when an existing project should adopt a playbook package or capability; when adding a backend or frontend feature (settings, permissions, OIDC, pagination, RAG, MCP, pages); or when deciding what to compose, configure, copy, or build.
 license: Apache-2.0
 compatibility: Requires git and network access, Python 3.12+ with uv, Node.js with pnpm, and Docker for the production gates.
 ---
@@ -35,17 +35,60 @@ source tree. A recipe that is insufficient is a skill bug: fix the recipe.
 
 ## Choose the entry point
 
-- **New AI-native application:** use the project scaffold instead of package
-  composition; read `reference/use-cases/start-ai-native-project.md`.
-- **New project, or first playbook adoption:** follow steps 0–7. Use the full
-  composition references once for the initial shell, then one use-case page per
-  capability.
+- **New AI-native application (default):** read
+  `reference/use-cases/start-ai-native-project.md`. Turn the user's brief into a
+  scaffold manifest, plan it, then run `scripts/scaffold_project.py --apply`.
+  Do **not** use the package-composition steps or `assemble_project.py` on this
+  path.
+- **New non-AI-native project, or first package adoption:** follow steps 0–7.
+  Use the full composition references once for the initial shell, then one
+  use-case page per capability.
 - **Existing project already on the playbook:** skip to the use-case catalog.
   Do not re-scaffold or re-read the assembly steps.
 - **Existing project not yet on the playbook:** read
   `reference/use-cases/adopt-playbook.md` first, then the capability recipe.
 - **Upgrading the pinned release:** read
   `reference/use-cases/upgrade-playbook.md` only.
+
+The two on-ramps are deliberately different. An AI-native app is materialized
+from a manifest by the scaffolder; package composition is for projects that
+already have their own shell and only adopt individual playbook packages.
+
+## Natural language brief → scaffold manifest
+
+For a new AI-native app, do not ask the user to write YAML first. Read the
+brief, infer the smallest manifest, show it, and only ask about choices that
+change the module set.
+
+| Brief signal | Manifest fields | Default |
+|---|---|---|
+| Web UI | `ui.web: true` | yes for AI-native apps |
+| Installable desktop app | `ui.desktop: tauri2`, `release.desktop: true` | only if asked |
+| iPhone/iPad | `ui.mobile.ios: swiftui`, `ui.mobile.layouts: [phone, pad]` | only if asked |
+| Android | `ui.mobile.android: kotlin`, `ui.mobile.layouts: [phone, pad]` | only if asked |
+| Accounts, roles, profile | `api.features` includes `auth`, `settings`; mobile `features` include `auth`, `profile` | infer from the brief |
+| AI assistant, tools, MCP | `api.features` includes `agent` and optionally `mcp`; `agent.runtime: agentcore` | AI-native default |
+| Knowledge base / RAG | `api.features` includes `rag` | only if asked |
+| Reference CRUD slice | `scaffold.reference_slices: [products]` | include only as a reference |
+| Local models / offline | `api.deployment: local`, `model.deployment: local`, desktop | only if asked |
+| One native client only | `ai-mobile` profile with one of iOS/Android | choose the requested platform |
+| All clients on day one | `ai-full` profile | use when the brief spans web + desktop + mobile |
+
+Rules:
+
+1. Start from the nearest example in `scaffold/examples/`, usually
+   `ai-full.yaml` for a multi-client app or `ai-web.yaml` for a browser-only
+   service.
+2. Set `project`, `scaffold.profile`, `scaffold.reference_slices`, `ui`,
+   `api.features`, `model`, `agent` and `release` from the brief. Leave
+   credentials and deployment endpoints out.
+3. Write the manifest to a file, then run
+   `python3 var/playbook/scripts/scaffold_project.py --plan <manifest>` and
+   show the module list and warnings. Ask for confirmation only where the
+   brief is ambiguous (platforms, accounts, RAG/MCP, local vs remote models,
+   release targets).
+4. Apply only after confirmation. If a requested capability has no module,
+   record the gap instead of hand-editing generated code.
 
 If `var/playbook` is absent, create it at the project's pinned tag (step 0)
 before opening any recipe's "Source of truth" path. Do not read from a random

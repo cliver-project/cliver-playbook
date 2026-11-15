@@ -23,9 +23,43 @@ git clone <playbook-repository> var/playbook
 git -C var/playbook checkout <tag-or-commit>
 ```
 
-### 2. Pick the smallest manifest
+### 2. Turn the brief into a manifest
 
-Start from the examples rather than writing one from scratch:
+Read the user's brief and infer the smallest manifest. Do not ask for YAML.
+Map the brief as follows, then show the manifest and plan before applying:
+
+| Brief signal | Manifest fields |
+|---|---|
+| Web UI | `ui.web: true` |
+| Installable desktop app | `ui.desktop: tauri2`, `release.desktop: true` |
+| iPhone/iPad or Android | `ui.mobile.ios: swiftui` / `ui.mobile.android: kotlin`, layouts `[phone, pad]` |
+| Accounts, roles, profile | `api.features` includes `auth`, `settings`; mobile features include `auth`, `profile` |
+| AI assistant/tools/MCP | `api.features` includes `agent`, optionally `mcp`; `agent.runtime: agentcore` |
+| Knowledge base | `api.features` includes `rag` |
+| Local/offline models | `api.deployment: local`, `model.deployment: local`, desktop |
+| Reference CRUD | `scaffold.reference_slices: [products]` |
+| All clients | `ai-full` profile |
+| One native client | `ai-mobile` with the requested platform |
+
+Ask only about choices that change modules: platforms, accounts, RAG/MCP,
+local vs remote models, and release targets.
+
+Example briefs and inferred starts:
+
+- "Browser-only AI assistant with login and a product list" → `ai-web`,
+  `ui.web: true`, `api.features` includes `auth`, `settings`, `agent`, remote
+  models, `scaffold.reference_slices: [products]`.
+- "Web, macOS/Windows installer, iPhone and Android from day one" → `ai-full`,
+  remote API/models, mobile features `[auth, profile, crud]`, release desktop
+  and mobile.
+- "Only an iPhone/iPad native client" → `ai-mobile` with
+  `ui.mobile.ios: swiftui`; do not enable web or Android.
+- "Desktop installer that works offline with local models" → `ai-desktop`,
+  local API and model deployment, desktop release.
+- "Add a knowledge base and MCP tools to the assistant" → keep the chosen
+  profile, add `rag`/`mcp` to `api.features`, enable `agent.mcp` as needed.
+
+Start from the nearest example:
 
 - `scaffold/examples/ai-web.yaml` — web + API, no mobile/desktop.
 - `scaffold/examples/ai-desktop.yaml` — web + Tauri desktop + local sidecars.
@@ -58,8 +92,11 @@ renders Jinja into the output.
 ```sh
 cd ../example-ai-full
 make init          # Python API, model service and web dependencies
+make contracts     # align generated clients/native manifests with this contract
 make db-init       # PostgreSQL + every migration chain
 make dev           # API, model service and web UI
+# Optional: run execution separately with make dev-worker after disabling the
+# API's in-process consumer (CLIVER_AGENT_RUN_WORKER_ENABLED=false).
 ```
 
 The API owns AgentCore, the agent runtime, authentication and model routing.
@@ -77,11 +114,14 @@ make web-e2e       # mocked chat and learning-dashboard flows
 make web-e2e-real E2E_USERNAME=<admin> E2E_PASSWORD=<password>  # live API
 ```
 
-Expected baseline: 87 API tests in `ai-full`, the model-service health test,
-the web typecheck/lint/seam/build and two mocked Playwright checks, iOS Core
-package tests and Android unit tests. `make contract-test` runs 1,000+ generated
-cases with no 5xx; `make web-e2e-real` signs in, chats, submits feedback and
-loads the learning dashboard.
+Expected baseline at the time of writing: 128 API tests in `ai-full`, the
+model-service health test, the web typecheck/lint/seam/build and 9 mocked
+Playwright checks (chat, sessions, runtime, learning and axe), iOS Core tests
+and Android unit plus adaptive tests. Counts evolve with the playbook; use the
+suite's current count. `make contracts-check` verifies generated clients;
+`make contract-test` runs 1,000+ generated cases with response-schema
+conformance and no 5xx; `make web-e2e-real` signs in, chats, submits feedback
+and loads the learning dashboard.
 `make test-api` uses a scratch PostgreSQL database; set
 `CLIVER_TEST_DATABASE_URL` when the default local DSN does not apply.
 
@@ -123,9 +163,10 @@ make test-android
 make package
 ```
 
-A fresh `ai-full` project must produce 78 passing API tests, a passing web
-build/E2E, and the five artifact locations above. Re-running the scaffolder
-into the same target must fail instead of overwriting project-owned code.
+A fresh `ai-full` project must produce the current API suite passing, a
+passing web build/E2E, and the five artifact locations above. Re-running the
+scaffolder into the same target must fail instead of overwriting project-owned
+code. `make contracts-check` must pass after `make contracts`.
 
 ## Pitfalls
 
@@ -143,6 +184,15 @@ into the same target must fail instead of overwriting project-owned code.
 - **Unsigned is not distributable.** `make package` is for local inspection and
   smoke tests; store builds need signing and notarization credentials.
 - **No secrets in the project.** Keep `.env`, keys and build output out of git.
+- **Use the scaffold, not package assembly.** For an AI-native app call
+  `scaffold_project.py`; `assemble_project.py` is for non-AI-native package
+  composition.
+- **Do not hand-write wire types.** Run `make contracts` after changing the
+  manifest or a contract fragment; TypeScript, Python, Swift and Kotlin clients
+  are generated and gated.
+- **Do not expect hosted staging from a local build.** Real-model local smoke
+  is available; hosted staging needs a deployed target and secrets, not just a
+  model API key.
 
 ## Source of truth
 

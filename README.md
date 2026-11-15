@@ -150,6 +150,28 @@ latest guidance, and does not need to match the release a project pins.
 skills directory (`.claude/skills/` for Claude Code, `.agents/skills/` for the
 other supported agents); add `-g` for a user-level install or `--list` to
 inspect what the repository offers.
+
+For a local checkout, point Claude Code at the source directory directly. In
+this repository `.claude/skills/cliver-playbook-assemble-project` is a local
+symlink to `skills/cliver-playbook-assemble-project` (the `.claude/skills/`
+directory is gitignored). For another project, create the same link in that
+project, or install it for every project:
+
+```sh
+# Project-scoped
+mkdir -p .claude/skills
+ln -s <playbook-root>/skills/cliver-playbook-assemble-project .claude/skills/
+
+# User-scoped
+mkdir -p ~/.claude/skills
+ln -s <playbook-root>/skills/cliver-playbook-assemble-project ~/.claude/skills/
+```
+
+For a new AI-native app, the skill's default on-ramp is the scaffold, not
+package assembly: Claude reads the brief, infers a manifest from the nearest
+`scaffold/examples/*.yaml`, runs `scripts/scaffold_project.py --plan`, asks
+only about module-changing choices, then applies it. Package composition
+remains for existing projects and non-AI-native services.
 `SKILL.md` holds the workflow and the reading protocol;
 `reference/use-cases/` holds the one-task recipes; the remaining `reference/`
 files are deep dives (decision guide, backend and frontend composition,
