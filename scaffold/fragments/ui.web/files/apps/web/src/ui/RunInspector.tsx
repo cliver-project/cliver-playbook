@@ -46,7 +46,7 @@ export function RunInspector({
   const hasDetails = steps.length > 0 || results.length > 0 || handoffs.length > 0;
   return (
     <details className="rounded-lg border bg-muted/30 p-3 text-sm">
-      <summary className="cursor-pointer select-none font-medium">
+      <summary className="cursor-pointer select-none font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         {title}
         {steps.length > 0 ? ` (${steps.length})` : null}
       </summary>

@@ -113,6 +113,53 @@ async function prepare(page: import("@playwright/test").Page, theme: "light" | "
   );
 }
 
+test("chat keeps a logical focus order", async ({ page }) => {
+  await prepare(page, "light");
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+
+  const newSession = page.getByRole("button", { name: "New session" });
+  await newSession.focus();
+  await expect(newSession).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Ask a question…")).toBeFocused();
+
+  await page.getByLabel("Ask a question…").fill("keyboard check");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Send" })).toBeFocused();
+});
+
+test("chat and runtime survive 200% text size without horizontal loss", async ({
+  page,
+}) => {
+  await prepare(page, "light");
+  for (const path of ["/", "/runtime"]) {
+    await page.goto(path);
+    await expect(page.getByRole("main")).toBeVisible();
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    const overflow = await page.evaluate(() => {
+      const main = document.querySelector("main");
+      return main ? main.scrollWidth - main.clientWidth : 0;
+    });
+    expect(overflow, `${path} horizontal overflow at 200% text`).toBeLessThanOrEqual(1);
+  }
+});
+
+test("chat exposes a usable accessibility tree", async ({ page }) => {
+  await prepare(page, "light");
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+  const snapshot = await page.getByRole("main").ariaSnapshot();
+  expect(snapshot).toContain('heading "Ask anything"');
+  expect(snapshot).toContain('navigation "Sessions"');
+  expect(snapshot).toContain("log");
+  expect(snapshot).toContain('textbox "Ask a question…"');
+  expect(snapshot).toContain('button "Send"');
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`primary pages have no WCAG A/AA violations in ${theme} mode`, async ({
     page,

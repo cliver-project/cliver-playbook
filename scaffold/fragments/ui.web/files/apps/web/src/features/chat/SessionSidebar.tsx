@@ -43,7 +43,9 @@ export function SessionSidebar({
         </p>
       ) : null}
       {loading && sessions.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{loadingLabel}</p>
+        <p role="status" className="text-xs text-muted-foreground">
+          {loadingLabel}
+        </p>
       ) : null}
       {!loading && sessions.length === 0 ? (
         <p className="text-xs text-muted-foreground">{emptyLabel}</p>
@@ -60,8 +62,8 @@ export function SessionSidebar({
                 onClick={() => onSelect(session.session_id)}
                 className={
                   current
-                    ? "w-full rounded-lg border bg-muted px-3 py-2 text-left"
-                    : "w-full rounded-lg border border-transparent px-3 py-2 text-left hover:bg-muted"
+                    ? "w-full rounded-lg border bg-muted px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    : "w-full rounded-lg border border-transparent px-3 py-2 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 }
               >
                 <span className="line-clamp-2 text-sm">{session.last_message}</span>
