@@ -25,8 +25,14 @@ git -C var/playbook checkout <tag-or-commit>
 
 ### 2. Turn the brief into a manifest
 
-Read the user's brief and infer the smallest manifest. Do not ask for YAML.
-Map the brief as follows, then show the manifest and plan before applying:
+**You are the parser for this step.** The scaffold script accepts YAML only;
+it does not understand prose. The user speaks naturally, and you infer, ask
+blocking questions, write the YAML, plan, confirm and apply. Do not ask the
+user to write YAML or to run the generation commands; execute them yourself
+unless the environment forbids it.
+
+Read the brief and infer the smallest manifest. Map it as follows, then show
+the manifest and plan before applying:
 
 | Brief signal | Manifest fields |
 |---|---|
@@ -42,7 +48,9 @@ Map the brief as follows, then show the manifest and plan before applying:
 | One native client | `ai-mobile` with the requested platform |
 
 Ask only about choices that change modules: platforms, accounts, RAG/MCP,
-local vs remote models, and release targets.
+local vs remote models, and release targets. Ask at most three questions per
+round. If the user says "you decide", use the table's default, record the
+assumption under `decisions` in the manifest, and continue.
 
 Example briefs and inferred starts:
 
@@ -73,6 +81,10 @@ the project, set `project`, and adjust `ui`, `api.features`, `reference_slices`
 and `release` deliberately.
 
 ### 3. Plan, then apply into an empty directory
+
+Run these commands yourself and report their real output. Show the plan and
+warnings before asking for confirmation; the user should not have to invoke
+the script.
 
 ```sh
 python3 var/playbook/scripts/scaffold_project.py \

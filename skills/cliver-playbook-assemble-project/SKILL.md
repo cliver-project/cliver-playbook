@@ -56,9 +56,21 @@ already have their own shell and only adopt individual playbook packages.
 
 ## Natural language brief → scaffold manifest
 
-For a new AI-native app, do not ask the user to write YAML first. Read the
-brief, infer the smallest manifest, show it, and only ask about choices that
-change the module set.
+**You are the parser.** `scaffold_project.py` reads YAML only; it does not
+interpret prose. The human speaks in natural language, and you:
+
+1. extract the smallest manifest,
+2. ask only questions that change the module set,
+3. write the manifest,
+4. run `--plan`, show the result, and ask for confirmation,
+5. run `--apply`.
+
+Do not require the user to write YAML or to run the generation commands. The
+commands in this skill are yours to execute unless the environment forbids it;
+report the actual command result, not a script for the user to run.
+
+For a new AI-native app, read the brief and infer the manifest. Only ask about
+choices that change the module set.
 
 | Brief signal | Manifest fields | Default |
 |---|---|---|
@@ -78,16 +90,18 @@ Rules:
 
 1. Start from the nearest example in `scaffold/examples/`, usually
    `ai-full.yaml` for a multi-client app or `ai-web.yaml` for a browser-only
-   service.
+   service. If the user supplied a template, treat it as authoritative.
 2. Set `project`, `scaffold.profile`, `scaffold.reference_slices`, `ui`,
    `api.features`, `model`, `agent` and `release` from the brief. Leave
    credentials and deployment endpoints out.
-3. Write the manifest to a file, then run
+3. Ask at most three questions per round, and only where the answer changes
+   modules: web/desktop/iOS/Android, accounts/roles, RAG/MCP, local vs remote
+   models, and release targets. "You decide" means take the table's default,
+   record the assumption under `decisions`, and continue.
+4. Write the manifest yourself, then run
    `python3 var/playbook/scripts/scaffold_project.py --plan <manifest>` and
-   show the module list and warnings. Ask for confirmation only where the
-   brief is ambiguous (platforms, accounts, RAG/MCP, local vs remote models,
-   release targets).
-4. Apply only after confirmation. If a requested capability has no module,
+   show the module list and warnings. Do not ask the user to run it.
+5. Apply only after confirmation. If a requested capability has no module,
    record the gap instead of hand-editing generated code.
 
 If `var/playbook` is absent, create it at the project's pinned tag (step 0)

@@ -38,10 +38,12 @@ what the repository offers. For a local checkout, symlink
 `<playbook-root>/skills/cliver-playbook-assemble-project` into a project's
 `.claude/skills/` or into `~/.claude/skills/`; Claude Code reads it directly.
 
-For a new AI-native app the skill routes to `scripts/scaffold_project.py`: the
-natural-language brief becomes a manifest, the agent shows the plan, then
-applies it. Package composition is the separate path for existing and
-non-AI-native projects. Its references are the detailed versions of the
+For a new AI-native app the skill routes to `scripts/scaffold_project.py` and
+is itself the natural-language parser: the user describes the product, the
+agent asks only module-changing questions, writes the manifest, shows the
+plan, then applies it. The script accepts YAML only; the user does not write
+YAML or run the generation commands. Package composition is the separate path
+for existing and non-AI-native projects. Its references are the detailed versions of the
 decision tree, the backend and frontend composition, the production gates, and
 the upstream loop.
 

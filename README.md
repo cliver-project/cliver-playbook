@@ -168,10 +168,12 @@ ln -s <playbook-root>/skills/cliver-playbook-assemble-project ~/.claude/skills/
 ```
 
 For a new AI-native app, the skill's default on-ramp is the scaffold, not
-package assembly: Claude reads the brief, infers a manifest from the nearest
-`scaffold/examples/*.yaml`, runs `scripts/scaffold_project.py --plan`, asks
-only about module-changing choices, then applies it. Package composition
-remains for existing projects and non-AI-native services.
+package assembly. The skill is the parser: the user describes the app in
+natural language, Claude asks only module-changing questions, writes a
+manifest based on the nearest `scaffold/examples/*.yaml`, runs
+`scripts/scaffold_project.py --plan`, then applies it. The script accepts YAML
+only; the user does not need to write YAML or run the generation commands.
+Package composition remains for existing projects and non-AI-native services.
 `SKILL.md` holds the workflow and the reading protocol;
 `reference/use-cases/` holds the one-task recipes; the remaining `reference/`
 files are deep dives (decision guide, backend and frontend composition,
