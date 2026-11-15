@@ -27,6 +27,9 @@ dependencies = [
 ]
 {% if enabled('api.agent') %}
 
+[project.scripts]
+{{ project_slug }}-worker = "app.worker_main:main"
+
 [project.optional-dependencies]
 # In-process laya System One selector: `uv sync --extra local-system-one`.
 local-system-one = ["cliver-core[local-laya]>=0.3.1,<0.4"]

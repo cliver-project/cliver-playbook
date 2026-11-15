@@ -152,7 +152,15 @@ an agent may name its own MCP servers. Runs are durable: every event lands in
 before it is observable, one worker executes each run (streams only replay and
 tail), the SSE frames carry `id: <sequence>` so `Last-Event-ID` resumes after a
 reconnect, and keepalive comments cover quiet periods. A worker that vanishes
-is marked `orphaned` rather than retried. Skills live in
+is marked `orphaned` rather than retried.
+
+By default every API process also runs a queue consumer. To scale execution
+separately, set `CLIVER_AGENT_RUN_WORKER_ENABLED=false` on the API instances
+and run `make dev-worker` (or `<project>-worker`) as a dedicated process
+against the same database and model secrets. It serves no HTTP and does not
+run migrations.
+
+Skills live in
 `services/api/skills/`; tool definitions live on each sub-agent in
 `services/api/app/agents/subagents/`. The UI never calls a model provider
 directly.

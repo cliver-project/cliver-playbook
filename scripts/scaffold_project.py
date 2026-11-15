@@ -1466,6 +1466,11 @@ def _self_test() -> int:
         assert "package: build" in makefile
         assert "test-ios" in makefile
         assert "test-android" in makefile
+        assert "dev-worker" in makefile
+        assert "worker_main:main" in (
+            full_target / "services/api/pyproject.toml"
+        ).read_text(encoding="utf-8")
+        assert (full_target / "services/api/app/worker_main.py").is_file()
         assert "test-model" in makefile
         assert "contract-test" in makefile
         assert "live-smoke" in makefile

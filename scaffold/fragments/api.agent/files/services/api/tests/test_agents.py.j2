@@ -1202,6 +1202,31 @@ def test_skills_are_scoped_per_agent(tmp_path) -> None:
     assert sorted(products.get_skill_names()) == ["greet", "price"]
 
 
+def test_agent_skill_overrides_shared_and_missing_agent_dir_is_harmless(tmp_path) -> None:
+    from app.agents.core import build_skill_manager
+
+    def write_skill(path, name, description):
+        path.mkdir(parents=True)
+        (path / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: {description}\n---\nUse it.\n",
+            encoding="utf-8",
+        )
+
+    write_skill(tmp_path / "shared" / "greet", "greet", "Shared greeting skill.")
+    write_skill(tmp_path / "products" / "greet", "greet", "Agent greeting skill.")
+    write_skill(tmp_path / "products" / "price", "price", "Product pricing skill.")
+    settings = Settings(_env_file=None, agent_skills_dir=str(tmp_path))
+
+    products = build_skill_manager(settings, "products")
+    assert products is not None
+    assert sorted(products.get_skill_names()) == ["greet", "price"]
+    assert products.get_skill("greet").description == "Agent greeting skill."
+
+    missing = build_skill_manager(settings, "unknown-agent")
+    assert missing is not None
+    assert missing.get_skill_names() == ["greet"]
+
+
 @pytest.mark.asyncio
 async def test_agentcore_runner_falls_back_before_emitting_output() -> None:
     runner = AgentCoreRunner(_runner_settings(), core_factory=_core_factory(BrokenCore()))
@@ -1366,6 +1391,66 @@ async def test_cancel_during_run_persists_cancelled_event(
 
     record = await _wait_status(run_id, "cancelled")
     assert record.cancelled is True
+
+
+@pytest.mark.asyncio
+async def test_cancel_queued_run_writes_terminal_event_and_is_idempotent() -> None:
+    from app.agents.events import EventStore
+    from app.agents.runs import DatabaseRunStore
+    from cliver_playbook.app.basic.db.session import open_session
+
+    run_id = uuid.uuid4().hex
+    async with open_session() as db:
+        store = DatabaseRunStore(db)
+        await store.create(run_id, message="queued cancel")
+        record = await store.cancel(run_id)
+        assert record is not None
+        assert record.status == "cancelled"
+        assert record.cancelled is True
+
+        events = await EventStore(db).after(run_id, -1)
+        assert events[-1]["type"] == "run.failed"
+        assert events[-1]["code"] == "cancelled"
+
+        again = await store.cancel(run_id)
+        assert again is not None and again.status == "cancelled"
+        assert (await EventStore(db).after(run_id, -1)) == events
+
+
+@pytest.mark.asyncio
+async def test_cancel_terminal_run_does_not_change_status() -> None:
+    from app.agents.runs import DatabaseRunStore
+    from cliver_playbook.app.basic.db.session import open_session
+
+    run_id = uuid.uuid4().hex
+    async with open_session() as db:
+        store = DatabaseRunStore(db)
+        await store.create(run_id, message="already done")
+        await store.set_status(run_id, "completed")
+        record = await store.cancel(run_id)
+        assert record is not None
+        assert record.status == "completed"
+        assert record.cancelled is False
+
+
+@pytest.mark.asyncio
+async def test_stream_resume_after_terminal_returns_no_events(client, auth_headers) -> None:
+    created = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "resume after the end"},
+        headers=auth_headers,
+    )
+    run_id = created.json()["run_id"]
+    await _wait_status(run_id, "completed")
+    full = await client.get(f"/api/v1/agent/runs/{run_id}/events", headers=auth_headers)
+    events = _events_from_sse(full.text)
+    last = events[-1]["sequence"]
+    resumed = await client.get(
+        f"/api/v1/agent/runs/{run_id}/events",
+        headers={**auth_headers, "Last-Event-ID": str(last)},
+    )
+    assert resumed.status_code == 200, resumed.text
+    assert resumed.text.strip() == ""
 
 
 @pytest.mark.asyncio
@@ -1572,6 +1657,38 @@ async def test_worker_runs_parallel_steps_with_isolated_sessions() -> None:
     assert {event.get("parallel_group") for event in selected} == {0}
     assert [event["sequence"] for event in events] == list(range(len(events)))
     assert events[-1]["type"] == "run.completed"
+
+
+@pytest.mark.asyncio
+async def test_dedicated_worker_refuses_when_disabled() -> None:
+    from app.worker_main import run_worker
+
+    with pytest.raises(SystemExit, match="WORKER_ENABLED"):
+        await run_worker(Settings(_env_file=None, agent_run_worker_enabled=False))
+
+
+@pytest.mark.asyncio
+async def test_dedicated_worker_starts_and_stops(monkeypatch) -> None:
+    from app import worker_main
+
+    started: list[Settings] = []
+    stopped: list[bool] = []
+
+    async def fake_start(settings: Settings) -> None:
+        started.append(settings)
+
+    async def fake_stop() -> None:
+        stopped.append(True)
+
+    monkeypatch.setattr(worker_main, "start_job_queue", fake_start)
+    monkeypatch.setattr(worker_main, "stop_job_queue", fake_stop)
+    stop = asyncio.Event()
+    stop.set()
+    await worker_main.run_worker(
+        Settings(_env_file=None, agent_run_worker_enabled=True),
+        stop=stop,
+    )
+    assert started and stopped
 
 
 @pytest.mark.asyncio

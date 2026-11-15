@@ -117,6 +117,12 @@ contracts-verify-native: ## Regenerate native clients in a temp dir and diff the
 
 ##@ Development
 
+{% if enabled('api.agent') %}
+.PHONY: dev-worker
+dev-worker: ## Run a dedicated agent-run worker (disable the API consumer)
+	cd services/api && uv run {{ project_slug }}-worker
+{% endif %}
+
 {% if enabled('api.python') %}
 .PHONY: dev-api
 dev-api: db-init ## Run the API with auto-reload
