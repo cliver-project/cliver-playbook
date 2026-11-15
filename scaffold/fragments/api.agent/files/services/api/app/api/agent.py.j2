@@ -16,6 +16,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.bootstrap import register_default_agents, register_project_agents
@@ -234,23 +235,49 @@ def _require_reviewer(viewer: Viewer) -> None:
 )
 async def create_run(
     payload: AgentRunRequest,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=200,
+    ),
 {% if enabled('api.auth') %}
     _viewer: Viewer = _VIEWER,
 {% endif %}
     db: AsyncSession = Depends(get_db),
 ) -> AgentRunCreated:
-    run_id = uuid.uuid4().hex
 {% if enabled('api.auth') %}
     user_id = _viewer.user_id
 {% else %}
     user_id = None
 {% endif %}
-    await _run_store(db).create(
-        run_id,
-        message=payload.message,
-        user_id=user_id,
-        session_id=payload.session_id,
-    )
+    key = idempotency_key.strip() if idempotency_key is not None else None
+    if idempotency_key is not None and not key:
+        raise HTTPException(status_code=422, detail="Idempotency-Key must not be blank")
+    store = _run_store(db)
+    if key is not None:
+        existing = await store.find_by_idempotency_key(key, user_id=user_id)
+        if existing is not None:
+            return AgentRunCreated(run_id=existing.run_id, status=existing.status)
+
+    run_id = uuid.uuid4().hex
+    try:
+        await store.create(
+            run_id,
+            message=payload.message,
+            user_id=user_id,
+            session_id=payload.session_id,
+            idempotency_key=key,
+        )
+    except IntegrityError:
+        # A concurrent request with the same key won the unique index.
+        await db.rollback()
+        existing = (
+            await store.find_by_idempotency_key(key, user_id=user_id) if key is not None else None
+        )
+        if existing is None:
+            raise
+        return AgentRunCreated(run_id=existing.run_id, status=existing.status)
     wake_job_queue()
     return AgentRunCreated(run_id=run_id, status="queued")
 

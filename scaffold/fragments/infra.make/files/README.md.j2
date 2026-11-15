@@ -88,8 +88,12 @@ client is stale. `contracts/events.json` defines the agent streaming events.
 
 `make contract-test` creates a scratch PostgreSQL database, starts the API,
 grants the seeded admin role and runs Schemathesis against the live contract.
-It fails on 5xx responses; missing fixtures and constrained-schema rejections
-are warnings.
+It fails on 5xx responses and response-schema violations; missing fixtures and
+constrained-schema rejections are warnings.
+
+Run creation accepts an optional `Idempotency-Key` header. Repeating the same
+key for the same user returns the existing run instead of starting another;
+the web client sends one and retries a lost response with it.
 
 {% if enabled('ui.web') %}
 ## Web UI seam

@@ -43,11 +43,14 @@ data class AgentRunCreated (
 ) {
 
     /**
-     * Values: queued,running
+     * Values: queued,running,completed,failed,cancelled
      */
     enum class Status(val value: kotlin.String) {
         @SerializedName(value = "queued") queued("queued"),
-        @SerializedName(value = "running") running("running");
+        @SerializedName(value = "running") running("running"),
+        @SerializedName(value = "completed") completed("completed"),
+        @SerializedName(value = "failed") failed("failed"),
+        @SerializedName(value = "cancelled") cancelled("cancelled");
     }
 
 }

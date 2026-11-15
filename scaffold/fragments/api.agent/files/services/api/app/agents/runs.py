@@ -27,6 +27,7 @@ class RunRecord:
     message: str
     user_id: int | None = None
     session_id: str | None = None
+    idempotency_key: str | None = None
     status: str = "queued"
     cancelled: bool = False
 
@@ -41,9 +42,14 @@ class RunStore(Protocol):
         message: str,
         user_id: int | None = None,
         session_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> RunRecord: ...
 
     async def get(self, run_id: str) -> RunRecord | None: ...
+
+    async def find_by_idempotency_key(
+        self, key: str, *, user_id: int | None
+    ) -> RunRecord | None: ...
 
     async def claim(self, run_id: str) -> bool: ...
 
@@ -73,15 +79,33 @@ class InMemoryRunStore:
         message: str,
         user_id: int | None = None,
         session_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> RunRecord:
         if run_id in self._runs:
             raise ValueError(f"Run {run_id!r} already exists")
-        record = RunRecord(run_id=run_id, message=message, user_id=user_id, session_id=session_id)
+        if (
+            idempotency_key is not None
+            and await self.find_by_idempotency_key(idempotency_key, user_id=user_id) is not None
+        ):
+            raise ValueError(f"Idempotency key {idempotency_key!r} is already used")
+        record = RunRecord(
+            run_id=run_id,
+            message=message,
+            user_id=user_id,
+            session_id=session_id,
+            idempotency_key=idempotency_key,
+        )
         self._runs[run_id] = record
         return record
 
     async def get(self, run_id: str) -> RunRecord | None:
         return self._runs.get(run_id)
+
+    async def find_by_idempotency_key(self, key: str, *, user_id: int | None) -> RunRecord | None:
+        for record in self._runs.values():
+            if record.idempotency_key == key and record.user_id == user_id:
+                return record
+        return None
 
     async def claim(self, run_id: str) -> bool:
         record = self._runs.get(run_id)
@@ -135,16 +159,35 @@ class DatabaseRunStore:
         message: str,
         user_id: int | None = None,
         session_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> RunRecord:
         if await self._row(run_id) is not None:
             raise ValueError(f"Run {run_id!r} already exists")
-        row = AgentRun(run_id=run_id, message=message, user_id=user_id, session_id=session_id)
+        row = AgentRun(
+            run_id=run_id,
+            message=message,
+            user_id=user_id,
+            session_id=session_id,
+            idempotency_key=idempotency_key,
+        )
         self.db.add(row)
         await self.db.commit()
         return _record(row)
 
     async def get(self, run_id: str) -> RunRecord | None:
         row = await self._row(run_id)
+        return _record(row) if row is not None else None
+
+    async def find_by_idempotency_key(self, key: str, *, user_id: int | None) -> RunRecord | None:
+        owner = AgentRun.user_id.is_(None) if user_id is None else AgentRun.user_id == user_id
+        row = (
+            await self.db.execute(
+                select(AgentRun).where(
+                    AgentRun.idempotency_key == key,
+                    owner,
+                )
+            )
+        ).scalar_one_or_none()
         return _record(row) if row is not None else None
 
     async def claim(self, run_id: str) -> bool:
@@ -258,6 +301,7 @@ def _record(row: AgentRun) -> RunRecord:
         message=row.message,
         user_id=row.user_id,
         session_id=row.session_id,
+        idempotency_key=row.idempotency_key,
         status=row.status,
         cancelled=row.cancelled,
     )

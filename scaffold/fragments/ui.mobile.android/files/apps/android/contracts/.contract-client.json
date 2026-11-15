@@ -11,6 +11,6 @@
     "sourceFolder": "src/main/kotlin",
     "useCoroutines": "true"
   },
-  "openapi_sha256": "fb6daa4feee0c754c9534ea422647112c9a5a700ee86091e76df140d9269a561",
+  "openapi_sha256": "f1c1d3b83f065685b9c98d4b1eb97df7a5dd054d8c1ee0e3e1d7a09d3e7cf0a8",
   "version": "7.27.0"
 }

@@ -528,7 +528,7 @@ export interface components {
         AgentRunCreated: {
             run_id: string;
             /** @enum {string} */
-            status: "queued" | "running";
+            status: "queued" | "running" | "completed" | "failed" | "cancelled";
         };
         AgentFeedbackRequest: {
             agent: string;
@@ -831,7 +831,10 @@ export interface operations {
     createAgentRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional client-generated key. Repeating the same key for the same user returns the existing run instead of creating another one. */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -872,7 +875,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "text/event-stream": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Invalid run id or Last-Event-ID header */

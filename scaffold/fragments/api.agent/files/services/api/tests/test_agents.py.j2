@@ -1692,6 +1692,87 @@ async def test_dedicated_worker_starts_and_stops(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_creation_is_idempotent_per_key(client, auth_headers) -> None:
+    from sqlalchemy import func, select
+
+    from app.agents.models import AgentRun
+    from cliver_playbook.app.basic.db.session import open_session
+
+    key = uuid.uuid4().hex
+    headers = {**auth_headers, "Idempotency-Key": key}
+    first = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "idempotent run"},
+        headers=headers,
+    )
+    second = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "idempotent run"},
+        headers=headers,
+    )
+    assert first.status_code == 202, first.text
+    assert second.status_code == 202, second.text
+    run_id = first.json()["run_id"]
+    assert second.json()["run_id"] == run_id
+
+    await _wait_status(run_id, "completed")
+    after = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "idempotent run"},
+        headers=headers,
+    )
+    assert after.json()["run_id"] == run_id
+    assert after.json()["status"] == "completed"
+
+    async with open_session() as db:
+        count = await db.scalar(
+            select(func.count()).select_from(AgentRun).where(AgentRun.idempotency_key == key)
+        )
+    assert count == 1
+
+    other = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "different key"},
+        headers={**auth_headers, "Idempotency-Key": uuid.uuid4().hex},
+    )
+    assert other.json()["run_id"] != run_id
+
+
+@pytest.mark.asyncio
+async def test_concurrent_idempotent_requests_share_one_run(client, auth_headers) -> None:
+    key = uuid.uuid4().hex
+    headers = {**auth_headers, "Idempotency-Key": key}
+
+    async def create() -> dict:
+        response = await client.post(
+            "/api/v1/agent/runs",
+            json={"message": "race"},
+            headers=headers,
+        )
+        assert response.status_code == 202, response.text
+        return response.json()
+
+    first, second = await asyncio.gather(create(), create())
+    assert first["run_id"] == second["run_id"]
+
+
+@pytest.mark.asyncio
+async def test_blank_or_overlong_idempotency_key_is_rejected(client, auth_headers) -> None:
+    blank = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "blank key"},
+        headers={**auth_headers, "Idempotency-Key": "   "},
+    )
+    assert blank.status_code == 422, blank.text
+    overlong = await client.post(
+        "/api/v1/agent/runs",
+        json={"message": "long key"},
+        headers={**auth_headers, "Idempotency-Key": "x" * 201},
+    )
+    assert overlong.status_code == 422, overlong.text
+
+
+@pytest.mark.asyncio
 async def test_agent_catalog_lists_examples(client, auth_headers) -> None:
     response = await client.get("/api/v1/agent/agents", headers=auth_headers)
     assert response.status_code == 200, response.text

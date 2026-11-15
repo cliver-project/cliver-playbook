@@ -15,6 +15,9 @@ public struct AgentRunCreated: Codable, JSONEncodable, Hashable {
     public enum Status: String, Codable, CaseIterable {
         case queued = "queued"
         case running = "running"
+        case completed = "completed"
+        case failed = "failed"
+        case cancelled = "cancelled"
     }
     public var runId: String
     public var status: Status

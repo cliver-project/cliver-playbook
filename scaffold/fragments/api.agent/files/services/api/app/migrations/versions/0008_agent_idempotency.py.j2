@@ -1,0 +1,41 @@
+"""Idempotency keys for agent run creation.
+
+Revision ID: {{ "0008_agent_idempotency" if enabled('api.products') else "0007_agent_idempotency" }}
+Revises:{{ "0007_agent_rollout" if enabled("api.products") else "0006_agent_rollout" }}
+Create Date: 2026-01-01 00:00:00
+"""
+
+import sqlalchemy as sa
+from alembic import op
+
+revision = "{{ "0008_agent_idempotency" if enabled('api.products') else "0007_agent_idempotency" }}"
+down_revision = "{{ "0007_agent_rollout" if enabled('api.products') else "0006_agent_rollout" }}"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.add_column(
+        "agent_runs",
+        sa.Column("idempotency_key", sa.String(length=200), nullable=True),
+    )
+    op.create_index(
+        "uq_agent_runs_idempotency_user",
+        "agent_runs",
+        ["user_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text("idempotency_key IS NOT NULL AND user_id IS NOT NULL"),
+    )
+    op.create_index(
+        "uq_agent_runs_idempotency_anonymous",
+        "agent_runs",
+        ["idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text("idempotency_key IS NOT NULL AND user_id IS NULL"),
+    )
+
+
+def downgrade() -> None:
+    op.drop_index("uq_agent_runs_idempotency_anonymous", table_name="agent_runs")
+    op.drop_index("uq_agent_runs_idempotency_user", table_name="agent_runs")
+    op.drop_column("agent_runs", "idempotency_key")

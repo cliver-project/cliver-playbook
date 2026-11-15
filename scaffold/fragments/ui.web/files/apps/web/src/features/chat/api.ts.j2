@@ -43,14 +43,26 @@ export async function startRun(message: string, sessionId?: string): Promise<str
     message,
     ...(sessionId ? { session_id: sessionId } : {}),
   };
-  const response = await fetch("/api/v1/agent/runs", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-    },
-    body: JSON.stringify(body),
-  });
+  // Retrying with the same key is safe: the API returns the existing run if
+  // the first request committed but the response was lost.
+  const idempotencyKey =
+    globalThis.crypto?.randomUUID?.() ?? `run-${Date.now()}-${Math.random()}`;
+  const send = () =>
+    fetch("/api/v1/agent/runs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        ...authHeaders(),
+      },
+      body: JSON.stringify(body),
+    });
+  let response: Response;
+  try {
+    response = await send();
+  } catch {
+    response = await send();
+  }
   if (!response.ok) {
     throw new Error((await response.text()) || `HTTP ${response.status}`);
   }

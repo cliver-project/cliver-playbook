@@ -6,8 +6,8 @@ Usage:
 
 The script creates a temporary database, applies every migration chain, starts
 one uvicorn process, registers a user when auth is enabled, and runs the
-composed OpenAPI contract. It fails on 5xx responses and schema-level server
-errors; missing test data and 4xx responses are reported as warnings.
+composed OpenAPI contract. It fails on 5xx responses and response-schema
+violations; missing test data and 4xx responses are reported as warnings.
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ def main() -> int:
             "-u",
             base_url,
             "--checks",
-            "not_a_server_error",
+            "not_a_server_error,response_schema_conformance",
             "--max-examples",
             "10",
             "--workers",

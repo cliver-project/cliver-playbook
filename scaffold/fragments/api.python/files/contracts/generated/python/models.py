@@ -18,6 +18,9 @@ class AgentRunRequest(BaseModel):
 class Status(Enum):
     queued = 'queued'
     running = 'running'
+    completed = 'completed'
+    failed = 'failed'
+    cancelled = 'cancelled'
 
 
 class AgentRunCreated(BaseModel):

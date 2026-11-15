@@ -29,11 +29,27 @@ class AgentRun(Base):
     """One coordinator run, durable across requests and restarts."""
 
     __tablename__ = "agent_runs"
+    __table_args__ = (
+        Index(
+            "uq_agent_runs_idempotency_user",
+            "user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL AND user_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_agent_runs_idempotency_anonymous",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL AND user_id IS NULL"),
+        ),
+    )
 
     run_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="queued", server_default="queued"
     )

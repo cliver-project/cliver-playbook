@@ -6,6 +6,17 @@ paths:
       operationId: createAgentRun
       security:
         - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: >
+            Optional client-generated key. Repeating the same key for the same
+            user returns the existing run instead of creating another one.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
       requestBody:
         required: true
         content:
@@ -50,7 +61,11 @@ paths:
           content:
             text/event-stream:
               schema:
-                type: string
+                type: object
+                description: >
+                  One JSON event per SSE frame; contracts/events.json is the
+                  normative union of event types.
+                additionalProperties: true
         "422":
           description: Invalid run id or Last-Event-ID header
   /api/v1/agent/runs/{run_id}/cancel:
@@ -606,7 +621,7 @@ components:
           type: string
         status:
           type: string
-          enum: [queued, running]
+          enum: [queued, running, completed, failed, cancelled]
     AgentFeedbackRequest:
       type: object
       required: [agent, rating]

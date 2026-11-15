@@ -177,11 +177,12 @@ open class AgentAPI {
      Start an agent run
      
      - parameter agentRunRequest: (body)  
+     - parameter idempotencyKey: (header) Optional client-generated key. Repeating the same key for the same user returns the existing run instead of creating another one.  (optional)
      - returns: AgentRunCreated
      */
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
-    open class func createAgentRun(agentRunRequest: AgentRunRequest) async throws -> AgentRunCreated {
-        return try await createAgentRunWithRequestBuilder(agentRunRequest: agentRunRequest).execute().body
+    open class func createAgentRun(agentRunRequest: AgentRunRequest, idempotencyKey: String? = nil) async throws -> AgentRunCreated {
+        return try await createAgentRunWithRequestBuilder(agentRunRequest: agentRunRequest, idempotencyKey: idempotencyKey).execute().body
     }
 
     /**
@@ -191,9 +192,10 @@ open class AgentAPI {
        - type: http
        - name: bearerAuth
      - parameter agentRunRequest: (body)  
+     - parameter idempotencyKey: (header) Optional client-generated key. Repeating the same key for the same user returns the existing run instead of creating another one.  (optional)
      - returns: RequestBuilder<AgentRunCreated> 
      */
-    open class func createAgentRunWithRequestBuilder(agentRunRequest: AgentRunRequest) -> RequestBuilder<AgentRunCreated> {
+    open class func createAgentRunWithRequestBuilder(agentRunRequest: AgentRunRequest, idempotencyKey: String? = nil) -> RequestBuilder<AgentRunCreated> {
         let localVariablePath = "/api/v1/agent/runs"
         let localVariableURLString = ContractsAPI.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: agentRunRequest)
@@ -202,6 +204,7 @@ open class AgentAPI {
 
         let localVariableNillableHeaders: [String: Any?] = [
             "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey?.encodeToJSON(),
         ]
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
@@ -893,10 +896,10 @@ open class AgentAPI {
      
      - parameter runId: (path)  
      - parameter lastEventID: (header) Replay starts after this event sequence. The stream always ends with the run&#39;s terminal event; reconnecting clients resume instead of re-executing the run.  (optional)
-     - returns: String
+     - returns: [String: AnyCodable]
      */
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
-    open class func streamAgentRun(runId: String, lastEventID: Int? = nil) async throws -> String {
+    open class func streamAgentRun(runId: String, lastEventID: Int? = nil) async throws -> [String: AnyCodable] {
         return try await streamAgentRunWithRequestBuilder(runId: runId, lastEventID: lastEventID).execute().body
     }
 
@@ -908,9 +911,9 @@ open class AgentAPI {
        - name: bearerAuth
      - parameter runId: (path)  
      - parameter lastEventID: (header) Replay starts after this event sequence. The stream always ends with the run&#39;s terminal event; reconnecting clients resume instead of re-executing the run.  (optional)
-     - returns: RequestBuilder<String> 
+     - returns: RequestBuilder<[String: AnyCodable]> 
      */
-    open class func streamAgentRunWithRequestBuilder(runId: String, lastEventID: Int? = nil) -> RequestBuilder<String> {
+    open class func streamAgentRunWithRequestBuilder(runId: String, lastEventID: Int? = nil) -> RequestBuilder<[String: AnyCodable]> {
         var localVariablePath = "/api/v1/agent/runs/{run_id}/events"
         let runIdPreEscape = "\(APIHelper.mapValueToPathItem(runId))"
         let runIdPostEscape = runIdPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -926,7 +929,7 @@ open class AgentAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<String>.Type = ContractsAPI.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<[String: AnyCodable]>.Type = ContractsAPI.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "GET", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: true)
     }

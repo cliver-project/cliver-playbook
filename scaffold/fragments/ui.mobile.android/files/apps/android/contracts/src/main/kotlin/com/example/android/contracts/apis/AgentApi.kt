@@ -373,6 +373,7 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
      * Start an agent run
      * 
      * @param agentRunRequest 
+     * @param idempotencyKey Optional client-generated key. Repeating the same key for the same user returns the existing run instead of creating another one.  (optional)
      * @return AgentRunCreated
      * @throws IllegalStateException If the request is not correctly configured
      * @throws IOException Rethrows the OkHttp execute method exception
@@ -382,8 +383,8 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
      */
     @Suppress("UNCHECKED_CAST")
     @Throws(IllegalStateException::class, IOException::class, UnsupportedOperationException::class, ClientException::class, ServerException::class)
-    suspend fun createAgentRun(agentRunRequest: AgentRunRequest) : AgentRunCreated = withContext(Dispatchers.IO) {
-        val localVarResponse = createAgentRunWithHttpInfo(agentRunRequest = agentRunRequest)
+    suspend fun createAgentRun(agentRunRequest: AgentRunRequest, idempotencyKey: kotlin.String? = null) : AgentRunCreated = withContext(Dispatchers.IO) {
+        val localVarResponse = createAgentRunWithHttpInfo(agentRunRequest = agentRunRequest, idempotencyKey = idempotencyKey)
 
         return@withContext when (localVarResponse.responseType) {
             ResponseType.Success -> (localVarResponse as Success<*>).data as AgentRunCreated
@@ -405,14 +406,15 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
      * Start an agent run
      * 
      * @param agentRunRequest 
+     * @param idempotencyKey Optional client-generated key. Repeating the same key for the same user returns the existing run instead of creating another one.  (optional)
      * @return ApiResponse<AgentRunCreated?>
      * @throws IllegalStateException If the request is not correctly configured
      * @throws IOException Rethrows the OkHttp execute method exception
      */
     @Suppress("UNCHECKED_CAST")
     @Throws(IllegalStateException::class, IOException::class)
-    suspend fun createAgentRunWithHttpInfo(agentRunRequest: AgentRunRequest) : ApiResponse<AgentRunCreated?> = withContext(Dispatchers.IO) {
-        val localVariableConfig = createAgentRunRequestConfig(agentRunRequest = agentRunRequest)
+    suspend fun createAgentRunWithHttpInfo(agentRunRequest: AgentRunRequest, idempotencyKey: kotlin.String?) : ApiResponse<AgentRunCreated?> = withContext(Dispatchers.IO) {
+        val localVariableConfig = createAgentRunRequestConfig(agentRunRequest = agentRunRequest, idempotencyKey = idempotencyKey)
 
         return@withContext request<AgentRunRequest, AgentRunCreated>(
             localVariableConfig
@@ -423,14 +425,16 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
      * To obtain the request config of the operation createAgentRun
      *
      * @param agentRunRequest 
+     * @param idempotencyKey Optional client-generated key. Repeating the same key for the same user returns the existing run instead of creating another one.  (optional)
      * @return RequestConfig
      */
-    fun createAgentRunRequestConfig(agentRunRequest: AgentRunRequest) : RequestConfig<AgentRunRequest> {
+    fun createAgentRunRequestConfig(agentRunRequest: AgentRunRequest, idempotencyKey: kotlin.String?) : RequestConfig<AgentRunRequest> {
         val localVariableBody = agentRunRequest
         val localVariableQuery: MultiValueMap = mutableMapOf()
         val localVariableHeaders: MutableMap<String, String> = mutableMapOf()
         localVariableHeaders["Content-Type"] = "application/json"
         localVariableHeaders["Accept"] = "application/json"
+        idempotencyKey?.apply { localVariableHeaders["Idempotency-Key"] = this.toString() }
 
         return RequestConfig(
             method = RequestMethod.POST,
@@ -1675,7 +1679,7 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
      * 
      * @param runId 
      * @param lastEventID Replay starts after this event sequence. The stream always ends with the run&#39;s terminal event; reconnecting clients resume instead of re-executing the run.  (optional)
-     * @return kotlin.String
+     * @return kotlin.collections.Map<kotlin.String, kotlin.Any?>
      * @throws IllegalStateException If the request is not correctly configured
      * @throws IOException Rethrows the OkHttp execute method exception
      * @throws UnsupportedOperationException If the API returns an informational or redirection response
@@ -1684,11 +1688,11 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
      */
     @Suppress("UNCHECKED_CAST")
     @Throws(IllegalStateException::class, IOException::class, UnsupportedOperationException::class, ClientException::class, ServerException::class)
-    suspend fun streamAgentRun(runId: kotlin.String, lastEventID: kotlin.Int? = null) : kotlin.String = withContext(Dispatchers.IO) {
+    suspend fun streamAgentRun(runId: kotlin.String, lastEventID: kotlin.Int? = null) : kotlin.collections.Map<kotlin.String, kotlin.Any?> = withContext(Dispatchers.IO) {
         val localVarResponse = streamAgentRunWithHttpInfo(runId = runId, lastEventID = lastEventID)
 
         return@withContext when (localVarResponse.responseType) {
-            ResponseType.Success -> (localVarResponse as Success<*>).data as kotlin.String
+            ResponseType.Success -> (localVarResponse as Success<*>).data as kotlin.collections.Map<kotlin.String, kotlin.Any?>
             ResponseType.Informational -> throw UnsupportedOperationException("Client does not support Informational responses.")
             ResponseType.Redirection -> throw UnsupportedOperationException("Client does not support Redirection responses.")
             ResponseType.ClientError -> {
@@ -1708,16 +1712,16 @@ open class AgentApi(basePath: kotlin.String = defaultBasePath, client: Call.Fact
      * 
      * @param runId 
      * @param lastEventID Replay starts after this event sequence. The stream always ends with the run&#39;s terminal event; reconnecting clients resume instead of re-executing the run.  (optional)
-     * @return ApiResponse<kotlin.String?>
+     * @return ApiResponse<kotlin.collections.Map<kotlin.String, kotlin.Any?>?>
      * @throws IllegalStateException If the request is not correctly configured
      * @throws IOException Rethrows the OkHttp execute method exception
      */
     @Suppress("UNCHECKED_CAST")
     @Throws(IllegalStateException::class, IOException::class)
-    suspend fun streamAgentRunWithHttpInfo(runId: kotlin.String, lastEventID: kotlin.Int?) : ApiResponse<kotlin.String?> = withContext(Dispatchers.IO) {
+    suspend fun streamAgentRunWithHttpInfo(runId: kotlin.String, lastEventID: kotlin.Int?) : ApiResponse<kotlin.collections.Map<kotlin.String, kotlin.Any?>?> = withContext(Dispatchers.IO) {
         val localVariableConfig = streamAgentRunRequestConfig(runId = runId, lastEventID = lastEventID)
 
-        return@withContext request<Unit, kotlin.String>(
+        return@withContext request<Unit, kotlin.collections.Map<kotlin.String, kotlin.Any?>>(
             localVariableConfig
         )
     }

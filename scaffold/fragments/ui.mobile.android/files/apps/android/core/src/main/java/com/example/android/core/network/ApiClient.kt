@@ -117,8 +117,13 @@ class ApiClient(
     // MARK: - Agent runs
 
     /** Start a coordinator run and return its id. */
-    suspend fun startAgentRun(message: String): String =
-        execute { agentApi.createAgentRunWithHttpInfo(AgentRunRequest(message = message)) }.runId
+    suspend fun startAgentRun(message: String, idempotencyKey: String? = null): String =
+        execute {
+            agentApi.createAgentRunWithHttpInfo(
+                AgentRunRequest(message = message),
+                idempotencyKey,
+            )
+        }.runId
 
     /** Ask the API to cancel a run. Best-effort from the chat surface. */
     suspend fun cancelAgentRun(runID: String) =
