@@ -40,6 +40,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -105,7 +107,7 @@ fun ProfileScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Profile") },
+                title = { Text("Profile", modifier = Modifier.semantics { heading() }) },
                 actions = {
                     if (user != null && !editing) {
                         IconButton(onClick = { beginEdit(user) }) {
@@ -172,6 +174,7 @@ private fun ProfileDetails(user: User) {
     ) {
         Text(
             text = user.displayName.ifBlank { user.username },
+            modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineMedium,
         )
         Text(

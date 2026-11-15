@@ -13,24 +13,32 @@ enum class LayoutMode {
     Expanded,
 }
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
-@Composable
-fun currentLayoutMode(): LayoutMode =
-    when (currentWindowAdaptiveInfo().windowSizeClass.windowWidthSizeClass) {
+/** Pure width-class mapping so tablet/foldable layouts stay unit-testable. */
+fun layoutModeFor(widthSizeClass: WindowWidthSizeClass): LayoutMode =
+    when (widthSizeClass) {
         WindowWidthSizeClass.COMPACT -> LayoutMode.Compact
         WindowWidthSizeClass.MEDIUM -> LayoutMode.Medium
         else -> LayoutMode.Expanded
     }
 
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+fun currentLayoutMode(): LayoutMode =
+    layoutModeFor(currentWindowAdaptiveInfo().windowSizeClass.windowWidthSizeClass)
+
 /**
  * Navigation surface for the current window: bottom bar on phones, rail on
  * medium widths and a permanent drawer on expanded widths.
  */
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
-@Composable
-fun rememberNavigationSuiteType(): NavigationSuiteType =
-    when (currentLayoutMode()) {
+/** Bottom bar on phones, rail on tablets, drawer on expanded/foldable widths. */
+fun navigationSuiteTypeFor(mode: LayoutMode): NavigationSuiteType =
+    when (mode) {
         LayoutMode.Compact -> NavigationSuiteType.NavigationBar
         LayoutMode.Medium -> NavigationSuiteType.NavigationRail
         LayoutMode.Expanded -> NavigationSuiteType.NavigationDrawer
     }
+
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+fun rememberNavigationSuiteType(): NavigationSuiteType =
+    navigationSuiteTypeFor(currentLayoutMode())

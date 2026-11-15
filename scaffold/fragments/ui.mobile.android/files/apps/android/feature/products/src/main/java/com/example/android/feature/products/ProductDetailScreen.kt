@@ -30,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.android.core.model.Product
 import com.example.android.core.network.ApiClient
@@ -75,7 +77,7 @@ fun ProductDetailScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(product?.name ?: "Product") },
+                title = { Text(product?.name ?: "Product", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -167,7 +169,11 @@ private fun ProductDetails(product: Product) {
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(product.name, style = MaterialTheme.typography.headlineMedium)
+        Text(
+            product.name,
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineMedium,
+        )
         Text(
             text = formatPrice(product.priceCents),
             style = MaterialTheme.typography.headlineSmall,

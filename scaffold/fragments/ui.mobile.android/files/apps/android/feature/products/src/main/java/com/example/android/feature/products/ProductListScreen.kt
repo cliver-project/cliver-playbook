@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.android.core.model.Product
 import com.example.android.core.network.ApiClient
@@ -91,7 +93,7 @@ fun ProductListScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Products") },
+                title = { Text("Products", modifier = Modifier.semantics { heading() }) },
                 actions = {
                     IconButton(onClick = { reloadToken += 1 }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Reload products")

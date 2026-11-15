@@ -98,6 +98,7 @@ private struct ReferenceProductRow: View {
             }
         }
         .padding(.vertical, DesignSystem.Spacing.xs)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -140,6 +141,8 @@ private struct ReferenceChatMessage: View {
                 )
             if !isUser { Spacer(minLength: DesignSystem.Spacing.xl) }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(isUser ? "You" : "Assistant"): \(text)")
     }
 }
 
