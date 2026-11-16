@@ -40,6 +40,17 @@ name. The `cliver-playbook-app-mcp` shell is the full composition (basic + user 
 mcp) and doubles as the reference for what a finished project's wiring looks like;
 `cliver-playbook-app-rag` has its own smaller shell for working on the RAG pages alone.
 
+### Agent plugins
+
+A capability can ship to agent platforms from one portable source: an open
+Agent Skill plus an MCP connector, rendered into Claude Code, Codex and
+WorkBuddy bundles. `plugins/<name>/` holds the source (`plugin.json`,
+`skill/<skill>/SKILL.md`, connector icon); `make plugin-check` validates it and
+`make plugin-package [APP=…] [MCP_URL=https://…/mcp]` writes the three target
+trees and ZIPs under `dist/plugins/`. See `plugins/README.md` for the layout
+and per-platform differences, and the assembly skill's
+`package-agent-plugin` recipe for the project workflow.
+
 ## Scope and non-goals
 
 The playbook is a thin platform for cross-cutting infrastructure, not a framework

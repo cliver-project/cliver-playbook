@@ -138,6 +138,7 @@ names the smallest composition where the recipe applies (`minimal` = basic,
 | Configure SSO / OIDC / WeChat / Alipay login | `reference/use-cases/configure-oidc-login.md` | web, rag, mcp |
 | Paginate a backend endpoint | `reference/use-cases/paginate-backend-endpoint.md` | any |
 | Add an MCP tool | `reference/use-cases/add-mcp-tool.md` | mcp |
+| Package a capability as an agent plugin (Claude Code / Codex / WorkBuddy) | `reference/use-cases/package-agent-plugin.md` | mcp |
 | Add a RAG stage | `reference/use-cases/add-rag-stage.md` | rag, mcp |
 | Add a frontend page, route, and nav entry | `reference/use-cases/add-frontend-page.md` | any |
 | Add an entity CRUD page | `reference/use-cases/add-frontend-crud-page.md` | any |

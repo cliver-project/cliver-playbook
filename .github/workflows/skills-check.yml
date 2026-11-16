@@ -10,17 +10,21 @@ on:
     paths:
       - "skills/**"
       - "scaffold/**"
+      - "plugins/**"
       - "scripts/validate_skill.py"
       - "scripts/validate_project_manifest.py"
       - "scripts/scaffold_project.py"
+      - "scripts/package_plugin.py"
       - ".github/workflows/skills-check.yml"
   pull_request:
     paths:
       - "skills/**"
       - "scaffold/**"
+      - "plugins/**"
       - "scripts/validate_skill.py"
       - "scripts/validate_project_manifest.py"
       - "scripts/scaffold_project.py"
+      - "scripts/package_plugin.py"
       - ".github/workflows/skills-check.yml"
 
 permissions:
@@ -53,3 +57,8 @@ jobs:
         run: |
           uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --self-test
           uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --validate-catalog
+
+      - name: Validate the agent plugins
+        run: |
+          uv run --with pyyaml python scripts/package_plugin.py --self-test
+          uv run --with pyyaml python scripts/package_plugin.py --check --all

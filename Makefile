@@ -107,6 +107,16 @@ scaffold-plan: ## Print the AI-native scaffold plan (MANIFEST=scaffold/examples/
 	@test -n "$(MANIFEST)" || { echo "usage: make scaffold-plan MANIFEST=scaffold/examples/ai-web.yaml" >&2; exit 2; }
 	uv run --with pyyaml --with jsonschema python scripts/scaffold_project.py --plan "$(MANIFEST)"
 
+.PHONY: plugin-check
+plugin-check: ## Validate every agent plugin source and its three rendered targets
+	uv run --with pyyaml python scripts/package_plugin.py --self-test
+	uv run --with pyyaml python scripts/package_plugin.py --check --all
+
+.PHONY: plugin-package
+plugin-package: ## Build agent plugin ZIPs into dist/plugins (make plugin-package [APP=name] [MCP_URL=https://…/mcp])
+	uv run --with pyyaml python scripts/package_plugin.py --package --all \
+		$(if $(APP),--app $(APP),) $(if $(MCP_URL),--mcp-url $(MCP_URL),)
+
 .PHONY: version-set
 version-set: ## Bump every module (usage: make version-set VERSION=0.2.0)
 	@test -n "$(VERSION)" || { echo "usage: make version-set VERSION=x.y.z" >&2; exit 2; }
@@ -121,7 +131,7 @@ release-check: ## Build every backend distribution and verify license + version 
 	uv run python scripts/check_release_artifacts.py --dist dist
 
 .PHONY: check
-check: backend-lint backend-test web-ui-check version-check skill-check scaffold-check ## Everything CI would run
+check: backend-lint backend-test web-ui-check version-check skill-check scaffold-check plugin-check ## Everything CI would run
 
 .PHONY: verify-reference
 verify-reference: ## Migrate a scratch DB, boot the composed app, build the reference frontend

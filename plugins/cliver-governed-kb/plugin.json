@@ -1,0 +1,31 @@
+{
+  "name": "cliver-governed-kb",
+  "source": "cliver-governed-kb",
+  "version": "0.1.0",
+  "author": "cliver-project",
+  "license": "Apache-2.0",
+  "display_name": {
+    "en": "Governed Knowledge Base",
+    "zh": "治理知识库"
+  },
+  "description": {
+    "en": "Ask a governed knowledge base. Answers come only from approved, access-controlled documents and live tools, and carry their full trace.",
+    "zh": "面向治理知识库提问：答案只来自已批准、受访问控制的文档与实时工具，并附带完整轨迹。"
+  },
+  "examples": {
+    "en": [
+      "What is the 90+ days receivables ratio and is the warning triggered?",
+      "Which documents back the revenue recognition policy?"
+    ],
+    "zh": [
+      "应收 90 天以上占比多少？是否触发预警？",
+      "收入确认口径的依据文档是哪些？"
+    ]
+  },
+  "mcp": {
+    "server_key": "governed-kb",
+    "url_var": "GOV_KB_MCP_URL",
+    "default_url": "https://mcp.example.com/mcp"
+  },
+  "targets": ["claude-code", "codex", "workbuddy"]
+}
