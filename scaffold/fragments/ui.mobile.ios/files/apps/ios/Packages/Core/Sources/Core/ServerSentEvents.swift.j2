@@ -1,3 +1,4 @@
+{% if enabled('api.agent') %}
 import Foundation
 
 /// One Server-Sent Events frame. The scaffold's agent stream uses `data` as a
@@ -68,3 +69,4 @@ struct ServerSentEventDecoder {
         )
     }
 }
+{% endif %}

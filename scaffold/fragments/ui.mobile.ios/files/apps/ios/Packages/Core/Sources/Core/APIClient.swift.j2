@@ -187,6 +187,7 @@ public final class APIClient: @unchecked Sendable {
         try await perform { try await ProductsAPI.deleteProduct(productId: id) }
     }
 
+{% if enabled('api.agent') %}
     // MARK: - Agent runs
 
     /// Start a coordinator run and return its id.
@@ -223,6 +224,8 @@ public final class APIClient: @unchecked Sendable {
         }
     }
 
+{% endif %}
+
     /// Map generated-client failures to the existing APIError surface and run
     /// the session-expiry handler exactly once on a 401.
     private func perform<T>(_ operation: () async throws -> T) async throws -> T {
@@ -244,6 +247,7 @@ public final class APIClient: @unchecked Sendable {
         }
     }
 
+{% if enabled('api.agent') %}
     /// Stream typed events for a run until the server closes the response.
     /// Pass the last seen sequence to resume after a reconnect instead of
     /// replaying from the start.
@@ -376,6 +380,7 @@ public final class APIClient: @unchecked Sendable {
         }
         return String(describing: value)
     }
+{% endif %}
 
     // MARK: - Transport
 

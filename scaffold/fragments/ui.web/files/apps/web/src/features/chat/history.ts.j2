@@ -1,3 +1,4 @@
+{% if enabled('ui.agent.chat') %}
 import type { RunAgentResult, RunHandoff, RunPlanStep } from "../../ui";
 import type { AgentEvent, AgentSessionDetail } from "./api";
 
@@ -84,3 +85,4 @@ export function rememberSessionId(sessionId: string): void {
     // The in-memory session id still works for this tab.
   }
 }
+{% endif %}

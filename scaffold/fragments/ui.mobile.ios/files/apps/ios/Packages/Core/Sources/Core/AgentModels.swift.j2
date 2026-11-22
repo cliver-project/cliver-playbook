@@ -1,3 +1,4 @@
+{% if enabled('api.agent') %}
 import Foundation
 
 /// One typed run event from `GET /api/v1/agent/runs/{id}/events`.
@@ -41,3 +42,4 @@ public struct AgentEvent: Sendable, Equatable {
         self.message = message
     }
 }
+{% endif %}

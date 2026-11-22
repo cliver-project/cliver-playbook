@@ -1,3 +1,4 @@
+{% if enabled('ui.agent.chat') %}
 import { Button } from "../../ui";
 import type { AgentSession } from "./api";
 
@@ -78,3 +79,4 @@ export function SessionSidebar({
     </nav>
   );
 }
+{% endif %}
