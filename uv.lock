@@ -646,18 +646,19 @@ wheels = [
 
 [[package]]
 name = "cliver-core"
-version = "0.3.1"
+version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
     { name = "httpx" },
+    { name = "httpx2" },
     { name = "mcp" },
     { name = "openai" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/64/cfbc331b5e36f1071d0a324b6b9743212f28762ee90cd4ad30142b21107b/cliver_core-0.3.1.tar.gz", hash = "sha256:3c58392363f752bba494f9b11b0bcdedff41173f091ac65ccc964203d0ffe73b", size = 345898, upload-time = "2026-11-11T08:55:47.652Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/6d/77dfb90f01d477d1d78b8292c3f09c6b3b96cdce3c83b00cc90938017afc/cliver_core-0.3.2.tar.gz", hash = "sha256:8ef09e3befc10ddd1d747dad0a6eb28c932d03e5827e87ee76b20ca133c51273", size = 356994, upload-time = "2026-11-22T10:39:37.21Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/ba/cf66653267aadce2f5e7f8c320d44a7d70b5e4a706266276f105132a0b57/cliver_core-0.3.1-py3-none-any.whl", hash = "sha256:3b4659caf76ecec531ca7e4ab446297b27144398e80b879d2a90c748670461fd", size = 241983, upload-time = "2026-11-11T08:55:46.453Z" },
+    { url = "https://files.pythonhosted.org/packages/24/d5/8d7364c5e769b177b12a09bd6563bdfdeedfcd8037c022b7e58ed979fbf3/cliver_core-0.3.2-py3-none-any.whl", hash = "sha256:80d172b914406e8d1389000e00e0c5455f8e0d3bcc70f3b553b3c6252657a7fc", size = 248910, upload-time = "2026-11-22T10:39:36.186Z" },
 ]
 
 [package.optional-dependencies]
@@ -824,7 +825,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "beautifulsoup4", specifier = ">=4.12" },
-    { name = "cliver-core", extras = ["local"], specifier = "==0.3.1" },
+    { name = "cliver-core", extras = ["local"], specifier = ">=0.3.1,<0.4" },
     { name = "cliver-playbook-app-user", editable = "packages/backend/cliver-playbook-app-user" },
     { name = "fastapi", specifier = ">=0.143.0" },
     { name = "httpx", specifier = ">=0.27.0" },
@@ -863,9 +864,11 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "python-docx" },
     { name = "pyyaml" },
     { name = "sqlalchemy" },
     { name = "tzdata" },
+    { name = "unstructured", extra = ["pdf"] },
     { name = "uvicorn" },
 ]
 
@@ -894,9 +897,11 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.16.0" },
+    { name = "python-docx", specifier = ">=1.2,<2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
     { name = "tzdata", specifier = ">=2024.1" },
+    { name = "unstructured", extras = ["pdf"], specifier = ">=0.16.0" },
     { name = "uvicorn", specifier = ">=0.31.1" },
 ]
 provides-extras = ["mcp-client"]

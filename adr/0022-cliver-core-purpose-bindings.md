@@ -201,7 +201,14 @@ The pin advances to `cliver-core[local]==0.3.1`. One reading in the
   worker thread. The fake-provider tests pin the contract with consecutive
   fresh-loop calls on one cached binding.
 - The alpha caveat under Risks no longer applies to the pin: 0.3.x patch
-  releases are bug-fix-only, and upgrades stay deliberate (exact pin,
-  regression tests).
+  releases are bug-fix-only, and upgrades stay deliberate (the lockfile pins
+  the resolved version and regression tests gate the update; the compatible
+  range policy is recorded below).
+
+The dependency later advanced through 0.3.2. It now uses the compatible range
+`cliver-core[local]>=0.3.1,<0.4`: the 0.3 API series is backward-compatible, a
+lock refresh picks the newest 0.3.x patch, and `uv.lock` pins the concrete
+version per build. The loop-agnostic provider contract, cached local bindings
+and purpose bindings above are unchanged.
 
 Stage names, `id` / `model_id` values and dimensions are unchanged.

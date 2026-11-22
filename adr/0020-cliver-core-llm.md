@@ -108,3 +108,10 @@ is awaited on every exit path. Remote providers keep loop-bound HTTP
 clients, so the agent remains per call. On the local side, 0.3.1 marks the
 in-process providers `loop_agnostic`, so the BGE stages again cache one
 binding per stage. See the 2026-11-11 amendment in ADR-0022.
+
+The dependency later advanced through 0.3.2 (shared provider HTTP clients and
+binding context managers). It now uses the compatible range
+`cliver-core[local]>=0.3.1,<0.4`, not an exact pin: the 0.3 API series is
+backward-compatible, a lock refresh picks the latest 0.3.x patch, and
+`uv.lock` still records the concrete version for reproducible builds. The
+per-call `AgentCore.open()` lifecycle above is unchanged.
