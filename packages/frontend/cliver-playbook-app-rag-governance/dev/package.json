@@ -1,6 +1,6 @@
 {
   "name": "cliver-playbook-dev-gov",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "Development shell: the governed knowledge-base demo app composed from the basic, user, rag and rag-governance packages.",

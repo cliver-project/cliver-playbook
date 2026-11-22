@@ -1,6 +1,6 @@
 {
   "name": "cliver-playbook-app-rag-governance",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "RAG governance frontend package: the governed knowledge-base loop — projects, intent rules, staged ingestion with approvals, golden sets, evaluations and the governed query facade.",
@@ -19,8 +19,8 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",
     "axios": "^1.7.0",
-    "cliver-playbook-app-basic": "0.3.0",
-    "cliver-playbook-app-user": "0.3.0",
+    "cliver-playbook-app-basic": "0.3.1",
+    "cliver-playbook-app-user": "0.3.1",
     "lucide-react": "^0.550.0",
     "react-i18next": "^16.0.0",
     "react-router-dom": "^7.18.0",
