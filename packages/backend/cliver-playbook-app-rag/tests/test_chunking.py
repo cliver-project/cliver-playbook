@@ -65,6 +65,26 @@ def test_pdf_chunker_uses_unstructured() -> None:
         assert chunks[1].metadata.get("element_type") == "NarrativeText"
 
 
+def test_pdf_partition_passes_a_seekable_stream(monkeypatch) -> None:
+    from cliver_playbook.app.rag.chunking import pdf as pdf_module
+
+    captured: dict[str, object] = {}
+
+    def fake_partition(*, file, strategy):
+        captured["file"] = file
+        captured["strategy"] = strategy
+        return []
+
+    monkeypatch.setattr(
+        "unstructured.partition.pdf.partition_pdf",
+        fake_partition,
+    )
+
+    assert pdf_module._partition(b"%PDF-1.4") == []
+    assert hasattr(captured["file"], "seek")
+    assert captured["strategy"] == "fast"
+
+
 def test_pdf_chunker_raises_empty_document_error_on_no_text() -> None:
     from cliver_playbook.app.rag.chunking.pdf import EmptyDocumentError
 

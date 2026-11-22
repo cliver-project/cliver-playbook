@@ -40,3 +40,14 @@ def test_offline_migration_renders_governance_primitives(capsys) -> None:
     assert "search_text" in sql
     assert "PRIMARY KEY (chunk_id, embedder_version)" in sql
     assert "WHERE published" in sql
+
+
+def test_published_uniqueness_is_scoped_to_the_collection(capsys) -> None:
+    run_migrations_offline("postgresql+psycopg://user:pass@127.0.0.1:5432/offline")
+
+    sql = capsys.readouterr().out
+    assert "DROP INDEX uq_rag_documents_published_logical_id" in sql
+    assert (
+        "CREATE UNIQUE INDEX uq_rag_documents_published_collection_logical "
+        "ON rag_documents (collection_id, logical_id) WHERE published"
+    ) in sql

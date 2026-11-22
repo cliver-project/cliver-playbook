@@ -11,6 +11,8 @@ endpoint catches that and returns 422 with a clear reason.
 
 from __future__ import annotations
 
+import io
+
 from .base import (
     Chunk,
     Document,
@@ -30,10 +32,14 @@ __all__ = ["EmptyDocumentError", "PdfChunker"]
 
 def _partition(pdf_bytes: bytes) -> list:
     """Thin wrapper around unstructured's partition_pdf, isolated so
-    tests can mock it without pulling the heavy dependency."""
+    tests can mock it without pulling the heavy dependency.
+
+    ``partition_pdf`` seeks on its input; raw bytes fail inside it.
+    A BytesIO keeps the chunker's public input as bytes.
+    """
     from unstructured.partition.pdf import partition_pdf
 
-    return partition_pdf(file=pdf_bytes, strategy="fast")
+    return partition_pdf(file=io.BytesIO(pdf_bytes), strategy="fast")
 
 
 class PdfChunker:
