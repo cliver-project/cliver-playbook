@@ -7,6 +7,9 @@
 {% if enabled('api.rag') %}
 @source "../../../node_modules/cliver-playbook-app-rag/src";
 {% endif %}
+{% if enabled('api.rag_governance') %}
+@source "../../../node_modules/cliver-playbook-app-rag-governance/src";
+{% endif %}
 {% if enabled('api.mcp') %}
 @source "../../../node_modules/cliver-playbook-app-mcp/src";
 {% endif %}

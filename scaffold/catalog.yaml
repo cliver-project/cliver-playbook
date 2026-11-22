@@ -120,6 +120,12 @@ modules:
     description: RAG pipeline and governance surfaces.
     contracts: [contracts/modules/rag.yaml]
 
+  api.rag_governance:
+    kind: api
+    description: Governed knowledge base (projects, staged ingestion with approvals, golden sets, evaluation gates, ACL and the governed query facade); composes rag-governance on top of api.rag.
+    requires: [api.python, api.auth, api.rag]
+    contracts: [contracts/modules/rag_governance.yaml]
+
   api.mcp:
     kind: api
     description: MCP endpoint, tool gate and server discovery.
@@ -293,6 +299,7 @@ selectors:
   feature.settings: [api.settings, ui.settings]
   feature.agent: [api.agent, ui.agent.chat]
   feature.rag: [api.rag]
+  feature.rag_governance: [api.rag_governance]
   feature.mcp: [api.mcp]
   feature.files: [api.files]
   feature.billing: [api.billing]

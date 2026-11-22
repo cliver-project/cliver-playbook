@@ -89,7 +89,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "enum": ["auth", "settings", "agent", "rag", "mcp", "files", "billing"]
+            "enum": ["auth", "settings", "agent", "rag", "mcp", "files", "billing", "rag_governance"]
           }
         }
       }

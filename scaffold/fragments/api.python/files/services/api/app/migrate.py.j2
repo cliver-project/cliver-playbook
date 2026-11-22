@@ -6,6 +6,9 @@ from cliver_playbook.app.basic.alembic import run_migrations_online as run_basic
 {% if enabled('api.rag') %}
 from cliver_playbook.app.rag.alembic import run_migrations_online as run_rag
 {% endif %}
+{% if enabled('api.rag_governance') %}
+from cliver_playbook.app.rag_governance.alembic import run_migrations_online as run_governance
+{% endif %}
 {% if enabled('api.auth') %}
 from cliver_playbook.app.user.alembic import run_migrations_online as run_user
 {% endif %}
@@ -19,6 +22,9 @@ def main() -> None:
 {% endif %}
 {% if enabled('api.rag') %}
     run_rag(url)
+{% endif %}
+{% if enabled('api.rag_governance') %}
+    run_governance(url)
 {% endif %}
     run_project(url)
 

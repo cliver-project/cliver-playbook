@@ -81,6 +81,7 @@ choices that change the module set.
 | Accounts, roles, profile | `api.features` includes `auth`, `settings`; mobile `features` include `auth`, `profile` | infer from the brief |
 | AI assistant, tools, MCP | `api.features` includes `agent` and optionally `mcp`; `agent.runtime: agentcore` | AI-native default |
 | Knowledge base / RAG | `api.features` includes `rag` | only if asked |
+| Knowledge-base governance (staged ingestion, approvals, golden sets, evaluations, governed query) | `api.features` includes `rag_governance` (implies `rag` and `auth`; the pages ship with it) | only if asked |
 | Reference CRUD slice | `scaffold.reference_slices: [products]` | include only as a reference |
 | Local models / offline | `api.deployment: local`, `model.deployment: local`, desktop | only if asked |
 | One native client only | `ai-mobile` profile with one of iOS/Android | choose the requested platform |

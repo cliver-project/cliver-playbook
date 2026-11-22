@@ -26,6 +26,9 @@
 {% if enabled('api.rag') %}
     "cliver-playbook-app-rag": "github:cliver-project/cliver-playbook#{{ playbook.revision }}&path:/packages/frontend/cliver-playbook-app-rag",
 {% endif %}
+{% if enabled('api.rag_governance') %}
+    "cliver-playbook-app-rag-governance": "github:cliver-project/cliver-playbook#{{ playbook.revision }}&path:/packages/frontend/cliver-playbook-app-rag-governance",
+{% endif %}
 {% if enabled('api.mcp') %}
     "cliver-playbook-app-mcp": "github:cliver-project/cliver-playbook#{{ playbook.revision }}&path:/packages/frontend/cliver-playbook-app-mcp",
 {% endif %}

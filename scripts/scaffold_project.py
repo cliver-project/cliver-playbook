@@ -999,6 +999,16 @@ def _self_test() -> int:
     assert web_plan == plan_project(web, schema, catalog)
     json.dumps(web_plan, sort_keys=True)
 
+    governed = copy.deepcopy(web)
+    governed["api"]["features"] = ["auth", "settings", "agent", "rag", "mcp", "rag_governance"]
+    governed_errors = validate_manifest_data(governed, schema, catalog)
+    assert governed_errors == [], governed_errors
+    governed_plan = plan_project(governed, schema, catalog)
+    assert {"api.rag_governance", "api.rag", "api.auth"} <= set(
+        governed_plan["modules"]
+    ), governed_plan["modules"]
+    assert "contracts/modules/rag_governance.yaml" in governed_plan["contracts"]
+
     full = load_manifest(EXAMPLES_DIR / "ai-full.yaml")
     full_plan = plan_project(full, schema, catalog)
     for module in (

@@ -6,6 +6,9 @@ import "./index.css";
 {% if enabled('api.rag') %}
 import { ragTranslations } from "cliver-playbook-app-rag";
 {% endif %}
+{% if enabled('api.rag_governance') %}
+import { govTranslations } from "cliver-playbook-app-rag-governance";
+{% endif %}
 {% if enabled('api.mcp') %}
 import { mcpTranslations } from "cliver-playbook-app-mcp";
 {% endif %}
@@ -25,6 +28,9 @@ createI18n(
 {% endif %}
 {% if enabled('api.rag') %}
   ragTranslations,
+{% endif %}
+{% if enabled('api.rag_governance') %}
+  govTranslations,
 {% endif %}
 {% if enabled('api.mcp') %}
   mcpTranslations,

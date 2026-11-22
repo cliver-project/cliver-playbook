@@ -175,6 +175,11 @@ a local-only API/model, a local deployment without a desktop shell, an agent
 feature without AgentCore, a release target without its UI, and similar invalid
 combinations.
 
+`rag` composes the knowledge-base API and pages. `rag_governance` adds the
+governed loop (projects, staged ingestion with approvals, golden sets,
+evaluation gates, ACL and the governed query facade) on top of `rag`; it
+implies `auth` and includes the in-process job worker and the migration chain.
+
 ## Profiles
 
 | Profile | Shape |

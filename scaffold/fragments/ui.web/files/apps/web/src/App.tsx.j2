@@ -18,6 +18,13 @@ import {
 {% if enabled('api.rag') %}
 import { ragNavItems, ragRoutes, ragStandaloneRoutes } from "cliver-playbook-app-rag";
 {% endif %}
+{% if enabled('api.rag_governance') %}
+import {
+  govNavItems,
+  govRoutes,
+  govStandaloneRoutes,
+} from "cliver-playbook-app-rag-governance";
+{% endif %}
 {% if enabled('api.mcp') %}
 import { mcpNavItems, mcpRoutes } from "cliver-playbook-app-mcp";
 {% endif %}
@@ -41,6 +48,9 @@ const routes: RouteObject[] = [
 {% if enabled('api.rag') %}
           ...ragNavItems,
 {% endif %}
+{% if enabled('api.rag_governance') %}
+          ...govNavItems,
+{% endif %}
 {% if enabled('api.mcp') %}
           ...mcpNavItems,
 {% endif %}
@@ -55,6 +65,9 @@ const routes: RouteObject[] = [
 {% if enabled('api.rag') %}
       ...ragRoutes,
 {% endif %}
+{% if enabled('api.rag_governance') %}
+      ...govRoutes,
+{% endif %}
 {% if enabled('api.mcp') %}
       ...mcpRoutes,
 {% endif %}
@@ -64,6 +77,9 @@ const routes: RouteObject[] = [
 {% if enabled('api.rag') %}
   ...ragStandaloneRoutes,
 {% endif %}
+{% if enabled('api.rag_governance') %}
+  ...govStandaloneRoutes,
+{% endif %}
 {% else %}
   {
     element: (
@@ -71,6 +87,9 @@ const routes: RouteObject[] = [
         navItems={[
 {% if enabled('api.rag') %}
           ...ragNavItems,
+{% endif %}
+{% if enabled('api.rag_governance') %}
+          ...govNavItems,
 {% endif %}
 {% if enabled('api.mcp') %}
           ...mcpNavItems,
@@ -84,6 +103,9 @@ const routes: RouteObject[] = [
       ...basicRoutes,
 {% if enabled('api.rag') %}
       ...ragRoutes,
+{% endif %}
+{% if enabled('api.rag_governance') %}
+      ...govRoutes,
 {% endif %}
 {% if enabled('api.mcp') %}
       ...mcpRoutes,

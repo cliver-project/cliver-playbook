@@ -26,6 +26,10 @@ from cliver_playbook.app.mcp.api.streamable import install_streamable_app
 {% if enabled('api.rag') %}
 from cliver_playbook.app.rag.api.routes import ROUTERS as RAG_ROUTERS
 {% endif %}
+{% if enabled('api.rag_governance') %}
+from app.governance_runtime import governance_worker
+from cliver_playbook.app.rag_governance.api.routes import ROUTERS as GOVERNANCE_ROUTERS
+{% endif %}
 {% if enabled('api.auth') %}
 from cliver_playbook.app.user.api.routes import ROUTERS as USER_ROUTERS
 from cliver_playbook.app.user.auth.oauth21 import (
@@ -36,7 +40,7 @@ from cliver_playbook.app.user.auth.oauth21 import (
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _base_lifespan(app: FastAPI) -> AsyncIterator[None]:
 {% if enabled('api.mcp') %}
     async with settings_lifespan(app):
         manager = install_streamable_app()
@@ -67,6 +71,19 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 {% endif %}
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # The governance worker starts only after settings_lifespan has bound the
+    # runtime, so its session factory and settings block are available.
+    async with _base_lifespan(app):
+{% if enabled('api.rag_governance') %}
+        async with governance_worker():
+            yield
+{% else %}
+        yield
+{% endif %}
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings if settings is not None else Settings()
     runtime.configure(resolved)
@@ -81,6 +98,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 {% endif %}
 {% if enabled('api.rag') %}
         *RAG_ROUTERS,
+{% endif %}
+{% if enabled('api.rag_governance') %}
+        *GOVERNANCE_ROUTERS,
 {% endif %}
 {% if enabled('api.mcp') %}
         *MCP_ROUTERS,

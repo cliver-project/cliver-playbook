@@ -1,0 +1,4 @@
+# Governance routes are provided by cliver-playbook-app-rag-governance
+# (prefix /api/v1/rag-governance). Add project-specific governance paths here
+# when the project extends the loop.
+paths: {}

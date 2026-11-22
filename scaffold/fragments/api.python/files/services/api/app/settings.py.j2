@@ -6,8 +6,13 @@ from typing import Self
 from pydantic import model_validator
 
 {% endif %}
-{% if enabled('api.mcp') %}
+{% if enabled('api.mcp') and enabled('api.rag_governance') %}
+from cliver_playbook.app.mcp.settings import Settings as McpSettings
+from cliver_playbook.app.rag_governance.settings import Settings as GovernanceSettings
+{% elif enabled('api.mcp') %}
 from cliver_playbook.app.mcp.settings import Settings as PlaybookSettings
+{% elif enabled('api.rag_governance') %}
+from cliver_playbook.app.rag_governance.settings import Settings as PlaybookSettings
 {% elif enabled('api.rag') %}
 from cliver_playbook.app.rag.settings import Settings as PlaybookSettings
 {% elif enabled('api.auth') %}
@@ -17,7 +22,11 @@ from cliver_playbook.app.basic.settings import Settings as PlaybookSettings
 {% endif %}
 
 
+{% if enabled('api.mcp') and enabled('api.rag_governance') %}
+class Settings(McpSettings, GovernanceSettings):
+{% else %}
 class Settings(PlaybookSettings):
+{% endif %}
     """Project fields; every playbook block is inherited unchanged."""
 
     # Role assigned by POST /api/v1/auth/register.

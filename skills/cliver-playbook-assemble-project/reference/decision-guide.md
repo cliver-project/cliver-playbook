@@ -31,6 +31,7 @@ proven otherwise.
 | Audit log | Reuse | Call `write_audit` from project services; never create another log table. |
 | Runtime settings UI | Reuse + create | Register one project `SettingsSection`; the admin page renders it. |
 | RAG pipeline (chunk, embed, retrieve, rerank, generate) | Reuse | Select stages in `rag.*`; bind cliver-core purposes. |
+| Knowledge-base governance (projects, staged ingestion, approvals, golden sets, evaluation, governed query) | Reuse | `api.features` includes `rag_governance` in the scaffold; it composes the routers, pages, worker and migration chain. |
 | Custom RAG stage | Create + register | Implement the package protocol, register in the registry, and route model access through cliver-core. |
 | MCP protocol endpoint and gate | Reuse | Include `mcp.ROUTERS` and compose the MCP lifespan. |
 | MCP tools | Create | Decorate project functions with `@mcp.tool()` plus `@public_tool()` or `@require_perm(...)`. |

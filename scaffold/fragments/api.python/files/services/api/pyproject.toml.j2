@@ -11,6 +11,9 @@ dependencies = [
 {% if enabled('api.rag') %}
     "cliver-playbook-app-rag=={{ playbook.revision }}",
 {% endif %}
+{% if enabled('api.rag_governance') %}
+    "cliver-playbook-app-rag-governance=={{ playbook.revision }}",
+{% endif %}
 {% if enabled('api.mcp') %}
     "cliver-playbook-app-mcp=={{ playbook.revision }}",
 {% endif %}
