@@ -81,7 +81,7 @@ choices that change the module set.
 | Accounts, roles, profile | `api.features` includes `auth`, `settings`; mobile `features` include `auth`, `profile` | infer from the brief |
 | AI assistant, tools, MCP | `api.features` includes `agent` and optionally `mcp`; `agent.runtime: agentcore` | AI-native default |
 | Knowledge base / RAG | `api.features` includes `rag` | only if asked |
-| Knowledge-base governance (staged ingestion, approvals, golden sets, evaluations, governed query) | `api.features` includes `rag_governance` (implies `rag` and `auth`; the pages ship with it) | only if asked |
+| Knowledge-base governance (text/Markdown/PDF/DOCX ingestion with section/page citations, staged approvals, golden sets, evaluations, governed query) | `api.features` includes `rag_governance` (implies `rag` and `auth`; the pages ship with it) | only if asked |
 | Reference CRUD slice | `scaffold.reference_slices: [products]` | include only as a reference |
 | Local models / offline | `api.deployment: local`, `model.deployment: local`, desktop | only if asked |
 | One native client only | `ai-mobile` profile with one of iOS/Android | choose the requested platform |
@@ -126,7 +126,8 @@ to read the package.
 
 Find the row that matches the task. Read that one file. The profile column
 names the smallest composition where the recipe applies (`minimal` = basic,
-`web` = basic + user, `rag` = + rag, `mcp` = + mcp).
+`web` = basic + user, `rag` = + rag, `mcp` = + mcp, `rag_governance` =
+`rag` + governance).
 
 | Task | Read this one file | Profile |
 |---|---|---|
@@ -141,6 +142,8 @@ names the smallest composition where the recipe applies (`minimal` = basic,
 | Add an MCP tool | `reference/use-cases/add-mcp-tool.md` | mcp |
 | Package a capability as an agent plugin (Claude Code / Codex / WorkBuddy) | `reference/use-cases/package-agent-plugin.md` | mcp |
 | Add a RAG stage | `reference/use-cases/add-rag-stage.md` | rag, mcp |
+| Configure System One (tool/skill filtering or intent routing) | `reference/use-cases/configure-system-one.md` | ai-native, rag_governance |
+| Add a governance document parser (OFD/OCR/HTML) | `reference/use-cases/add-governance-parser.md` | rag_governance |
 | Add a frontend page, route, and nav entry | `reference/use-cases/add-frontend-page.md` | any |
 | Add an entity CRUD page | `reference/use-cases/add-frontend-crud-page.md` | any |
 | Add a paged list page | `reference/use-cases/add-frontend-paged-list.md` | any |

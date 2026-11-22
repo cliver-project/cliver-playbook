@@ -112,17 +112,17 @@ modules:
 
   api.agent:
     kind: api
-    description: AgentCore planner, sub-agent tools, skills/MCP seams, streaming events and the self-enhancement loop.
+    description: AgentCore planner, optional System One tool/skill selection, sub-agent tools, skills/MCP seams, streaming events and the self-enhancement loop.
     contracts: [contracts/modules/agent.yaml]
 
   api.rag:
     kind: api
-    description: RAG pipeline and governance surfaces.
+    description: RAG pipeline (upload, chunk, embed, retrieve, rerank, generate).
     contracts: [contracts/modules/rag.yaml]
 
   api.rag_governance:
     kind: api
-    description: Governed knowledge base (projects, staged ingestion with approvals, golden sets, evaluation gates, ACL and the governed query facade); composes rag-governance on top of api.rag.
+    description: Governed knowledge base (staged ingestion of text/Markdown/PDF/DOCX with section/page locators, approvals, golden sets, evaluation gates, ACL and the governed query facade); composes rag-governance on top of api.rag.
     requires: [api.python, api.auth, api.rag]
     contracts: [contracts/modules/rag_governance.yaml]
 

@@ -29,7 +29,8 @@ Phase 2 is in progress:
   narrows the connected servers by intent. The web `/learning` dashboard
   exposes proposals, golden-set versions and prompt rollback. An optional System One
   selector (local laya, Bailian, TypeSafe or HTTP) narrows large tool/skill
-  catalogues as AgentCore's `candidate_selector`; it is fail-open and has a
+  catalogues as AgentCore's `candidate_selector`; the same binding is mounted
+  for explicit `AgentCore.system_one` predictions. It is fail-open and has a
   `make system-one-smoke` live check. Runs are durable: events land in
   `agent_run_events`, a PostgreSQL queue leases each run with `FOR UPDATE
   SKIP LOCKED` while streams replay and tail it, SSE frames carry
@@ -177,8 +178,11 @@ combinations.
 
 `rag` composes the knowledge-base API and pages. `rag_governance` adds the
 governed loop (projects, staged ingestion with approvals, golden sets,
-evaluation gates, ACL and the governed query facade) on top of `rag`; it
-implies `auth` and includes the in-process job worker and the migration chain.
+evaluation gates, ACL and the governed query facade) on top of `rag`. Its
+ingestion parses text/Markdown, text PDF and DOCX into structural blocks and
+records section ancestry plus page/clause locators for citations. It implies
+`auth` and includes the in-process job worker and the migration chain; OCR and
+OFD parsers are project extensions (`parsing.parser`).
 
 ## Profiles
 

@@ -18,6 +18,8 @@ dependencies = [
     "cliver-playbook-app-mcp=={{ playbook.revision }}",
 {% endif %}
 {% if enabled('api.agent') %}
+    # Follow the stable 0.3 API series; a fresh lock resolves the latest
+    # compatible patch, while uv.lock records the concrete version.
     "cliver-core>=0.3.1,<0.4",
 {% endif %}
     "fastapi>=0.143.0",

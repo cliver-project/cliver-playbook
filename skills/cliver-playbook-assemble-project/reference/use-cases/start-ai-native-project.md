@@ -42,7 +42,7 @@ the manifest and plan before applying:
 | Accounts, roles, profile | `api.features` includes `auth`, `settings`; mobile features include `auth`, `profile` |
 | AI assistant/tools/MCP | `api.features` includes `agent`, optionally `mcp`; `agent.runtime: agentcore` |
 | Knowledge base | `api.features` includes `rag` |
-| Knowledge-base governance | `api.features` includes `rag_governance` (implies `rag` and `auth`) |
+| Knowledge-base governance | `api.features` includes `rag_governance` (implies `rag` and `auth`); text/Markdown/PDF/DOCX ingestion with section/page citations ships; OCR/OFD are parser extensions |
 | Local/offline models | `api.deployment: local`, `model.deployment: local`, desktop |
 | Reference CRUD | `scaffold.reference_slices: [products]` |
 | All clients | `ai-full` profile |

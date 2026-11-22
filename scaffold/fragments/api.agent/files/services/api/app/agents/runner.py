@@ -28,8 +28,8 @@ from cliver_core.events import (
 from app.agents.contracts import AgentContext, AgentHandoff, AgentToolkit, SubAgent
 from app.agents.core import (
     build_llm_binding,
+    build_model_bindings,
     build_skill_manager,
-    build_system_one_selector,
 )
 from app.agents.learning import load_prompt_overlay
 from app.agents.mcp import select_mcp_servers
@@ -310,21 +310,22 @@ def build_runner(settings: Settings) -> AgentRunner:
 def _default_core_factory(
     context: AgentContext, toolkit: AgentToolkit, settings: Settings
 ) -> AbstractAsyncContextManager[CoreHandle]:
-    binding = build_llm_binding(settings)
-    if binding is None:
-        raise RuntimeError("No API-plane model is configured")
+    # The helper mounts the same System One binding on AgentCore and its
+    # selector; the selector narrows tools/skills, while
+    # AgentCore.system_one serves explicit project predictions.
+    bindings, system_one_selector = build_model_bindings(settings)
     # MCP and permissions are opt-in through run resources: a project
     # supplies "mcp_client", "mcp_servers", "permission_callback" and
     # "execution_policy". No client/callback, no MCP/mutating-tool access.
     return AgentCore.open(
-        ModelBindings(llm=binding),
+        bindings,
         builtin_tools=toolkit.tools,
         skill_manager=build_skill_manager(settings, toolkit.agent_name or None),
         mcp_client=context.resources.get("mcp_client"),
         permission_callback=context.resources.get("permission_callback")
         or build_permission_callback(toolkit, context),
         execution_policy=context.resources.get("execution_policy"),
-        candidate_selector=build_system_one_selector(settings),
+        candidate_selector=system_one_selector,
     )
 
 

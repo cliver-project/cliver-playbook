@@ -12,7 +12,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from cliver_core import ModelBinding, SkillManager, presets
+from cliver_core import ModelBinding, ModelBindings, SkillManager, presets
 from cliver_core.system_one.selector import SystemOneSelector
 
 from app.settings import Settings
@@ -131,6 +131,32 @@ def build_system_one_selector(
     except Exception as exc:  # noqa: BLE001 — selection must fail open
         logger.warning("System One selector disabled: %s", exc)
         return None
+
+
+def build_model_bindings(
+    settings: Settings,
+) -> tuple[ModelBindings, SystemOneSelector | None]:
+    """Build AgentCore bindings and the optional System One selector.
+
+    The same System One binding serves explicit ``AgentCore.system_one`` calls
+    and the selector, so a run builds one provider rather than two. A missing
+    optional local dependency disables System One instead of failing the run.
+    """
+    llm = build_llm_binding(settings)
+    if llm is None:
+        raise RuntimeError("No API-plane model is configured")
+    try:
+        system_one = build_system_one_binding(settings)
+    except Exception as exc:  # noqa: BLE001 — selection must fail open
+        logger.warning("System One binding disabled: %s", exc)
+        system_one = None
+    bindings = ModelBindings(llm=llm, system_one=system_one)
+    selector = (
+        build_system_one_selector(settings, binding=system_one)
+        if system_one is not None
+        else None
+    )
+    return bindings, selector
 
 
 async def close_system_one_providers() -> None:

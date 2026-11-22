@@ -31,8 +31,12 @@ proven otherwise.
 | Audit log | Reuse | Call `write_audit` from project services; never create another log table. |
 | Runtime settings UI | Reuse + create | Register one project `SettingsSection`; the admin page renders it. |
 | RAG pipeline (chunk, embed, retrieve, rerank, generate) | Reuse | Select stages in `rag.*`; bind cliver-core purposes. |
-| Knowledge-base governance (projects, staged ingestion, approvals, golden sets, evaluation, governed query) | Reuse | `api.features` includes `rag_governance` in the scaffold; it composes the routers, pages, worker and migration chain. |
+| Knowledge-base governance (projects, staged ingestion, approvals, golden sets, evaluation, governed query) | Reuse | `api.features` includes `rag_governance` in the scaffold; it composes text/Markdown/PDF/DOCX parsing with section/page locators, the routers, pages, worker and migration chain. |
 | Custom RAG stage | Create + register | Implement the package protocol, register in the registry, and route model access through cliver-core. |
+| Custom governance parser (OFD/OCR/HTML/legacy formats) | Create + register | Implement the governance `Parser` protocol, register in `stages.parser.parsers`, and select it through project config `parsing.parser`; keep page/clause locators. |
+| System One tool/skill filtering | Configure | Enable `agent.system_one`; the scaffold wires `SystemOneSelector` as AgentCore's `candidate_selector`. It is fail-open and opt-in. |
+| System One explicit decision call | Use cliver-core | Mount a `system_one` binding on `ModelBindings` and call `AgentCore.system_one`, or call `provider.system_one` directly. |
+| System One governance intent routing | Create + configure | Build a `SystemOneIntentRouter` from a cliver-core binding and put it on `app.state.intent_router`; the query facade falls back to keyword rules on failure. |
 | MCP protocol endpoint and gate | Reuse | Include `mcp.ROUTERS` and compose the MCP lifespan. |
 | MCP tools | Create | Decorate project functions with `@mcp.tool()` plus `@public_tool()` or `@require_perm(...)`. |
 | Test harness | Copy once | Adapt a package `tests/conftest.py`; the pattern is the asset. |
@@ -208,6 +212,34 @@ registry.register("orders-markdown", lambda: OrdersMarkdownChunker())
 Import it before the app serves `GET /api/v1/rag/stages`. All model calls go
 through cliver-core. If the stage is reusable beyond this product, contribute
 it to the playbook instead of keeping it in the project.
+
+#### Custom governance parser
+
+Governance ingestion has its own `Parser` seam, separate from the RAG chunker
+registry. A new format (OFD, OCR, HTML, legacy Word) implements `parse(
+SourceDocument) -> ParsedDocument` and returns `ParsedBlock` values with
+`heading`/`text`/`table`/`page_break` kinds plus page/clause locators.
+Register it in `stages.parser.parsers` under a project-specific name and select
+it in the project config `parsing.parser`; `auto` covers text/Markdown, text
+PDF and DOCX. Keep page breaks and source order so `structure_path` and
+citations stay accurate. A reusable parser belongs upstream.
+
+#### System One
+
+System One is a cliver-core decision-model capability: `Choice`, `Score` and
+`Noul` return probabilities, not text. The scaffold agent wires
+`SystemOneSelector` as AgentCore's `candidate_selector` when
+`agent.system_one` is enabled; it narrows large tool/skill catalogues and is
+fail-open. For an explicit prediction, mount a `system_one` binding on
+`ModelBindings` and call `AgentCore.system_one`, or call
+`provider.system_one` on a binding directly.
+
+Governance rule routing is deterministic keyword matching by default. A project
+that wants System One routing builds `SystemOneIntentRouter` from a binding and
+sets `app.state.intent_router`; the facade falls back to keyword rules on any
+provider or parsing failure. This is a live-query seam, not a scaffold switch;
+wire the same router into a custom evaluation query runner before changing the
+production rule set.
 
 ### 6. Frontend composition
 

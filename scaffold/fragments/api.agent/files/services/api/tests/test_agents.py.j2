@@ -30,6 +30,7 @@ from app.agents.contracts import (
 from app.agents.coordinator import Coordinator
 from app.agents.core import (
     build_llm_binding,
+    build_model_bindings,
     build_system_one_binding,
     build_system_one_selector,
 )
@@ -415,6 +416,39 @@ def test_bailian_system_one_binding_maps_settings() -> None:
     assert selector.fit_threshold == 0.3
     assert selector.min_tools == 2
     assert selector.top_k_tools == 2
+
+
+def test_model_bindings_mount_the_configured_system_one() -> None:
+    settings = Settings(
+        _env_file=None,
+        agent_llm_model="test-model",
+        agent_llm_base_url="http://127.0.0.1:9/v1",
+        agent_system_one_provider="bailian",
+        agent_system_one_workspace_id="workspace-test",
+        agent_system_one_api_key="test-key",
+        agent_system_one_model="decision-model-preview",
+    )
+
+    bindings, selector = build_model_bindings(settings)
+
+    assert bindings.system_one is not None
+    assert bindings.system_one.purpose == "system_one"
+    assert selector is not None
+    assert selector.min_tools == settings.agent_system_one_min_tools
+
+
+def test_model_bindings_leave_system_one_unmounted_when_disabled() -> None:
+    settings = Settings(
+        _env_file=None,
+        agent_llm_model="test-model",
+        agent_llm_base_url="http://127.0.0.1:9/v1",
+        agent_system_one_provider="",
+    )
+
+    bindings, selector = build_model_bindings(settings)
+
+    assert bindings.system_one is None
+    assert selector is None
 
 
 def test_system_one_http_binding_requires_an_endpoint() -> None:
