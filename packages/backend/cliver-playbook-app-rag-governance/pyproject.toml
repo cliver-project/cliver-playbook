@@ -24,6 +24,11 @@ dependencies = [
     # HTTP; the in-process transport uses the same shapes.
     "httpx>=0.27.0",
     "pyyaml>=6.0",
+    # The parser stage reads DOCX and (text) PDF before cleaning. These
+    # are the same libraries the rag chunkers use, declared here because
+    # this package imports them directly.
+    "python-docx>=1.2,<2.0",
+    "unstructured[pdf]>=0.16.0",
     # IANA timezone data for `as_of` handling on platforms whose system
     # tz database is incomplete (the finance fixtures use Asia/Shanghai).
     "tzdata>=2024.1",

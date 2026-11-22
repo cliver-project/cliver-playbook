@@ -19,12 +19,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 from cliver_playbook.app.rag.chunking.base import split_text_with_offsets
+from cliver_playbook.app.rag_governance.stages.base import ParsedBlock
 
 _HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 _TRAILING_HASHES = re.compile(r"[ \t]+#+[ \t]*$")
 _PARAGRAPH = re.compile(r"\n[ \t]*\n")
+_CLAUSE = re.compile(r"^第[一二三四五六七八九十百千万0-9]+条")
 
 
 @dataclass(frozen=True)
@@ -35,11 +38,19 @@ class ParentSection:
     section and ``""`` for text before the first heading. When a body
     was split, each part gets a ``#part-N`` suffix so two parts never
     share an identity.
+
+    ``structure_path`` is the full heading ancestry (and a synthetic
+    ``part`` node when a body was split). ``locator`` carries the page
+    range and clause/section label a citation can point at; it is
+    metadata, not a database relation, so the storage contract stays
+    stable while parsers grow richer.
     """
 
     text: str
     section_path: str
     children: list[str] = field(default_factory=list)
+    structure_path: list[dict[str, Any]] = field(default_factory=list)
+    locator: dict[str, Any] = field(default_factory=dict)
 
 
 def split_parent_child(
@@ -80,6 +91,131 @@ def split_parent_child(
             if children:
                 sections.append(ParentSection(text=part, section_path=path, children=children))
     return sections
+
+
+def split_parsed_blocks(
+    blocks: list[ParsedBlock],
+    *,
+    child_size: int = 512,
+    child_overlap: int = 64,
+    parent_max_chars: int = 4000,
+) -> list[ParentSection]:
+    """Group parser blocks into parents, preserving structure and locators.
+
+    This is the structured counterpart of :func:`split_parent_child`.
+    Headings delimit sections exactly as they do for Markdown, but the
+    parser has already resolved page boundaries and can attach a page
+    locator to every block. A ``page_break`` flushes the current parent
+    so a citation never points at an entire multi-page document when a
+    single page is enough.
+    """
+    if child_size <= 0:
+        raise ValueError("child_size must be positive")
+    if child_overlap < 0 or child_overlap >= child_size:
+        raise ValueError("child_overlap must be >= 0 and < child_size")
+    if parent_max_chars <= 0:
+        raise ValueError("parent_max_chars must be positive")
+
+    sections: list[ParentSection] = []
+    heading_stack: list[tuple[int, str]] = []
+    body: list[ParsedBlock] = []
+
+    def flush() -> None:
+        if not body:
+            return
+        body_blocks = list(body)
+        body.clear()
+
+        text = "\n\n".join(block.text.strip() for block in body_blocks if block.text.strip())
+        if not text:
+            return
+
+        structure = [
+            {"type": "heading", "level": level, "title": title, "ordinal": ordinal}
+            for ordinal, (level, title) in enumerate(heading_stack)
+        ]
+        locator = _block_locator(body_blocks, heading_stack)
+        parts = _paragraph_parts(text, parent_max_chars)
+        base_path = _heading_path_from_stack(heading_stack)
+
+        for part_number, part in enumerate(parts, start=1):
+            section_structure = list(structure)
+            if len(parts) == 1:
+                path = base_path
+            else:
+                path = f"{base_path}#part-{part_number}"
+                section_structure.append({"type": "part", "ordinal": part_number})
+            children = [
+                piece.strip()
+                for piece, _start, _end in split_text_with_offsets(
+                    text=part,
+                    chunk_size=child_size,
+                    chunk_overlap=child_overlap,
+                )
+            ]
+            children = [child for child in children if child]
+            if children:
+                sections.append(
+                    ParentSection(
+                        text=part,
+                        section_path=path,
+                        children=children,
+                        structure_path=section_structure,
+                        locator=dict(locator),
+                    )
+                )
+
+    for block in blocks:
+        if block.kind == "heading":
+            title = block.text.strip()
+            if not title:
+                continue
+            if not 1 <= block.level <= 6:
+                body.append(ParsedBlock(kind="text", text=title, locator=block.locator))
+                continue
+            flush()
+            while heading_stack and heading_stack[-1][0] >= block.level:
+                heading_stack.pop()
+            heading_stack.append((block.level, title))
+        elif block.kind == "page_break":
+            flush()
+        else:
+            if block.text.strip():
+                body.append(block)
+
+    flush()
+    return sections
+
+
+def _heading_path_from_stack(heading_stack: list[tuple[int, str]]) -> str:
+    if not heading_stack:
+        return ""
+    level, title = heading_stack[-1]
+    return f"H{level}#{title}"
+
+
+def _block_locator(
+    blocks: list[ParsedBlock],
+    heading_stack: list[tuple[int, str]],
+) -> dict[str, Any]:
+    """Page range plus the nearest heading label for one parent."""
+    pages: list[int] = []
+    for block in blocks:
+        for key in ("page", "page_start", "page_end"):
+            value = block.locator.get(key)
+            if isinstance(value, int):
+                pages.append(value)
+    locator: dict[str, Any] = {}
+    if pages:
+        locator["page_start"] = min(pages)
+        locator["page_end"] = max(pages)
+    if heading_stack:
+        title = heading_stack[-1][1]
+        if _CLAUSE.match(title):
+            locator["clause"] = title
+        else:
+            locator["section"] = title
+    return locator
 
 
 def _sections(text: str) -> list[tuple[str, str]]:

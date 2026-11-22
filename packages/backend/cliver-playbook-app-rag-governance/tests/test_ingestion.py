@@ -19,9 +19,13 @@ from cliver_playbook.app.rag_governance.models import GovProject
 from cliver_playbook.app.rag_governance.stages import (
     ByExtensionClassifier,
     DirectorySource,
+    ParsedBlock,
+    ParsedDocument,
+    ParserOptions,
     PassthroughCleaner,
     RegexPiiMasker,
     SectionPathContextualizer,
+    TextParser,
     UploadSource,
 )
 from cliver_playbook.app.rag_governance.stages.base import SourceDocument
@@ -37,14 +41,36 @@ def _source(text: str) -> SourceDocument:
     )
 
 
-def _stages() -> dict:
+def _stages(**overrides) -> dict:
     return {
         "embedder": StubEmbedder(),
         "cleaner": PassthroughCleaner(),
         "masker": RegexPiiMasker(),
         "classifier": ByExtensionClassifier(),
         "contextualizer": SectionPathContextualizer(),
+        "parser": TextParser(),
+        **overrides,
     }
+
+
+class _PagedParser:
+    """A parser double with two pages and no real file dependency."""
+
+    name = "paged"
+    version = "1"
+    options_model = ParserOptions
+
+    def parse(self, document: SourceDocument, options=None) -> ParsedDocument:
+        del document, options
+        return ParsedDocument(
+            blocks=[
+                ParsedBlock(kind="heading", text="Chapter", level=1),
+                ParsedBlock(kind="text", text="Body on page two", locator={"page": 2}),
+                ParsedBlock(kind="page_break", locator={"page": 3}),
+                ParsedBlock(kind="text", text="Body on page three", locator={"page": 3}),
+            ],
+            metadata={"page_count": 3},
+        )
 
 
 async def _project(db: AsyncSession) -> GovProject:
@@ -122,6 +148,64 @@ async def test_ingestion_stages_unpublished_parents_and_children(
     )
     assert len(embeddings) == len(chunks)
     assert all(embedding.embedder_version == "stub@1.0" for embedding in embeddings)
+
+
+async def test_ingestion_persists_parser_and_section_locator_metadata(
+    db_session: AsyncSession,
+) -> None:
+    project = await _project(db_session)
+
+    result = await ingest_document(
+        db_session,
+        project=project,
+        source_document=_source("ignored by the parser double"),
+        config=IngestConfig(logical_id="fin-paged", pipeline_run_id="batch-paged"),
+        **_stages(parser=_PagedParser()),
+    )
+    await db_session.commit()
+
+    document = await db_session.get(Document, result.document_id)
+    assert document is not None
+    assert document.metadata_json["parser_id"] == "paged@1"
+
+    parents = (
+        (
+            await db_session.execute(
+                select(ChunkParent)
+                .where(ChunkParent.document_id == document.id)
+                .order_by(ChunkParent.ordinal)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [parent.text for parent in parents] == [
+        "Body on page two",
+        "Body on page three",
+    ]
+    assert all(
+        parent.metadata_json["structure_path"]
+        == [{"type": "heading", "level": 1, "title": "Chapter", "ordinal": 0}]
+        for parent in parents
+    )
+    assert [parent.metadata_json["locator"] for parent in parents] == [
+        {"page_start": 2, "page_end": 2, "section": "Chapter"},
+        {"page_start": 3, "page_end": 3, "section": "Chapter"},
+    ]
+
+    chunks = (
+        (
+            await db_session.execute(
+                select(Chunk).where(Chunk.document_id == document.id).order_by(Chunk.ordinal)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [chunk.metadata_json["locator"] for chunk in chunks] == [
+        {"page_start": 2, "page_end": 2, "section": "Chapter"},
+        {"page_start": 3, "page_end": 3, "section": "Chapter"},
+    ]
 
 
 async def test_reingest_bumps_version_and_keeps_each_staged_row(

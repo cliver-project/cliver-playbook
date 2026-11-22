@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -39,6 +39,43 @@ class SourceDocument:
     mime_type: str
     content: bytes
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ParsedBlock:
+    """One structural block produced by a parser.
+
+    ``kind`` is deliberately small: the section builder only needs to
+    know whether a block starts a section, contributes body text, or
+    marks a page boundary. Format-specific detail (PDF element type,
+    DOCX style, spreadsheet sheet) belongs in ``metadata``.
+    """
+
+    kind: Literal["heading", "text", "table", "page_break"]
+    text: str = ""
+    level: int = 0
+    locator: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ParsedDocument:
+    """A parsed source: structural blocks plus document-level facts."""
+
+    blocks: list[ParsedBlock]
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class Parser(Protocol):
+    name: str
+    version: str
+    options_model: type[BaseModel]
+
+    def parse(
+        self,
+        document: SourceDocument,
+        options: BaseModel | None = None,
+    ) -> ParsedDocument: ...
 
 
 @dataclass(frozen=True)

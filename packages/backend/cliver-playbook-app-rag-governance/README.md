@@ -24,9 +24,9 @@ Full design: `docs/superpowers/specs/2026-11-05-rag-governance-loop-design.md`
 |---|---|---|
 | Projects | `services/projects.py`, `api/projects.py` | Project row and versioned configuration: scope strategy, retrieval knobs, embedder, thresholds, approval mode. |
 | Sources and batches | `services/sources.py`, `services/batches.py`, `api/sources.py`, `api/batches.py` | Source definitions, ingestion batches, staged rows and the publish transition. |
-| Ingestion | `ingestion/` | Masking, parent/child splitting, contextual prefixes, embedding and staging. |
+| Ingestion | `ingestion/`, `stages/parser.py` | Parsing (text/PDF/DOCX), masking, parent/child splitting with structure/page locators, contextual prefixes, embedding and staging. |
 | Golden sets | `golden/`, `api/golden.py` | Candidate generation, JSONL codec, immutable confirmed versions, per-case edits. |
-| Intent rules | `rules/`, `api/rules.py` | Priority-ordered keyword/regex rules, typed filter-AST scopes, `none`/`retrieval`/`tools`/`agentic` strategies. |
+| Intent rules | `rules/`, `api/rules.py` | Priority-ordered keyword/regex rules, typed filter-AST scopes, `none`/`retrieval`/`tools`/`agentic` strategies, and an optional System One router with keyword fallback. |
 | Evaluation | `evaluation/`, `api/evaluations.py` | Runner, evaluators, hard gates, thresholds, case-level and aggregate reports. |
 | Approvals | `services/approvals.py`, `api/approvals.py` | Approve/reject a staged batch, audit, publish or discard. |
 | Jobs | `runtime/jobs.py`, `runtime/handlers.py` | DB-backed queue, in-process worker, and the canonical handlers for `ingest_batch`, `run_eval` and `generate_golden`. |

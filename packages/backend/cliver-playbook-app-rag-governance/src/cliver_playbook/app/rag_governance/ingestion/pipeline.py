@@ -23,8 +23,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import delete, func, select
@@ -40,16 +41,19 @@ from cliver_playbook.app.rag.models.entities import (
 )
 from cliver_playbook.app.rag_governance.ingestion.parent_child import (
     ParentSection,
-    split_parent_child,
+    split_parsed_blocks,
 )
 from cliver_playbook.app.rag_governance.models.entities import GovProject
 from cliver_playbook.app.rag_governance.stages.base import (
     Cleaner,
     Contextualizer,
     Masker,
+    ParsedBlock,
+    Parser,
     SourceDocument,
     TypeClassifier,
 )
+from cliver_playbook.app.rag_governance.stages.parser import select_parser
 
 logger = logging.getLogger("cliver_playbook.app.rag_governance.ingestion.pipeline")
 
@@ -74,6 +78,10 @@ class IngestConfig(BaseModel):
     child_size: int = Field(default=512, gt=0)
     child_overlap: int = Field(default=64, ge=0)
     parent_max_chars: int = Field(default=4000, gt=0)
+    # Parser registry name; ``auto`` infers one from MIME type then
+    # filename suffix. An explicit name is the escape hatch for a
+    # source whose type cannot be inferred reliably.
+    parser: str = "auto"
     # Document type -> chunker policy name. Only ``parent-child`` ships
     # in v1; the map exists so a project can be explicit about types
     # it wants rejected rather than silently coerced.
@@ -107,6 +115,8 @@ class _Prepared:
     search_texts: list[str]
     masked_counts: dict[str, int]
     content_hash: str
+    parser_id: str
+    parser_metadata: dict[str, Any]
 
 
 async def ingest_document(
@@ -120,14 +130,14 @@ async def ingest_document(
     masker: Masker,
     classifier: TypeClassifier,
     contextualizer: Contextualizer,
+    parser: Parser | None = None,
 ) -> IngestResult:
     """Stage one document version. The caller owns the commit."""
-    raw_text = _decode(source_document)
     prepared = await asyncio.to_thread(
         _prepare,
-        raw_text,
         source_document,
         config,
+        parser,
         cleaner,
         masker,
         classifier,
@@ -189,34 +199,25 @@ async def ingest_document(
     )
 
 
-def _decode(source_document: SourceDocument) -> str:
-    """Decode the source as UTF-8 text.
-
-    Governance v1 ingests text/markdown sources. A binary format must
-    go through a format-specific parser before this pipeline; failing
-    loudly here is safer than letting ``errors="replace"`` corrupt the
-    stored parents.
-    """
-    try:
-        return source_document.content.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise ValueError(
-            f"source document {source_document.source_uri!r} is not UTF-8 text"
-        ) from exc
-
-
 def _prepare(
-    raw_text: str,
     source_document: SourceDocument,
     config: IngestConfig,
+    parser: Parser | None,
     cleaner: Cleaner,
     masker: Masker,
     classifier: TypeClassifier,
     contextualizer: Contextualizer,
 ) -> _Prepared:
-    """Pure-text half of the pipeline; safe to run off the event loop."""
-    cleaned = cleaner.clean(raw_text)
-    masked = masker.mask(cleaned.text)
+    """Parse, clean and mask; safe to run off the event loop.
+
+    Cleaning and masking happen per block rather than on one joined
+    string. That keeps each block's locator aligned with the text that
+    is actually stored: a masked phone number changes the string but
+    never shifts a page boundary.
+    """
+    resolved_parser = parser or select_parser(source_document, config.parser)
+    parsed = resolved_parser.parse(source_document)
+    masked_blocks, masked_counts = _clean_and_mask_blocks(parsed.blocks, cleaner, masker)
     doc_type = classifier.classify(source_document)
 
     chunker = config.type_to_chunker.get(doc_type, config.chunker)
@@ -226,8 +227,8 @@ def _prepare(
             f"only {PARENT_CHILD_CHUNKER!r} is available"
         )
 
-    sections = split_parent_child(
-        masked.text,
+    sections = split_parsed_blocks(
+        masked_blocks,
         child_size=config.child_size,
         child_overlap=config.child_overlap,
         parent_max_chars=config.parent_max_chars,
@@ -253,13 +254,38 @@ def _prepare(
                 contextual = ""
             search_texts.append(_compose_search_text(contextual, child))
 
+    masked_text = "\n\n".join(
+        block.text for block in masked_blocks if block.kind != "page_break" and block.text.strip()
+    )
     return _Prepared(
         doc_type=doc_type,
         sections=sections,
         search_texts=search_texts,
-        masked_counts=masked.counts,
-        content_hash=hashlib.sha256(masked.text.encode("utf-8")).hexdigest(),
+        masked_counts=masked_counts,
+        content_hash=hashlib.sha256(masked_text.encode("utf-8")).hexdigest(),
+        parser_id=f"{resolved_parser.name}@{resolved_parser.version}",
+        parser_metadata=dict(parsed.metadata),
     )
+
+
+def _clean_and_mask_blocks(
+    blocks: list[ParsedBlock],
+    cleaner: Cleaner,
+    masker: Masker,
+) -> tuple[list[ParsedBlock], dict[str, int]]:
+    """Apply both text stages block by block and aggregate the counts."""
+    masked_blocks: list[ParsedBlock] = []
+    counts: dict[str, int] = {}
+    for block in blocks:
+        if block.kind == "page_break":
+            masked_blocks.append(block)
+            continue
+        cleaned = cleaner.clean(block.text)
+        masked = masker.mask(cleaned.text)
+        for name, count in masked.counts.items():
+            counts[name] = counts.get(name, 0) + count
+        masked_blocks.append(replace(block, text=masked.text))
+    return masked_blocks, counts
 
 
 def _contextualizer_options(contextualizer: Contextualizer, section_path: str) -> BaseModel | None:
@@ -345,6 +371,7 @@ def _assign_document_fields(
     document.chunker_config = {
         "name": PARENT_CHILD_CHUNKER,
         "version": "1",
+        "parser": prepared.parser_id,
         "child_size": config.child_size,
         "child_overlap": config.child_overlap,
         "parent_max_chars": config.parent_max_chars,
@@ -366,6 +393,8 @@ def _assign_document_fields(
         **source_document.metadata,
         "doc_type": prepared.doc_type,
         "masked_counts": prepared.masked_counts,
+        "parser_id": prepared.parser_id,
+        **({"parser_metadata": prepared.parser_metadata} if prepared.parser_metadata else {}),
     }
     document.published = False
     document.pipeline_run_id = config.pipeline_run_id
@@ -401,7 +430,7 @@ def _build_rows(
                 document_id=document_id,
                 ordinal=parent_ordinal,
                 text=section.text,
-                metadata_json={"section_path": section.section_path},
+                metadata_json=_section_metadata(section),
             )
         )
         for child in section.children:
@@ -415,10 +444,7 @@ def _build_rows(
                     text=child,
                     search_text=search_text,
                     token_count=embedder.estimate_tokens(search_text),
-                    metadata_json={
-                        "section_path": section.section_path,
-                        "parent_ordinal": parent_ordinal,
-                    },
+                    metadata_json=_section_metadata(section, parent_ordinal=parent_ordinal),
                     parent_id=parent_id,
                 )
             )
@@ -435,6 +461,22 @@ def _build_rows(
     if chunk_ordinal != len(prepared.search_texts):
         raise RuntimeError("prepared search texts and section children are out of sync")
     return parent_rows, chunk_rows, embedding_rows
+
+
+def _section_metadata(section: ParentSection, **extra: Any) -> dict[str, Any]:
+    """Metadata shared by one parent and its children.
+
+    ``section_path`` stays the backward-compatible string; the
+    structured path and locator are additive. A document ingested
+    before this contract simply has neither key, and citations fall
+    back to the section string.
+    """
+    metadata: dict[str, Any] = {"section_path": section.section_path, **extra}
+    if section.structure_path:
+        metadata["structure_path"] = section.structure_path
+    if section.locator:
+        metadata["locator"] = section.locator
+    return metadata
 
 
 async def _delete_staged_rows(db: AsyncSession, document_id: str) -> None:

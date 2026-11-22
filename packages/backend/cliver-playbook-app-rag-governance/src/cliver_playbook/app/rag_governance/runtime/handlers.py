@@ -12,6 +12,8 @@ Configuration comes from the project's ``config_json``:
 
 - ``embedding.embedder`` names the rag embedder registry entry that embeds
   staged chunks (default ``stub``; a real deployment names a model).
+- ``parsing.parser`` names a ``parsers`` registry entry, or ``auto`` to
+  infer one from the source MIME type and filename (default ``auto``).
 - ``chunking`` carries the optional ``IngestConfig`` knobs (``child_size``,
   ``child_overlap``, ``parent_max_chars``, ``type_to_chunker``).
 - ``taxonomy.classifier`` names a ``type_classifiers`` registry entry
@@ -57,6 +59,9 @@ from cliver_playbook.app.rag_governance.stages import (
     SectionPathContextualizer,
 )
 from cliver_playbook.app.rag_governance.stages import (
+    parsers as parser_stages,
+)
+from cliver_playbook.app.rag_governance.stages import (
     sources as source_stages,
 )
 from cliver_playbook.app.rag_governance.stages import (
@@ -97,6 +102,9 @@ async def run_ingest_batch(db: AsyncSession, job: Any) -> dict[str, Any]:
     embedder = get_embedder((config.get("embedding") or {}).get("embedder") or _DEFAULT_EMBEDDER)
     chunking = dict(config.get("chunking") or {})
     taxonomy = dict(config.get("taxonomy") or {})
+    parsing = dict(config.get("parsing") or {})
+    parser_name = parsing.get("parser") or "auto"
+    parser = None if parser_name == "auto" else parser_stages.get(parser_name)
     batch.status = "running"
     await db.flush()
 
@@ -116,6 +124,7 @@ async def run_ingest_batch(db: AsyncSession, job: Any) -> dict[str, Any]:
                 child_size=chunking.get("child_size", 512),
                 child_overlap=chunking.get("child_overlap", 64),
                 parent_max_chars=chunking.get("parent_max_chars", 4000),
+                parser=parser_name,
                 type_to_chunker=dict(chunking.get("type_to_chunker") or {}),
             ),
             embedder=embedder,
@@ -126,13 +135,14 @@ async def run_ingest_batch(db: AsyncSession, job: Any) -> dict[str, Any]:
             # implementation, and an unknown name fails the job loudly.
             classifier=classifier_stages.get(taxonomy.get("classifier") or "by-extension"),
             contextualizer=SectionPathContextualizer(),
+            parser=parser,
         )
         chunks += result.chunk_count
         parents += result.parent_count
         masked += sum(result.masked_counts.values())
 
     batch.status = "staged"
-    batch.stats = {
+    batch.stats_json = {
         "documents": len(documents),
         "parents": parents,
         "chunks": chunks,
@@ -143,7 +153,7 @@ async def run_ingest_batch(db: AsyncSession, job: Any) -> dict[str, Any]:
     logger.info(
         "ingest batch %s staged %d document(s), %d chunk(s)", batch.id, len(documents), chunks
     )
-    return {"batch_id": batch.id, **batch.stats}
+    return {"batch_id": batch.id, **batch.stats_json}
 
 
 async def run_eval_job(db: AsyncSession, job: Any) -> dict[str, Any]:

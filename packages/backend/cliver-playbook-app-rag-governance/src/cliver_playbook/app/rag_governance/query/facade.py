@@ -62,6 +62,7 @@ from cliver_playbook.app.rag_governance.models.entities import GovProject, GovTo
 from cliver_playbook.app.rag_governance.query.access import governed_scope, tool_authorized
 from cliver_playbook.app.rag_governance.rules.engine import (
     IntentMatch,
+    IntentRouter,
     KeywordRegexClassifier,
     compose_scope,
     fallback_rule,
@@ -236,17 +237,27 @@ def _primary(matches: Sequence[IntentMatch]) -> IntentRule:
     return rank_matches(matches)[0].rule
 
 
-def _resolve_matches(
+async def _resolve_matches(
     question: str,
     rules: Sequence[IntentRule],
     config: dict[str, Any],
+    intent_router: IntentRouter | None = None,
 ) -> list[IntentMatch]:
     classifier_config = config.get("classifier")
-    matches = KeywordRegexClassifier().classify(
-        question,
-        rules,
-        classifier_config if isinstance(classifier_config, dict) else None,
-    )
+    options = classifier_config if isinstance(classifier_config, dict) else None
+    if intent_router is not None:
+        try:
+            routed = list(await intent_router.route(question, rules, options))
+            if routed:
+                return routed
+        except Exception:
+            # A decision-model outage must not disable the query surface:
+            # fall through to the deterministic classifier.
+            logger.warning(
+                "intent router failed; falling back to keyword rules",
+                exc_info=True,
+            )
+    matches = KeywordRegexClassifier().classify(question, rules, options)
     if matches:
         return list(matches)
     fallback = fallback_rule(rules)
@@ -265,7 +276,36 @@ def _locator(section_path: str | None) -> str | None:
     return locator or None
 
 
+def _render_locator(locator: Any) -> str | None:
+    """Render the structured locator a parser attached to a section.
+
+    The public citation remains a string; this is only the canonical
+    rendering. Old chunks have no ``locator`` and keep using the
+    section path below.
+    """
+    if not isinstance(locator, dict):
+        return None
+    parts: list[str] = []
+    clause = locator.get("clause")
+    section = locator.get("section")
+    label = clause if isinstance(clause, str) and clause.strip() else section
+    if isinstance(label, str) and label.strip():
+        parts.append(label.strip())
+
+    start = locator.get("page_start")
+    end = locator.get("page_end")
+    if isinstance(start, int) and not isinstance(start, bool):
+        if isinstance(end, int) and not isinstance(end, bool) and end != start:
+            parts.append(f"pp.{start}-{end}")
+        else:
+            parts.append(f"p.{start}")
+    return ", ".join(parts) or None
+
+
 def _hit_locator(hit: Hit) -> str | None:
+    structured = _render_locator(hit.metadata.get("locator"))
+    if structured is not None:
+        return structured
     return _locator(hit.metadata.get("section_path"))
 
 
@@ -639,6 +679,7 @@ async def answer_question(
     access: Any = None,
     max_tokens: int = _MAX_TOKENS,
     audit: AuditSink | None = None,
+    intent_router: IntentRouter | None = None,
 ) -> Answer:
     """Answer one question through the governance loop.
 
@@ -646,7 +687,8 @@ async def answer_question(
     ``AccessScope`` (the primary run or the leak probe); ordinary callers
     omit it and the scope is derived from the viewer's clearance and
     grants. ``as_of`` is the question's reference instant and is passed
-    unchanged to every tool.
+    unchanged to every tool. ``intent_router`` is an optional decision-model
+    router; any failure falls back to the deterministic keyword classifier.
     """
     _require_aware(as_of, "as_of")
     if not question.strip():
@@ -660,7 +702,7 @@ async def answer_question(
         rules = snapshot.rules
         rule_version = snapshot.version
 
-    matches = _resolve_matches(question, rules, config)
+    matches = await _resolve_matches(question, rules, config, intent_router)
     if not matches:
         answer = _terminal_answer(
             question=question,

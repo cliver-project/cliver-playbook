@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cliver_playbook.app.basic import runtime
+from cliver_playbook.app.rag.models.entities import Document
 from cliver_playbook.app.rag_governance.models import GovIngestBatch, GovJob
 from cliver_playbook.app.rag_governance.models.entities import GovProject
 from cliver_playbook.app.rag_governance.runtime import enqueue, run_worker
@@ -26,6 +27,9 @@ from cliver_playbook.app.rag_governance.runtime.handlers import (
 )
 from cliver_playbook.app.rag_governance.services.projects import create_project
 from cliver_playbook.app.rag_governance.services.sources import create_source
+from cliver_playbook.app.rag_governance.stages import ParsedBlock, ParsedDocument, ParserOptions
+from cliver_playbook.app.rag_governance.stages.base import SourceDocument
+from cliver_playbook.app.rag_governance.stages.parser import parsers
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "finance_kpi"
 SEED_DIR = EXAMPLES / "seed"
@@ -82,9 +86,58 @@ async def test_ingest_batch_handler_stages_documents(db_session: AsyncSession) -
     stored = await db_session.get(GovIngestBatch, batch.id)
     assert stored is not None
     assert stored.status == "staged"
-    assert stored.stats["documents"] == len(list(Path(SEED_DIR).glob("*.md"))) > 0
-    assert stored.stats["chunks"] > 0
+    assert stored.stats_json["documents"] == len(list(Path(SEED_DIR).glob("*.md"))) > 0
+    assert stored.stats_json["chunks"] > 0
     assert result["batch_id"] == batch.id
+
+
+class _ConfiguredParser:
+    name = "handler-test"
+    version = "1"
+    options_model = ParserOptions
+
+    def parse(self, document: SourceDocument, options=None) -> ParsedDocument:
+        del document, options
+        return ParsedDocument(blocks=[ParsedBlock(kind="text", text="configured output")])
+
+
+async def test_ingest_batch_handler_uses_the_configured_parser(
+    db_session: AsyncSession, tmp_path
+) -> None:
+    if "handler-test" not in parsers.names():
+        parsers.register("handler-test", _ConfiguredParser)
+    (tmp_path / "doc.md").write_text("ignored by the configured parser", encoding="utf-8")
+    project = await create_project(
+        db_session,
+        slug="configured-parser",
+        name="Configured parser",
+        config={
+            "embedding": {"embedder": "stub"},
+            "parsing": {"parser": "handler-test"},
+        },
+    )
+    source = await create_source(
+        db_session,
+        project,
+        kind="directory",
+        config={"path": str(tmp_path), "extensions": [".md"]},
+    )
+    batch = GovIngestBatch(project_id=project.id, source_id=source.id, status="queued")
+    db_session.add(batch)
+    await db_session.flush()
+    job = await enqueue(
+        db_session,
+        project_id=project.id,
+        kind="ingest_batch",
+        payload={"batch_id": batch.id, "source_id": source.id},
+    )
+
+    await run_ingest_batch(db_session, job)
+    await db_session.commit()
+
+    document = await db_session.scalar(select(Document).where(Document.logical_id == "doc"))
+    assert document is not None
+    assert document.metadata_json["parser_id"] == "handler-test@1"
 
 
 async def test_ingest_batch_handler_fails_cleanly_for_a_missing_batch(

@@ -26,6 +26,7 @@ from cliver_playbook.app.rag_governance.query.facade import (
     ToolPlan,
     answer_question,
 )
+from cliver_playbook.app.rag_governance.rules.engine import IntentMatch
 from cliver_playbook.app.rag_governance.rules.schema import IntentRule
 from cliver_playbook.app.rag_governance.services.projects import create_project
 from cliver_playbook.app.rag_governance.tools.base import ToolResult, ToolSpec
@@ -146,6 +147,7 @@ async def _add_doc(
     published: bool = True,
     section_path: str = "H2#资产负债率",
     metadata: dict[str, Any] | None = None,
+    locator: dict[str, Any] | None = None,
 ) -> Document:
     suffix = uuid4().hex
     document = Document(
@@ -167,12 +169,15 @@ async def _add_doc(
         pipeline_run_id=None,
         metadata_json={"doc_type": "metric_definition", **(metadata or {})},
     )
+    section_metadata = {"section_path": section_path}
+    if locator is not None:
+        section_metadata["locator"] = locator
     parent = ChunkParent(
         id=f"parent-{suffix}",
         document_id=document.id,
         ordinal=0,
         text=text,
-        metadata_json={"section_path": section_path},
+        metadata_json=section_metadata,
     )
     chunk = Chunk(
         id=f"chunk-{suffix}",
@@ -181,7 +186,7 @@ async def _add_doc(
         text=text,
         search_text=text,
         token_count=10,
-        metadata_json={"section_path": section_path},
+        metadata_json=section_metadata,
         parent_id=parent.id,
     )
     db.add_all([document, parent, chunk])
@@ -302,6 +307,22 @@ class RecordingPlanner:
         return ToolPlan(calls=tuple(calls))
 
 
+class _FixedRouter:
+    def __init__(self, intent: str) -> None:
+        self.intent = intent
+        self.calls = 0
+
+    async def route(self, question, rules, config=None):
+        self.calls += 1
+        rule = next(rule for rule in rules if rule.intent == self.intent)
+        return [IntentMatch(intent=rule.intent, confidence=0.9, rule=rule)]
+
+
+class _BrokenRouter:
+    async def route(self, question, rules, config=None):
+        raise RuntimeError("decision model unavailable")
+
+
 class StaticTool:
     def __init__(
         self,
@@ -368,6 +389,106 @@ async def test_retrieval_only_answer_cites_document_locators(db_session: AsyncSe
     assert answer.observation.retrieval_calls == 1
     assert answer.observation.sources[0].logical_id == "fin-metric-catalog"
     assert "Revenue and debt ratio definitions" in llm.prompts[0]
+
+
+async def test_structured_locator_wins_over_the_section_path(
+    db_session: AsyncSession,
+) -> None:
+    project = await _project(db_session)
+    await _activate(db_session, project, [_rule(keywords=["revenue"])])
+    await _set_clearance(db_session, 2)
+    await _add_doc(
+        db_session,
+        project,
+        logical_id="fin-contract",
+        text="Revenue recognition follows the contract clause.",
+        classification=2,
+        locator={"clause": "第十二条", "page_start": 3, "page_end": 4},
+    )
+    llm = RecordingLLM(text="Revenue follows the contract clause.")
+
+    answer = await answer_question(
+        db_session,
+        project=project,
+        question="What does the revenue clause say?",
+        viewer=_viewer(),
+        as_of=NOW,
+        llm=llm,
+        reranker=PassthroughReranker(),
+    )
+
+    citation = next(citation for citation in answer.citations if citation.kind == "document")
+    assert citation.locator == "第十二条, pp.3-4"
+    assert "[doc:fin-contract#第十二条, pp.3-4]" in answer.text
+
+
+async def test_intent_router_can_select_a_rule_without_keyword_match(
+    db_session: AsyncSession,
+) -> None:
+    project = await _project(db_session)
+    await _activate(
+        db_session,
+        project,
+        [_rule(intent="policy_question", keywords=["policy"])],
+    )
+    await _set_clearance(db_session, 2)
+    await _add_doc(
+        db_session,
+        project,
+        logical_id="fin-retention",
+        text="The retention period is thirty years.",
+        classification=2,
+    )
+    router = _FixedRouter("policy_question")
+
+    answer = await answer_question(
+        db_session,
+        project=project,
+        question="What is the retention period?",
+        viewer=_viewer(),
+        as_of=NOW,
+        llm=RecordingLLM(text="Thirty years."),
+        reranker=PassthroughReranker(),
+        intent_router=router,
+    )
+
+    assert router.calls == 1
+    assert answer.intent == "policy_question"
+    assert answer.refused is False
+    assert answer.citations
+
+
+async def test_intent_router_failure_falls_back_to_keyword_rules(
+    db_session: AsyncSession,
+) -> None:
+    project = await _project(db_session)
+    await _activate(
+        db_session,
+        project,
+        [_rule(intent="revenue_question", keywords=["revenue"])],
+    )
+    await _set_clearance(db_session, 2)
+    await _add_doc(
+        db_session,
+        project,
+        logical_id="fin-revenue",
+        text="Revenue is recognized on delivery.",
+        classification=2,
+    )
+
+    answer = await answer_question(
+        db_session,
+        project=project,
+        question="What is revenue?",
+        viewer=_viewer(),
+        as_of=NOW,
+        llm=RecordingLLM(text="Revenue is recognized on delivery."),
+        reranker=PassthroughReranker(),
+        intent_router=_BrokenRouter(),
+    )
+
+    assert answer.intent == "revenue_question"
+    assert answer.refused is False
 
 
 async def test_parent_text_is_what_the_generator_receives(db_session: AsyncSession) -> None:
@@ -1049,6 +1170,32 @@ async def test_api_query_returns_citations(client, db_session: AsyncSession) -> 
     assert body["rule_version"] == 1
     assert any(item["kind"] == "document" for item in body["citations"])
     assert "[doc:" in body["text"]
+
+
+async def test_api_query_uses_the_app_state_intent_router(
+    client, app, db_session: AsyncSession
+) -> None:
+    project = await _project(db_session)
+    await _activate(
+        db_session,
+        project,
+        [_rule(intent="policy_question", keywords=["policy"])],
+    )
+    await _add_doc(
+        db_session,
+        project,
+        logical_id="fin-retention",
+        text="The retention period is thirty years.",
+    )
+    app.state.intent_router = _FixedRouter("policy_question")
+
+    response = await client.post(
+        f"/api/v1/rag-governance/projects/{project.id}/query",
+        json={"question": "What is the retention period?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["intent"] == "policy_question"
 
 
 async def test_api_query_requires_authentication(raw_client) -> None:

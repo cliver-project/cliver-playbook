@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any, Protocol
 
 from cliver_playbook.app.rag.filters import And, FilterNode, Or
 from cliver_playbook.app.rag_governance.rules.compiler import compile_rule_scope
@@ -33,6 +34,22 @@ class IntentMatch:
     intent: str
     confidence: float
     rule: IntentRule
+
+
+class IntentRouter(Protocol):
+    """Optional router consulted before the deterministic classifier.
+
+    A router may call a decision model. It must return an empty sequence
+    to defer to keyword matching; the facade turns any exception into the
+    same fallback, so a routing outage cannot disable the query surface.
+    """
+
+    async def route(
+        self,
+        question: str,
+        rules: Sequence[IntentRule],
+        config: Mapping[str, Any] | None = None,
+    ) -> Sequence[IntentMatch]: ...
 
 
 class KeywordRegexClassifier:

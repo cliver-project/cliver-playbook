@@ -8,6 +8,7 @@ from cliver_playbook.app.rag_governance.rules.compiler import (
 from cliver_playbook.app.rag_governance.rules.engine import (
     SCOPE_COMBINATIONS,
     IntentMatch,
+    IntentRouter,
     KeywordRegexClassifier,
     compose_scope,
     fallback_rule,
@@ -21,6 +22,10 @@ from cliver_playbook.app.rag_governance.rules.schema import (
     RetrievalSpec,
     RuleValidationError,
     Strategy,
+)
+from cliver_playbook.app.rag_governance.rules.system_one import (
+    SystemOneIntentRouter,
+    SystemOneRoutingError,
 )
 from cliver_playbook.app.rag_governance.rules.versions import (
     RuleActivationError,
@@ -40,6 +45,7 @@ __all__ = [
     "STRATEGIES",
     "ClassifierSpec",
     "IntentMatch",
+    "IntentRouter",
     "IntentRule",
     "KeywordRegexClassifier",
     "RefusalSpec",
@@ -50,6 +56,8 @@ __all__ = [
     "RuleSetVersion",
     "RuleValidationError",
     "Strategy",
+    "SystemOneIntentRouter",
+    "SystemOneRoutingError",
     "activate_rule_set",
     "active_rule_set",
     "compile_rule_scope",

@@ -46,6 +46,15 @@ async def test_duplicate_slug_is_rejected(client) -> None:
     assert response.status_code == 409
 
 
+async def test_parsing_config_selects_a_parser(client) -> None:
+    response = await client.post(
+        "/api/v1/rag-governance/projects",
+        json={**PROJECT, "config": {"parsing": {"parser": "text"}}},
+    )
+    assert response.status_code == 201
+    assert response.json()["config"] == {"parsing": {"parser": "text"}}
+
+
 async def test_unknown_config_key_is_rejected(client) -> None:
     response = await client.post(
         "/api/v1/rag-governance/projects",

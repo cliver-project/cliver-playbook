@@ -31,6 +31,7 @@ PROJECT_CONFIG_KEYS: frozenset[str] = frozenset(
         "taxonomy",
         "type_policies",
         "masking",
+        "parsing",
         "embedding",
         "chunking",
         "retrieval",

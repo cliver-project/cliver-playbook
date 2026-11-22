@@ -81,6 +81,7 @@ async def query_project(
 
     registry: ToolRegistry | None = getattr(request.app.state, "tool_registry", None)
     planner: ToolPlanner | None = getattr(request.app.state, "tool_planner", None)
+    intent_router = getattr(request.app.state, "intent_router", None)
     llm = get_llm(rag_settings.rag.llm)
     as_of = payload.as_of or datetime.now(UTC)
 
@@ -95,6 +96,7 @@ async def query_project(
             max_tokens=payload.max_tokens,
             tool_registry=registry,
             planner=planner,
+            intent_router=intent_router,
             audit=_audit_sink(viewer, request),
         )
     except (QueryConfigError, QueryToolError) as exc:
